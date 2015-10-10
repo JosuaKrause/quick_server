@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Created on 2015-05-29
+Created on 2015-10-10
 
-@author: joschi <jkrause@us.ibm.com>
+@author: joschi <josua.krause@gmail.com>
 
 QuickServer is an quick to use and easy to set up server implementation. It has
 the following goals / features and is primarily meant to speed up back end
@@ -53,8 +53,8 @@ from __future__ import division
 
 import os
 import sys
-import math
 import json
+import math
 import time
 import zlib
 import errno
@@ -69,8 +69,8 @@ import threading
 import traceback
 import collections
 
-from SimpleHTTPServer import SimpleHTTPRequestHandler
 from StringIO import StringIO
+from SimpleHTTPServer import SimpleHTTPRequestHandler
 import BaseHTTPServer
 import SocketServer
 
