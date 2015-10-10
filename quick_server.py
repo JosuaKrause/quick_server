@@ -5,7 +5,7 @@ Created on 2015-10-10
 
 @author: joschi <josua.krause@gmail.com>
 
-QuickServer is an quick to use and easy to set up server implementation. It has
+QuickServer is a quick to use and easy to set up server implementation. It has
 the following goals / features and is primarily meant to speed up back end
 implementation / iteration:
 
