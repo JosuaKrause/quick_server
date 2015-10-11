@@ -1,0 +1,10 @@
+os:
+  - linux
+language: python
+python:
+  - "2.7"
+sudo: false
+install: true
+script: test/run.py
+notifications:
+  email: false
