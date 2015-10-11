@@ -10,6 +10,7 @@ import urllib
 import urllib2
 from subprocess import Popen, PIPE
 from StringIO import StringIO
+import signal
 
 os.chdir(os.path.dirname(__file__))
 
@@ -75,7 +76,13 @@ def url_server_run(probes):
                 return fail("{0} responded with {1} ({2} expected)", url, response.code, status_code)
     finally:
         if p is not None:
-            p.kill()
+            p.terminate()
+            time.sleep(3)
+            try:
+                p.kill()
+            except OSError as e:
+                if e.errno != 3:
+                    raise
     return True
 
 if not cmd_server_run([ "requests uptime" ], [], [], [ "[SERVER] requests made to uptime: 0" ], []):
