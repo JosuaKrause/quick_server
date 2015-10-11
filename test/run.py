@@ -6,10 +6,8 @@ from __future__ import division
 import os
 import sys
 import time
-import urllib
 import urllib2
 from subprocess import Popen, PIPE
-from StringIO import StringIO
 
 os.chdir(os.path.dirname(__file__))
 
