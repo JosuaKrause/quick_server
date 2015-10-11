@@ -3,7 +3,6 @@ os:
 language: python
 python:
   - "2.7"
-  - "3.4"
 sudo: false
 install: true
 script: test/run.py
