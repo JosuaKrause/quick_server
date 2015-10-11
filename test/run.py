@@ -13,6 +13,8 @@ from StringIO import StringIO
 
 os.chdir(os.path.dirname(__file__))
 
+PYTHON = os.environ.get('PYTHON').split()
+
 def status(msg, *args):
     for line in msg.format(*args).split('\n'):
         print("[TEST] {0}".format(line), file=sys.stderr)
@@ -23,7 +25,7 @@ def fail(msg, *args):
     return False
 
 def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exit_code=0):
-    p = Popen(["python", "example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    p = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = p.communicate('\n'.join(commands) + '\nquit\n')
     if p.returncode != exit_code:
         return fail("wrong exit code {0} expected {1}", ret, exit_code)
@@ -51,7 +53,7 @@ user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'
 def url_server_run(probes):
     p = None
     try:
-        p = Popen(["python", "example.py"], cwd='../example')
+        p = Popen(PYTHON + ["example.py"], cwd='../example')
         time.sleep(1) # give the server some time to wake up
         for parr in probes:
             url = 'http://localhost:8000/{0}'.format(parr[0])
