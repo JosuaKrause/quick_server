@@ -675,11 +675,11 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """Server log date time format."""
         return time.strftime("%Y-%m-%d %H:%M:%S")
 
-    def _convert_unit(self, value, units):
+    def _convert_unit(self, fmt, value, units):
         cur = ''
         for (conv, unit) in units:
             if value / conv >= 1 or not len(cur):
-                cur = "{0:8.3f}".format(value / conv) + unit
+                cur = fmt.format(value / conv) + unit
             else:
                 break
         return cur
@@ -695,19 +695,19 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def log_elapsed_time_string(self, elapsed):
         """Convert elapsed time into a readable string."""
-        return self._convert_unit(elapsed, self.elapsed_units)
+        return self._convert_unit("{0:8.3f}", elapsed, self.elapsed_units)
 
     # size units for logging request sizes
     size_units = [
-        (1, 'B'),
-        (1024, 'kB'),
-        (1024*1024, 'MB'),
-        (1024*1024*1024, 'GB')
+        (1, ' B'),
+        (1024, ' kB'),
+        (1024*1024, ' MB'),
+        (1024*1024*1024, ' GB')
     ]
 
     def log_size_string(self, size):
         """Convert buffer sizes into a readable string."""
-        return self._convert_unit(size, self.size_units)
+        return self._convert_unit("{0:.3g}", size, self.size_units)
 
     def log_message(self, format, *args):
         """Logs a message. All messages get prefixed with '[SERVER]'
@@ -725,10 +725,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if size != '-':
             size_str = ' (%s)' % size
         elif print_size >= 0:
-            size_str = ' ' + self.log_size_string(print_size)
+            size_str = self.log_size_string(print_size) + ' '
         else:
             size_str = ''
-        self.log_message('"%s" %s%s', self.requestline, str(code), size_str)
+        self.log_message('%s"%s" %s', size_str, self.requestline, str(code))
         if print_size >= 0:
             thread_local.size = -1
 
@@ -1497,8 +1497,8 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                 self.handle_request()
         except KeyboardInterrupt:
             # clean error output if log file is STD_ERR
-            if log['file'] == sys.stderr:
-                log['file'].write("\n")
+            if log_file == sys.stderr:
+                log_file.write("\n")
         finally:
             if self._clean_up_call is not None:
                 self._clean_up_call()
