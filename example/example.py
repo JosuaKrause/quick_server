@@ -11,6 +11,7 @@ addr = ''
 port = 8000
 server = create_server((addr, port))
 server.bind_path('/', '..')
+server.favicon_fallback = 'favicon.ico'
 
 start = clock()
 @server.json_get('/api/uptime/')

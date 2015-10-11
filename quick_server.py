@@ -453,9 +453,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 if os.path.exists(favicon):
                     path = favicon
                     break
-                favicon = os.path.join(os.path.join(fav_base, 'favicon.ico'))
+                favicon = os.path.join(fav_base, 'favicon.ico')
                 if os.path.exists(favicon):
                     path = favicon
+                    break
+                if self.server.favicon_fallback is not None and os.path.exists(self.server.favicon_fallback):
+                    path = os.path.join(self.server.base_path, self.server.favicon_fallback)
                     break
         # handle ETag caching
         if self.request_version >= "HTTP/1.1" and os.path.isfile(path):
@@ -776,6 +779,9 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             If True any path ending with 'favicon.ico' will try to serve the favicon
             file found at any root.
 
+        favicon_fallback : string or None
+            If set points to the fallback 'favicon.ico' file.
+
         max_age : number
             The content of the 'max-age' directive for the 'Cache-Control' header
             used by cached responses. Defaults to 0.
@@ -797,6 +803,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         self.history_file = '.cmd_history'
         self.prompt = '> '
         self.favicon_everywhere = True
+        self.favicon_fallback = None
         self.max_age = 0
         self.max_file_size = 50 * 1024 * 1024
         self.cross_origin = False
