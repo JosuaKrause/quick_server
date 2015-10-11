@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on 2015-10-10
@@ -24,30 +23,7 @@ the command. 'help', 'restart', and 'quit' are built-in commands ready to use.
 
 Note: The server is thread based so all callback functions should be thread-safe.
 
-Example:
-```
-from __future__ import print_function
-from quick_server import create_server
-from time import clock
-
-server = create_server(('', 8000))
-
-start = clock()
-@server.json_get('api/uptime/')
-def uptime(esrh, args):
-    return {
-        "uptime": esrh.log_elapsed_time_string(clock() - start).strip()
-    }
-
-@server.cmd()
-def hello(args):
-    print("hello {0}".format(' '.join(args)))
-
-print("starting server")
-server.serve_forever()
-print("shutting down..")
-server.server_close()
-```
+Please refer to the example folder for usage examples.
 """
 from __future__ import division
 

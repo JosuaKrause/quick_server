@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>QuickServer Example</title>
+  <meta charset="utf-8">
+</head>
+<body onload="start()">
+  <h3>Hello World!</h3>
+  <span id="uptime"></span>
+<script>
+function start() {
+  var uptime = document.getElementById("uptime");
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/api/uptime/", true);
+  xhr.onload = function(e) {
+    if(xhr.readyState === 4) {
+      if(xhr.status === 200) {
+        var obj = JSON.parse(xhr.responseText);
+        uptime.textContent = 'uptime: ' + obj['uptime'];
+      } else {
+        uptime.textContent = "ERROR (" + xhr.status + "): " + xhr.statusText;
+      }
+    }
+  };
+  xhr.onerror = function (e) {
+    uptime.textContent = "ERROR: " + xhr.statusText;
+  };
+  xhr.send(null);
+}
+</script>
+</body>
+</html>
