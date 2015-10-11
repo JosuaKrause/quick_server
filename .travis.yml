@@ -6,6 +6,6 @@ python:
   - "3.4"
 sudo: false
 install: true
-script: test/run.sh
+script: test/run.py
 notifications:
   email: false
