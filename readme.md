@@ -8,6 +8,8 @@ implementation / iteration:
 * provide functionality for dynamic requests
 * provide a basic command interpret loop for server commands
 
+[![Build Status](https://travis-ci.org/JosuaKrause/quick_server.svg?branch=master)](https://travis-ci.org/JosuaKrause/quick_server)
+
 ## Usage
 
 [example.py](example/example.py) contains a minimal example server.
