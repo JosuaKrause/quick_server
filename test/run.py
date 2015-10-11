@@ -24,7 +24,7 @@ def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exi
     p = Popen(["python", "example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = p.communicate('\n'.join(commands) + '\nquit\n')
     if p.returncode != exit_code:
-        return fail("wrong exit code {0} expected {1}", ret, exit_code)
+        return fail("wrong exit code {0} expected {1}", p.returncode, exit_code)
 
     def check_stream(text, requireds, fails, name):
         for line in text.split('\n'):
@@ -88,5 +88,5 @@ if not url_server_run([
     ]):
     exit(2)
 
-status("all tests succesful!")
+status("all tests successful!")
 exit(0)

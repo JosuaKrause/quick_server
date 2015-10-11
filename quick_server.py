@@ -718,7 +718,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         timing = self.log_elapsed_time_string(time.clock() - clock_start) if clock_start is not None else ''
         msg("%s[%s] %s" % (timing + ' ' if len(timing) else '', self.log_date_time_string(), format % args))
 
-    def log_request(self, code, size='-'):
+    def log_request(self, code='-', size='-'):
         """Logs the current request."""
         # we ignore the size argument since it is not used anyway
         print_size = getattr(thread_local, 'size', -1)
