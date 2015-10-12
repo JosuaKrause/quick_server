@@ -388,7 +388,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def translate_path(self, orig_path):
         """Translates a path for a static file request. The server base path could
-           be different from out cwd.
+           be different from our cwd.
 
         Parameters
         ----------
