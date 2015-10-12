@@ -142,6 +142,8 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
                 read_all("")
             else:
                 return fail("unknown action {0}", a[0])
+        read_all("")
+        time.sleep(1)
     finally:
         if p is not None:
             read_all("quit\n")
@@ -196,6 +198,18 @@ if not cmd_url_server_run([
             "\"GET /example/ HTTP/1.1\"",
         ], []):
     exit(3)
+status("api test")
+if not cmd_url_server_run([
+            [ "cmd", "requests uptime"],
+            [ "url", "api/uptime/", 200 ],
+            [ "cmd", "requests uptime" ],
+        ], [], [], [
+            "[SERVER] starting server at localhost:8000",
+            "[SERVER] requests made to uptime: 0",
+            "\"GET /api/uptime/ HTTP/1.1\"",
+            "[SERVER] requests made to uptime: 1"
+        ], []):
+    exit(4)
 
 status("all tests successful!")
 exit(0)
