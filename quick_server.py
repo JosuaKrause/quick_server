@@ -453,10 +453,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 if os.path.exists(favicon):
                     path = favicon
                     break
-                favicon = os.path.join(fav_base, 'favicon.ico')
-                if os.path.exists(favicon):
-                    path = favicon
-                    break
                 if self.server.favicon_fallback is not None and os.path.exists(self.server.favicon_fallback):
                     path = os.path.join(self.server.base_path, self.server.favicon_fallback)
                     break
