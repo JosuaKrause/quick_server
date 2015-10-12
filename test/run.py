@@ -6,10 +6,14 @@ from __future__ import division
 import os
 import sys
 import time
+import signal
 import urllib2
+from StringIO import StringIO
 from subprocess import Popen, PIPE
 
 os.chdir(os.path.dirname(__file__))
+
+PYTHON = os.environ.get('PYTHON').split() if os.environ.get('PYTHON') is not None else [ sys.executable ]
 
 def status(msg, *args):
     for line in msg.format(*args).split('\n'):
@@ -21,7 +25,7 @@ def fail(msg, *args):
     return False
 
 def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exit_code=0):
-    p = Popen(["python", "example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    p = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = p.communicate('\n'.join(commands) + '\nquit\n')
     if p.returncode != exit_code:
         return fail("wrong exit code {0} expected {1}", p.returncode, exit_code)
@@ -49,7 +53,7 @@ user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'
 def url_server_run(probes):
     p = None
     try:
-        p = Popen(["python", "example.py"], cwd='../example')
+        p = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE)
         time.sleep(1) # give the server some time to wake up
         for parr in probes:
             url = 'http://localhost:8000/{0}'.format(parr[0])
@@ -71,7 +75,15 @@ def url_server_run(probes):
                 return fail("{0} responded with {1} ({2} expected)", url, response.code, status_code)
     finally:
         if p is not None:
-            p.kill()
+            p.communicate("quit\n")
+            time.sleep(1)
+            if p.poll() is None:
+                status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
+                p.terminate()
+                time.sleep(3)
+                if p.poll() is None:
+                    status("WARNING: killed server")
+                    p.kill()
     return True
 
 if not cmd_server_run([ "requests uptime" ], [], [], [ "[SERVER] requests made to uptime: 0" ], []):
@@ -83,10 +95,18 @@ if not url_server_run([
         [ 'favicon.ico', 200 ],
         [ 'api/uptime/', 200 ],
         [ 'favicon.ico', 304, { 'eTag': '8f471f65' } ],
+        [ 'favicon.ico', 200, { 'eTag': 'deadbeef' } ],
         # [ 'example/example.py', 404 ], TODO
         # [ 'example/', 304, { 'eTag': '???' } ], TODO
     ]):
     exit(2)
+if not cmd_server_run([ "restart" ], [], [], [
+            "[SERVER] starting server at localhost:8000",
+            "[SERVER] shutting down..",
+            "[SERVER] starting server at localhost:8000",
+            "[SERVER] shutting down.."
+        ], []):
+    exit(3)
 
 status("all tests successful!")
 exit(0)

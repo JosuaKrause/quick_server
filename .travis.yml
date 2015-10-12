@@ -4,7 +4,15 @@ language: python
 python:
   - "2.7"
 sudo: false
-install: true
-script: test/run.py
+install:
+  - pip install coverage
+script:
+  - export PYTHON="coverage run --parallel-mode --source=$PWD/quick_server.py,$PWD/test/run.py"
+  - $PYTHON test/run.py
+  - find example test -name '.coverage*' | while read i; do mv "$i" ".coverage.$(basename "$i")"; done
+  - coverage combine
+after_success:
+  - pip install codecov
+  - codecov
 notifications:
   email: false
