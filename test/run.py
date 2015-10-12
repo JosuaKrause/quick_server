@@ -13,7 +13,7 @@ from subprocess import Popen, PIPE
 
 os.chdir(os.path.dirname(__file__))
 
-PYTHON = os.environ.get('PYTHON').split()
+PYTHON = os.environ.get('PYTHON').split() if os.environ.get('PYTHON') is not None else [ sys.executable ]
 
 def status(msg, *args):
     for line in msg.format(*args).split('\n'):
@@ -53,7 +53,7 @@ user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'
 def url_server_run(probes):
     p = None
     try:
-        p = Popen(PYTHON + ["example.py"], cwd='../example')
+        p = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE)
         time.sleep(1) # give the server some time to wake up
         for parr in probes:
             url = 'http://localhost:8000/{0}'.format(parr[0])
@@ -75,13 +75,15 @@ def url_server_run(probes):
                 return fail("{0} responded with {1} ({2} expected)", url, response.code, status_code)
     finally:
         if p is not None:
-            p.terminate()
+            p.communicate("quit\n")
             time.sleep(3)
-            try:
-                p.kill()
-            except OSError as e:
-                if e.errno != 3:
-                    raise
+            if p.poll() is None:
+                status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
+                p.terminate()
+                time.sleep(3)
+                if p.poll() is None:
+                    status("WARNING: killed server")
+                    p.kill()
     return True
 
 if not cmd_server_run([ "requests uptime" ], [], [], [ "[SERVER] requests made to uptime: 0" ], []):
