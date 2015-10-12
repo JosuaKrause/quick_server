@@ -76,7 +76,7 @@ def url_server_run(probes):
     finally:
         if p is not None:
             p.communicate("quit\n")
-            time.sleep(3)
+            time.sleep(1)
             if p.poll() is None:
                 status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
                 p.terminate()
@@ -95,10 +95,18 @@ if not url_server_run([
         [ 'favicon.ico', 200 ],
         [ 'api/uptime/', 200 ],
         [ 'favicon.ico', 304, { 'eTag': '8f471f65' } ],
+        [ 'favicon.ico', 200, { 'eTag': 'deadbeef' } ],
         # [ 'example/example.py', 404 ], TODO
         # [ 'example/', 304, { 'eTag': '???' } ], TODO
     ]):
     exit(2)
+if not cmd_server_run([ "restart" ], [], [], [
+            "[SERVER] starting server at localhost:8000",
+            "[SERVER] shutting down..",
+            "[SERVER] starting server at localhost:8000",
+            "[SERVER] shutting down.."
+        ], []):
+    exit(3)
 
 status("all tests successful!")
 exit(0)
