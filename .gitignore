@@ -1,4 +1,5 @@
 .cmd_history
+.DS_Store
 
 *.py[co]
 
