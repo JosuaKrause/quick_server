@@ -181,6 +181,8 @@ if not url_server_run([
         [ 'api/uptime/', 200 ],
         [ 'favicon.ico', 304, { 'eTag': '8f471f65' } ],
         [ 'favicon.ico', 200, { 'eTag': 'deadbeef' } ],
+        # [ '/', 404 ],
+        # [ '/../', 404 ],
         # [ 'example/example.py', 404 ], TODO
         # [ 'example/', 304, { 'eTag': '???' } ], TODO
     ]):
