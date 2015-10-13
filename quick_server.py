@@ -120,26 +120,24 @@ def _on_exit():
         # just to make sure not come into an infinite loop if something breaks
         # we reset the restart flag before we attempt to actually restart
         _do_restart = False
-        # fd = os.fork()
-        # if fd != 0:
-        #     # close file handles -- pray and spray!
-        #     # try:
-        #     #     import resource
-        #     #     fd_range = resource.getrlimit(resource.RLIMIT_NOFILE)
-        #     #     # don't close 0, 1, or 2! we assume those are STD_IN, STD_OUT,
-        #     #     # and STD_ERR
-        #     #     os.closerange(3, fd_range[0])
-        #     # except:
-        #     #     msg("{0}", traceback.format_exc())
-        #     # restart the executable
+        # close file handles -- pray and spray!
+        try:
+            import resource
+            fd_range = resource.getrlimit(resource.RLIMIT_NOFILE)
+            # don't close 0, 1, or 2! we assume those are STD_IN, STD_OUT,
+            # and STD_ERR
+            os.closerange(3, fd_range[0])
+        except:
+            msg("{0}", traceback.format_exc())
+        # restart the executable
         executable = os.environ.get('PYTHON').split() if os.environ.get('PYTHON') is not None else [ sys.executable ]
+        msg("restarting")
         os.execvp(executable[0], executable + sys.argv)
 
 try:
     # try to sneak in as first -- this will be the last action
     # the program does before it gets replaced with the new instance.
     # being the first in list ensures that all other exit handlers run before us
-    raise ValueError()
     atexit._exithandlers.insert(0, (_on_exit, (), {}))
 except:
     # otherwise register normally
