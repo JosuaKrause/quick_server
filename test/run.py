@@ -13,7 +13,7 @@ from subprocess import Popen, PIPE
 
 os.chdir(os.path.dirname(__file__))
 
-PYTHON = os.environ.get('PYTHON').split() if os.environ.get('PYTHON') is not None else [ sys.executable ]
+PYTHON = os.environ.get('PYTHON', sys.executable).split()
 
 def status(msg, *args):
     for line in msg.format(*args).split('\n'):

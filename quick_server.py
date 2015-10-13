@@ -130,8 +130,7 @@ def _on_exit():
         except:
             msg("{0}", traceback.format_exc())
         # restart the executable
-        executable = os.environ.get('PYTHON').split() if os.environ.get('PYTHON') is not None else [ sys.executable ]
-        msg("restarting")
+        executable = os.environ.get('PYTHON', sys.executable).split()
         os.execvp(executable[0], executable + sys.argv)
 
 try:
