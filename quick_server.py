@@ -356,7 +356,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 break
         if method is None:
             return False
-
         files = {}
         args = {}
         try:
