@@ -139,6 +139,7 @@ try:
     # try to sneak in as first -- this will be the last action
     # the program does before it gets replaced with the new instance.
     # being the first in list ensures that all other exit handlers run before us
+    raise ValueError()
     atexit._exithandlers.insert(0, (_on_exit, (), {}))
 except:
     # otherwise register normally
