@@ -11,6 +11,7 @@ addr = ''
 port = 8000
 server = create_server((addr, port))
 server.bind_path('/', '..')
+server.add_default_white_list()
 server.favicon_fallback = 'favicon.ico'
 
 start = clock()

@@ -185,10 +185,12 @@ if not url_server_run([
         [ 'api/uptime/', 200 ],
         [ 'favicon.ico', 304, { 'eTag': '8f471f65' } ],
         [ 'favicon.ico', 200, { 'eTag': 'deadbeef' } ],
-        # [ '/', 404 ],
-        # [ '/../', 404 ],
-        # [ 'example/example.py', 404 ], TODO
-        # [ 'example/', 304, { 'eTag': '???' } ], TODO
+        [ '/', 404 ],
+        [ '/../', 404 ],
+        [ 'example/example.py', 404 ],
+        [ '.git/', 404 ],
+        [ '.travis.yml', 404 ],
+        # [ 'example/', 304, { 'eTag': 'deadbeef' } ],
     ]):
     exit(2)
 status("restart test")

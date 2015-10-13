@@ -166,9 +166,9 @@ try:
     # the program does before it gets replaced with the new instance.
     # being the first in list ensures that all other exit handlers run before us
     atexit._exithandlers.insert(0, (_on_exit, (), {}))
-except:
+except: # pragma: no cover
     # otherwise register normally
-    atexit.register(_on_exit) # pragma: no cover
+    atexit.register(_on_exit)
 
 class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and instead
@@ -449,7 +449,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 break
         # if pass is still None here the file cannot be found
         if path is None:
-            raise ValueError("no matching folder alias: {0}".format(orig_path))
+            msg("no matching folder alias: {0}".format(orig_path))
+            self.send_error(404, "File not found")
+            raise PreventDefaultResponse()
         if os.path.isdir(path):
             # no black-/white-list for directories
             is_white = True
@@ -741,7 +743,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def log_request(self, code='-', size='-'):
         """Logs the current request."""
-        # we ignore the size argument since it is not used anyway
         print_size = getattr(thread_local, 'size', -1)
         if size != '-':
             size_str = ' (%s)' % size
