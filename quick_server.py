@@ -349,7 +349,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         rem_path = ""
         for mask, m in self.server._f_mask.get(method_str, []):
             lm = len(mask)
-            if path.startswith(mask) and (len(path) <= lm + 1 or path[lm + 1] in '#?/'):
+            if path.startswith(mask) and (mask[-1] == '/' or len(path) <= lm + 1 or path[lm] in '#?/'):
                 method = m
                 method_mask = mask
                 rem_path = path[lm:]
@@ -395,7 +395,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 f = method(self, args)
                 if f is not None and send_body:
                     self.copyfile(f, self.wfile)
-                thread_local.size = f.tell()
+                    thread_local.size = f.tell()
             finally:
                 if f is not None:
                     f.close()
@@ -452,6 +452,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             msg("no matching folder alias: {0}".format(orig_path))
             self.send_error(404, "File not found")
             raise PreventDefaultResponse()
+        if os.path.isdir(path):
+            for index in [ "index.html", "index.htm" ]:
+                index = os.path.join(path, index)
+                if os.path.isfile(index):
+                    path = index
+                    break
         if os.path.isdir(path):
             # no black-/white-list for directories
             is_white = True

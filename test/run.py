@@ -190,7 +190,7 @@ if not url_server_run([
         [ 'example/example.py', 404 ],
         [ '.git/', 404 ],
         [ '.travis.yml', 404 ],
-        # [ 'example/', 304, { 'eTag': 'deadbeef' } ],
+        [ 'example/', 304, { 'eTag': '5a73b4a0' } ],
     ]):
     exit(2)
 status("restart test")
