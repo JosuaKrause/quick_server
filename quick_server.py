@@ -100,13 +100,41 @@ def set_log_file(file):
     global log_file
     log_file = file
 
+def _caller_trace(frame):
+    try:
+        return frame.f_globals['__file__'], frame.f_lineno
+    finally:
+        del frame
+
+def caller_trace(): # pragma: no cover
+    try:
+        raise Exception
+    except:
+        try:
+            frames = [ sys.exc_info()[2].tb_frame ]
+            for _ in xrange(2):
+                frames.append(frames[-1].f_back)
+            return _caller_trace(frames[-1])
+        finally:
+            for f in frames:
+                del f
+            frames = []
+if hasattr(sys, '_getframe'):
+    caller_trace = lambda: _caller_trace(sys._getframe(2))
+
+long_msg = True
 def msg(message, *args):
     """Prints a message from the server to the log file."""
     global log_file
     if log_file is None:
         log_file = sys.stderr
+    if long_msg:
+        file, line = caller_trace()
+        head = '{0} ({1}): '.format(os.path.basename(file), line)
+    else:
+        head = '[SERVER] '
     for line in message.format(*args).split('\n'):
-        log_file.write('[SERVER] {0}\n'.format(line))
+        log_file.write('{0}{1}\n'.format(head, line))
 
 __version__ = "0.1"
 # thread local storage for keeping track of request information (eg. time)
@@ -114,7 +142,7 @@ thread_local = threading.local()
 
 # handling the 'restart' command
 _do_restart = False
-def _on_exit():
+def _on_exit(): # pragma: no cover
     global _do_restart
     if _do_restart:
         # just to make sure not come into an infinite loop if something breaks
@@ -140,7 +168,7 @@ try:
     atexit._exithandlers.insert(0, (_on_exit, (), {}))
 except:
     # otherwise register normally
-    atexit.register(_on_exit)
+    atexit.register(_on_exit) # pragma: no cover
 
 class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and instead

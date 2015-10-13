@@ -170,7 +170,11 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
     return True
 
 status("basic command check")
-if not cmd_server_run([ "requests uptime" ], [], [], [ "[SERVER] requests made to uptime: 0" ], []):
+if not cmd_server_run([
+            "requests uptime"
+        ], [], [], [
+            "requests made to uptime: 0"
+        ], []):
     exit(1)
 status("url request checks")
 if not url_server_run([
@@ -193,10 +197,10 @@ if not cmd_url_server_run([
             [ "cmd", "restart" ],
             [ "url", "example/", 200 ]
         ], [], [], [
-            "[SERVER] starting server at localhost:8000",
+            "starting server at localhost:8000",
             "\"GET /example/ HTTP/1.1\"",
-            "[SERVER] shutting down..",
-            "[SERVER] starting server at localhost:8000",
+            "shutting down..",
+            "starting server at localhost:8000",
             "\"GET /example/ HTTP/1.1\"",
         ], []):
     exit(3)
@@ -206,10 +210,10 @@ if not cmd_url_server_run([
             [ "url", "api/uptime/", 200 ],
             [ "cmd", "requests uptime" ],
         ], [], [], [
-            "[SERVER] starting server at localhost:8000",
-            "[SERVER] requests made to uptime: 0",
+            "starting server at localhost:8000",
+            "requests made to uptime: 0",
             "\"GET /api/uptime/ HTTP/1.1\"",
-            "[SERVER] requests made to uptime: 1"
+            "requests made to uptime: 1"
         ], []):
     exit(4)
 
