@@ -116,9 +116,7 @@ def caller_trace(): # pragma: no cover
                 frames.append(frames[-1].f_back)
             return _caller_trace(frames[-1])
         finally:
-            for f in frames:
-                del f
-            frames = []
+            del frames
 if hasattr(sys, '_getframe'):
     caller_trace = lambda: _caller_trace(sys._getframe(2))
 
