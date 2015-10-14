@@ -9,6 +9,7 @@ implementation / iteration:
 * provide a basic command interpret loop for server commands
 
 [![Build Status](https://travis-ci.org/JosuaKrause/quick_server.svg?branch=master)](https://travis-ci.org/JosuaKrause/quick_server)
+[![codecov.io](https://codecov.io/github/JosuaKrause/quick_server/coverage.svg?branch=master)](https://codecov.io/github/JosuaKrause/quick_server?branch=master)
 
 ## Usage
 
