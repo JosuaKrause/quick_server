@@ -36,6 +36,8 @@ import zlib
 import errno
 import atexit
 import select
+import signal
+import socket
 import urllib
 import fnmatch
 import readline
@@ -121,6 +123,7 @@ if hasattr(sys, '_getframe'):
     caller_trace = lambda: _caller_trace(sys._getframe(2))
 
 long_msg = True
+_msg_stderr = False
 def msg(message, *args):
     """Prints a message from the server to the log file."""
     global log_file
@@ -131,33 +134,74 @@ def msg(message, *args):
         head = '{0} ({1}): '.format(os.path.basename(file), line)
     else:
         head = '[SERVER] '
+    out = StringIO()
     for line in message.format(*args).split('\n'):
-        log_file.write('{0}{1}\n'.format(head, line))
+        out.write('{0}{1}\n'.format(head, line))
+    out.flush()
+    out.seek(0)
+    if _msg_stderr:
+        sys.stderr.write(out.read())
+        sys.stderr.flush()
+    else:
+        log_file.write(out.read())
+        log_file.flush()
+    out.close()
 
 __version__ = "0.1"
 # thread local storage for keeping track of request information (eg. time)
 thread_local = threading.local()
 
+# if a restart file is set a '1' is written to the file if a restart is requested
+# no further action (like closing file descriptors etc.) is performed
+_restart_file = None
+def set_restart_file(rf):
+    global _restart_file
+    _restart_file = rf
+
+# fds not to close
+fds_no_close = []
 # handling the 'restart' command
 _do_restart = False
 def _on_exit(): # pragma: no cover
+    global _msg_stderr
     global _do_restart
     if _do_restart:
         # just to make sure not come into an infinite loop if something breaks
         # we reset the restart flag before we attempt to actually restart
         _do_restart = False
-        # close file handles -- pray and spray!
-        try:
-            import resource
-            fd_range = resource.getrlimit(resource.RLIMIT_NOFILE)
-            # don't close 0, 1, or 2! we assume those are STD_IN, STD_OUT,
-            # and STD_ERR
-            os.closerange(3, fd_range[0])
-        except:
-            msg("{0}", traceback.format_exc())
-        # restart the executable
-        executable = os.environ.get('PYTHON', sys.executable).split()
-        os.execvp(executable[0], executable + sys.argv)
+        if _restart_file is not None:
+            with open(_restart_file, 'w') as rf:
+                rf.write('1')
+                rf.flush()
+        else:
+            # close file handles -- pray and spray!
+            try:
+                import resource
+                fd_range = resource.getrlimit(resource.RLIMIT_NOFILE)
+                # redirect messages to STD_ERR since we are about to close everything else
+                _msg_stderr = True
+                # don't close STD_IN, STD_OUT, or STD_ERR
+                no_close = [ sys.stdin.fileno(), sys.stdout.fileno(), sys.stderr.fileno() ]
+                no_close += fds_no_close
+                for fd in xrange(0, fd_range[0]):
+                    if fd in no_close:
+                        continue
+                    try:
+                        # when closing some fd in some circumstances the process
+                        # terminates -- there is no safe way to avoid that :(
+                        os.close(fd)
+                    except (IOError, OSError):
+                        pass
+            except:
+                msg("{0}", traceback.format_exc())
+            # restart the executable
+            executable = os.environ.get('PYTHON', sys.executable).split()
+            exec_arr = executable + sys.argv
+            msg("restarting: {0}", ' '.join(exec_arr))
+            try:
+                os.execvp(executable[0], exec_arr)
+            except:
+                msg("error during restart:\n{0}", traceback.format_exc())
 
 try:
     # try to sneak in as first -- this will be the last action
@@ -514,11 +558,17 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def handle_error(self):
         """Tries to send an 500 error after encountering an exception."""
-        msg("{0}", traceback.format_exc())
+        if self.server.can_ignore_error(self):
+            return
         if thread_local.status_code is None:
             msg("ERROR: Cannot send error status code! Header already sent!")
         else:
-            self.send_error(500, "Internal Error")
+            try:
+                self.send_error(500, "Internal Error")
+            except:
+                if self.server.can_ignore_error(self):
+                    return
+                msg("ERROR: Cannot send error status code:\n{0}", traceback.format_exc())
 
     def is_cross_origin(self):
         return self.server.cross_origin
@@ -753,7 +803,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             size_str = self.log_size_string(print_size) + ' '
         else:
             size_str = ''
-        self.log_message('%s"%s" %s', size_str, self.requestline, str(code))
+        if not self.server.suppress_noise or (code != 200 and code != 304):
+            self.log_message('%s"%s" %s', size_str, self.requestline, str(code))
         if print_size >= 0:
             thread_local.size = -1
 
@@ -817,6 +868,10 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         cross_origin : bool
             Whether to allow cross origin requests. Defaults to False.
 
+        suppress_noise : bool
+            If set only messages with a non-trivial status code (ie. not 200 nor 304)
+            are reported. Defaults to False.
+
         done : bool
             If set to True the server will terminate.
         """
@@ -832,6 +887,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         self.max_age = 0
         self.max_file_size = 50 * 1024 * 1024
         self.cross_origin = False
+        self.suppress_noise = False
         self.done = False
         self._folder_masks = [ ]
         self._f_mask = {}
@@ -1528,6 +1584,27 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             if self._clean_up_call is not None:
                 self._clean_up_call()
             self.done = True
+
+    def can_ignore_error(self, reqhnd=None):
+        """Tests if the error is worth reporting.
+        """
+        if not self.done:
+            return False
+        value = sys.exc_info()[1]
+        if not isinstance(value, socket.error):
+            return False
+        need_close = value.errno == 9
+        if need_close and reqhnd is not None:
+            reqhnd.close_connection = 1
+        return need_close
+
+    def handle_error(self, request, client_address):
+        """Handle an error gracefully.
+        """
+        if self.can_ignore_error():
+            return
+        thread = threading.current_thread()
+        msg("Error in request ({0}): {1} in {2}\n{3}", client_address, repr(request), thread.name, traceback.format_exc())
 
 class ParallelQuickServer(SocketServer.ThreadingMixIn, QuickServer):
     daemon_threads = True
