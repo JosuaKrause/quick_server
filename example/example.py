@@ -30,9 +30,9 @@ count_uptime = 0
 @server.cmd(1, complete_requests)
 def requests(args):
     if args[0] != 'uptime':
-      msg("unknown request: {0}", args[0])
+        msg("unknown request: {0}", args[0])
     else:
-      msg("requests made to {0}: {1}", args[0], count_uptime)
+        msg("requests made to {0}: {1}", args[0], count_uptime)
 
 msg("starting server at {0}:{1}", addr if addr else 'localhost', port)
 server.serve_forever()
