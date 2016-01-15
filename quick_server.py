@@ -466,7 +466,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         The absolute file path denoted by the original path.
         """
         orig_path = urlparse.urlparse(orig_path)[2]
+        is_folder = len(orig_path) > 1 and orig_path[-1] == '/'
         orig_path = posixpath.normpath(urllib.unquote(orig_path))
+        if is_folder:
+            orig_path += '/'
         path = None
         for (name, fm) in self.server._folder_masks:
             if not orig_path.startswith(name):
