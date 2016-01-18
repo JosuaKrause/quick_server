@@ -566,6 +566,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if thread_local.status_code is None:
             msg("ERROR: Cannot send error status code! Header already sent!")
         else:
+            msg("ERROR: Error while processing request:\n{0}", traceback.format_exc())
             try:
                 self.send_error(500, "Internal Error")
             except:
