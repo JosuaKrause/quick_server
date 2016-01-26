@@ -384,6 +384,27 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         A bool whether the request was handled. If it was not handled the requested
         URL is interpreted as static file.
         """
+        ongoing = True
+        if self.server.report_slow_requests:
+            path = self.path
+
+            def do_report():
+                if not ongoing:
+                    return
+                msg("request takes longer than expected: \"{0} {1}\"", method_str, path)
+
+            alarm = threading.Timer(5.0, do_report)
+            alarm.start()
+        else:
+            alarm = None
+        try:
+            return self._handle_special(send_body, method_str)
+        finally:
+            if alarm is not None:
+                alarm.cancel()
+            ongoing = False
+
+    def _handle_special(self, send_body, method_str):
         path = self.path
         # interpreting the URL masks to find which method to call
         method = None
@@ -876,6 +897,9 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             If set only messages with a non-trivial status code (ie. not 200 nor 304)
             are reported. Defaults to False.
 
+        report_slow_requests : bool
+            If set request that take longer than 5 seconds are reported. Defaults to False.
+
         done : bool
             If set to True the server will terminate.
         """
@@ -892,6 +916,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         self.max_file_size = 50 * 1024 * 1024
         self.cross_origin = False
         self.suppress_noise = False
+        self.report_slow_requests = False
         self.done = False
         self._folder_masks = [ ]
         self._f_mask = {}
