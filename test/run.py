@@ -232,7 +232,9 @@ if not cmd_url_server_run([
             "shutting down..",
             "starting server at localhost:8000",
             "\"GET /example/ HTTP/1.1\"",
-        ], []):
+        ], [
+            "Exception KeyError: KeyError(",
+        ]):
     exit(3)
 note("api test")
 if not cmd_url_server_run([
@@ -263,7 +265,8 @@ if not cmd_url_server_run([
             "starting server at localhost:8000",
             "request takes longer than expected: \"GET /api/uptime/8/\"",
         ], [
-            "] \"GET" # the server is not supposed to output normal requests
+            "] \"GET", # the server is not supposed to output normal requests
+            "Exception KeyError: KeyError(",
         ], script="example2.py"):
     exit(5)
 note("special value responses")

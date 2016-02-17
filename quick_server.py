@@ -183,7 +183,7 @@ def _on_exit(): # pragma: no cover
                 rf.flush()
         else:
             # restart the executable
-            _start_restart_loop(exit_code, verbose=True)
+            _start_restart_loop(exit_code, in_atexit=True)
 
 try:
     # try to sneak in as first -- this will be the last action
@@ -194,7 +194,7 @@ except: # pragma: no cover
     # otherwise register normally
     atexit.register(_on_exit)
 
-def _start_restart_loop(exit_code, verbose):
+def _start_restart_loop(exit_code, in_atexit):
     try:
         if exit_code is not None:
             # we have a parent process that restarts us
@@ -204,7 +204,7 @@ def _start_restart_loop(exit_code, verbose):
 
             executable = os.environ.get('PYTHON', sys.executable).split()
             exec_arr = executable + sys.argv
-            if verbose:
+            if in_atexit:
                 msg("restarting: {0}", ' '.join(exec_arr))
 
             exit_code = _restart_exit_code
@@ -217,7 +217,10 @@ def _start_restart_loop(exit_code, verbose):
         msg("error during restart:\n{0}", traceback.format_exc())
         child_code = _error_exit_code
     finally:
-        sys.exit(child_code)
+        if in_atexit:
+            os._exit(child_code)
+        else:
+            sys.exit(child_code)
 
 def setup_restart():
     """Sets up restart functionality that doesn't keep the first process alive.
@@ -230,7 +233,7 @@ def setup_restart():
     """
     exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
     if exit_code is None:
-        _start_restart_loop(None, verbose=False)
+        _start_restart_loop(None, in_atexit=False)
 
 class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and instead
