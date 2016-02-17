@@ -15,9 +15,15 @@ os.chdir(os.path.dirname(__file__))
 
 PYTHON = os.environ.get('PYTHON', sys.executable).split()
 
-def status(msg, *args):
+def print_msg(prefix, msg, *args):
     for line in msg.format(*args).split('\n'):
-        print("[TEST] {0}".format(line), file=sys.stderr)
+        print("[{0}] {1}".format(prefix, line), file=sys.stderr)
+
+def status(msg, *args):
+    print_msg("TEST", msg, *args)
+
+def note(msg, *args):
+    print_msg("NOTE", msg, *args)
 
 def fail(msg, *args):
     status(msg, *args)
@@ -70,10 +76,10 @@ def access_url(parr):
         return fail("{0} responded with {1} ({2} expected)", url, response.code, status_code)
     return True
 
-def url_server_run(probes):
+def url_server_run(probes, script="example.py"):
     p = None
     try:
-        p = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE)
+        p = Popen(PYTHON + [script], cwd='../example', stdin=PIPE)
         time.sleep(1) # give the server some time to wake up
         for parr in probes:
             if not access_url(parr):
@@ -91,7 +97,17 @@ def url_server_run(probes):
                     p.kill()
     return True
 
-def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, exit_code=0):
+def report_output(output, error):
+    status("STD_OUT>>>")
+    for s in output:
+        status("{0}", s.rstrip())
+    status("<<<STD_OUT")
+    status("STD_ERR>>>")
+    for s in error:
+        status("{0}", s.rstrip())
+    status("<<<STD_ERR")
+
+def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, exit_code=0, script="example.py"):
     output = []
     error = []
 
@@ -111,20 +127,13 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
                     written += os.write(s.fileno(), write[written:])
             except OSError as e:
                 if e.errno == 32:
-                    status("STD_OUT>>>")
-                    for s in output:
-                        status("{0}", s.rstrip())
-                    status("<<<STD_OUT")
-                    status("STD_ERR>>>")
-                    for s in error:
-                        status("{0}", s.rstrip())
-                    status("<<<STD_ERR")
+                    report_output(output, error)
                 raise e
 
     p = None
     pr = None
     try:
-        pr = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        pr = Popen(PYTHON + [script], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
         # make pipes non-blocking
         flags = fcntl(pr.stdin, F_GETFL)
         fcntl(pr.stdin, F_SETFL, flags | os.O_NONBLOCK)
@@ -150,6 +159,8 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
                 status("url: {0}", a[1])
                 a.pop(0)
                 if not access_url(a):
+                    read_all("")
+                    report_output(output, error)
                     return False
                 read_all("")
             else:
@@ -181,14 +192,14 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
         return False
     return True
 
-status("basic command check")
+note("basic command check")
 if not cmd_server_run([
             "requests uptime"
         ], [], [], [
             "requests made to uptime: 0"
         ], []):
     exit(1)
-status("url request checks")
+note("url request checks")
 if not url_server_run([
         [ 'example/', 200 ],
         [ 'example/index.html', 200 ],
@@ -205,12 +216,17 @@ if not url_server_run([
         [ 'example/', 304, { 'eTag': '5a73b4a0' } ],
     ]):
     exit(2)
-status("restart test")
+note("restart test")
 if not cmd_url_server_run([
             [ "url", "example/", 200 ],
             [ "cmd", "restart" ],
-            [ "url", "example/", 200 ]
+            [ "url", "example/", 200 ],
+            [ "cmd", "restart" ],
+            [ "url", "example/", 200 ],
         ], [], [], [
+            "starting server at localhost:8000",
+            "\"GET /example/ HTTP/1.1\"",
+            "shutting down..",
             "starting server at localhost:8000",
             "\"GET /example/ HTTP/1.1\"",
             "shutting down..",
@@ -218,7 +234,7 @@ if not cmd_url_server_run([
             "\"GET /example/ HTTP/1.1\"",
         ], []):
     exit(3)
-status("api test")
+note("api test")
 if not cmd_url_server_run([
             [ "cmd", "requests uptime"],
             [ "url", "api/uptime/", 200 ],
@@ -230,6 +246,34 @@ if not cmd_url_server_run([
             "requests made to uptime: 1"
         ], []):
     exit(4)
+note("restart loop test")
+if not cmd_url_server_run([
+            [ "url", "api/uptime/6", 200 ],
+            [ "cmd", "restart" ],
+            [ "url", "api/uptime/7/", 200 ],
+            [ "cmd", "restart" ],
+            [ "url", "api/uptime/8/", 200 ],
+        ], [], [], [
+            "starting server at localhost:8000",
+            "request takes longer than expected: \"GET /api/uptime/6\"",
+            "shutting down..",
+            "starting server at localhost:8000",
+            "request takes longer than expected: \"GET /api/uptime/7/\"",
+            "shutting down..",
+            "starting server at localhost:8000",
+            "request takes longer than expected: \"GET /api/uptime/8/\"",
+        ], [
+            "] \"GET" # the server is not supposed to output normal requests
+        ], script="example2.py"):
+    exit(5)
+note("special value responses")
+if not url_server_run([
+        [ 'api/uptime/0/?foo=1', 200 ],
+        [ 'api/uptime/0/?bar=nan', 200 ],
+        [ 'api/uptime/0/?baz=inf', 200 ],
+        [ 'api/uptime/0/?fub=-inf', 200 ],
+    ], script="example2.py"):
+    exit(6)
 
-status("all tests successful!")
+note("all tests successful!")
 exit(0)
