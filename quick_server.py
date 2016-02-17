@@ -158,6 +158,12 @@ def set_restart_file(rf):
     global _restart_file
     _restart_file = rf
 
+# if a restart file is set the restart exit code is ignored
+_restart_exit_code = 42
+def set_restart_exit_code(code):
+    global _restart_exit_code
+    _restart_exit_code = code
+
 # fds not to close
 fds_no_close = []
 # handling the 'restart' command
@@ -174,32 +180,23 @@ def _on_exit(): # pragma: no cover
                 rf.write('1')
                 rf.flush()
         else:
-            # close file handles -- pray and spray!
-            try:
-                import resource
-                fd_range = resource.getrlimit(resource.RLIMIT_NOFILE)
-                # redirect messages to STD_ERR since we are about to close everything else
-                _msg_stderr = True
-                # don't close STD_IN, STD_OUT, or STD_ERR
-                no_close = [ sys.stdin.fileno(), sys.stdout.fileno(), sys.stderr.fileno() ]
-                no_close += fds_no_close
-                for fd in xrange(0, fd_range[0]):
-                    if fd in no_close:
-                        continue
-                    try:
-                        # when closing some fd in some circumstances the process
-                        # terminates -- there is no safe way to avoid that :(
-                        os.close(fd)
-                    except (IOError, OSError):
-                        pass
-            except:
-                msg("{0}", traceback.format_exc())
             # restart the executable
+            exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
+            msg("restarting: {0}", ' '.join(exec_arr))
+            if exit_code is not None:
+                # we have a parent process that restarts us
+                sys.exit(int(exit_code))
             executable = os.environ.get('PYTHON', sys.executable).split()
             exec_arr = executable + sys.argv
-            msg("restarting: {0}", ' '.join(exec_arr))
+            exit_code = _restart_exit_code
             try:
-                os.execvp(executable[0], exec_arr)
+                child_code = exit_code
+                environ = os.environ.copy()
+                environ['QUICK_SERVER_RESTART'] = str(exit_code)
+                while child_code == exit_code:
+                    child_code = os.spawnvpe(os.P_WAIT, executable[0], exec_arr, environ)
+                # propagate the exit code
+                sys.exit(child_code)
             except:
                 msg("error during restart:\n{0}", traceback.format_exc())
 
