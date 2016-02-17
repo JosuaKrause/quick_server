@@ -152,53 +152,39 @@ __version__ = "0.1"
 thread_local = threading.local()
 
 # if a restart file is set a '1' is written to the file if a restart is requested
-# no further action (like closing file descriptors etc.) is performed
+# if a restart exit code is set the restart file is ignored
 _restart_file = None
 def set_restart_file(rf):
     global _restart_file
     _restart_file = rf
 
-# if a restart file is set the restart exit code is ignored
 _restart_exit_code = 42
 def set_restart_exit_code(code):
     global _restart_exit_code
     _restart_exit_code = code
 
-# fds not to close
-fds_no_close = []
+_error_exit_code = 1
+def set_error_exit_code(code):
+    global _error_exit_code
+    _error_exit_code = code
+
 # handling the 'restart' command
 _do_restart = False
 def _on_exit(): # pragma: no cover
-    global _msg_stderr
     global _do_restart
     if _do_restart:
         # just to make sure not come into an infinite loop if something breaks
         # we reset the restart flag before we attempt to actually restart
         _do_restart = False
-        if _restart_file is not None:
+        exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
+        if _restart_file is not None and exit_code is None:
             with open(_restart_file, 'w') as rf:
                 rf.write('1')
                 rf.flush()
         else:
             # restart the executable
-            exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
             msg("restarting: {0}", ' '.join(exec_arr))
-            if exit_code is not None:
-                # we have a parent process that restarts us
-                sys.exit(int(exit_code))
-            executable = os.environ.get('PYTHON', sys.executable).split()
-            exec_arr = executable + sys.argv
-            exit_code = _restart_exit_code
-            try:
-                child_code = exit_code
-                environ = os.environ.copy()
-                environ['QUICK_SERVER_RESTART'] = str(exit_code)
-                while child_code == exit_code:
-                    child_code = os.spawnvpe(os.P_WAIT, executable[0], exec_arr, environ)
-                # propagate the exit code
-                sys.exit(child_code)
-            except:
-                msg("error during restart:\n{0}", traceback.format_exc())
+            _start_restart_loop(exit_code)
 
 try:
     # try to sneak in as first -- this will be the last action
@@ -208,6 +194,39 @@ try:
 except: # pragma: no cover
     # otherwise register normally
     atexit.register(_on_exit)
+
+def _start_restart_loop(exit_code):
+    try:
+        if exit_code is not None:
+            # we have a parent process that restarts us
+            child_code = int(exit_code)
+        else:
+            executable = os.environ.get('PYTHON', sys.executable).split()
+            exec_arr = executable + sys.argv
+            exit_code = _restart_exit_code
+            child_code = exit_code
+            while child_code == exit_code:
+                environ = os.environ.copy()
+                environ['QUICK_SERVER_RESTART'] = str(exit_code)
+                child_code = os.spawnvpe(os.P_WAIT, executable[0], exec_arr, environ)
+    except:
+        msg("error during restart:\n{0}", traceback.format_exc())
+        child_code = _error_exit_code
+    finally:
+        sys.exit(child_code)
+
+def setup_restart():
+    """Sets up restart functionality that doesn't keep the first process alive.
+       The function needs to be called before the actual process starts but
+       after loading the program. It will restart the program in a child process
+       and immediately returns in the child process. The call in the parent
+       process never returns. Calling this function is not necessary for using
+       restart functionality but avoids potential errors resulting from open
+       file descriptors or rogue threads.
+    """
+    exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
+    if exit_code is None:
+        _start_restart_loop(None)
 
 class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and instead
