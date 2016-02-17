@@ -106,8 +106,20 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
                     output.append(os.read(p.stdout.fileno(), 1024))
                 if s == p.stderr:
                     error.append(os.read(p.stderr.fileno(), 1024))
-            for s in sels[1]:
-                written += os.write(s.fileno(), write[written:])
+            try:
+                for s in sels[1]:
+                    written += os.write(s.fileno(), write[written:])
+            except OSError as e:
+                if e.errno == 32:
+                    status("STD_OUT>>>")
+                    for s in output:
+                        status("{0}", s.rstrip())
+                    status("<<<STD_OUT")
+                    status("STD_ERR>>>")
+                    for s in error:
+                        status("{0}", s.rstrip())
+                    status("<<<STD_ERR")
+                raise e
 
     p = None
     pr = None

@@ -183,8 +183,7 @@ def _on_exit(): # pragma: no cover
                 rf.flush()
         else:
             # restart the executable
-            msg("restarting: {0}", ' '.join(exec_arr))
-            _start_restart_loop(exit_code)
+            _start_restart_loop(exit_code, verbose=True)
 
 try:
     # try to sneak in as first -- this will be the last action
@@ -195,20 +194,25 @@ except: # pragma: no cover
     # otherwise register normally
     atexit.register(_on_exit)
 
-def _start_restart_loop(exit_code):
+def _start_restart_loop(exit_code, verbose):
     try:
         if exit_code is not None:
             # we have a parent process that restarts us
             child_code = int(exit_code)
         else:
+            import subprocess
+
             executable = os.environ.get('PYTHON', sys.executable).split()
             exec_arr = executable + sys.argv
+            if verbose:
+                msg("restarting: {0}", ' '.join(exec_arr))
+
             exit_code = _restart_exit_code
             child_code = exit_code
             while child_code == exit_code:
                 environ = os.environ.copy()
                 environ['QUICK_SERVER_RESTART'] = str(exit_code)
-                child_code = os.spawnvpe(os.P_WAIT, executable[0], exec_arr, environ)
+                child_code = subprocess.Popen(exec_arr, env=environ, close_fds=True).wait()
     except:
         msg("error during restart:\n{0}", traceback.format_exc())
         child_code = _error_exit_code
@@ -221,12 +225,12 @@ def setup_restart():
        after loading the program. It will restart the program in a child process
        and immediately returns in the child process. The call in the parent
        process never returns. Calling this function is not necessary for using
-       restart functionality but avoids potential errors resulting from open
-       file descriptors or rogue threads.
+       restart functionality but avoids potential errors originating from rogue
+       threads.
     """
     exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
     if exit_code is None:
-        _start_restart_loop(None)
+        _start_restart_loop(None, verbose=False)
 
 class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and instead
