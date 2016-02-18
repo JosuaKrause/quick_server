@@ -233,6 +233,7 @@ def setup_restart():
     """
     exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
     if exit_code is None:
+        atexit.unregister(_on_exit)
         _start_restart_loop(None, in_atexit=False)
 
 class PreventDefaultResponse(Exception):
