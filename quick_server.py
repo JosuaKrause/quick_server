@@ -212,7 +212,10 @@ def _start_restart_loop(exit_code, in_atexit):
             while child_code == exit_code:
                 environ = os.environ.copy()
                 environ['QUICK_SERVER_RESTART'] = str(exit_code)
-                child_code = subprocess.Popen(exec_arr, env=environ, close_fds=True).wait()
+                try:
+                    child_code = subprocess.Popen(exec_arr, env=environ, close_fds=True).wait()
+                except KeyboardInterrupt:
+                    child_code = 0
     except:
         msg("error during restart:\n{0}", traceback.format_exc())
         child_code = _error_exit_code
