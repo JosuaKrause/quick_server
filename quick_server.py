@@ -215,7 +215,7 @@ def _start_restart_loop(exit_code, in_atexit):
                 try:
                     child_code = subprocess.Popen(exec_arr, env=environ, close_fds=True).wait()
                 except KeyboardInterrupt:
-                    child_code = 0
+                    child_code = _error_exit_code
     except:
         msg("error during restart:\n{0}", traceback.format_exc())
         child_code = _error_exit_code
