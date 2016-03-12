@@ -993,7 +993,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             '*.ttf',
             '*.txt',
             '*.woff',
-            '*.woff2'
+            '*.woff2',
         ], blacklist=False)
 
     def bind_path(self, name, folder):
