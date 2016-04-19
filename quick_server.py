@@ -513,8 +513,11 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         -------
         The absolute file path denoted by the original path.
         """
+        init_path = orig_path
         orig_path = urlparse.urlparse(orig_path)[2]
-        is_folder = len(orig_path) > 1 and orig_path[-1] == '/'
+        end_slash = orig_path[-1] == '/'
+        needs_redirect = False
+        is_folder = len(orig_path) > 1 and end_slash
         orig_path = posixpath.normpath(urllib.unquote(orig_path))
         if is_folder:
             orig_path += '/'
@@ -549,6 +552,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 index = os.path.join(path, index)
                 if os.path.isfile(index):
                     path = index
+                    if not end_slash:
+                        needs_redirect = True
                     break
         if os.path.isdir(path):
             # no black-/white-list for directories
@@ -581,6 +586,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 if self.server.favicon_fallback is not None and os.path.exists(self.server.favicon_fallback):
                     path = os.path.join(self.server.base_path, self.server.favicon_fallback)
                     break
+        # redirect improper index requests
+        if needs_redirect:
+            self.send_response(301, "Use index page with slash")
+            self.send_header("Location", "".join([ seg if ix != 2 else seg + '/' for (ix, seg) in enumerate(urlparse.urlparse(init_path)) ]))
+            self.end_headers()
+            raise PreventDefaultResponse()
         # handle ETag caching
         if self.request_version >= "HTTP/1.1" and os.path.isfile(path):
             e_tag = None

@@ -201,6 +201,7 @@ if not cmd_server_run([
     exit(1)
 note("url request checks")
 if not url_server_run([
+        [ 'example', 301 ],
         [ 'example/', 200 ],
         [ 'example/index.html', 200 ],
         [ 'example/nothing_here.txt', 404 ],
