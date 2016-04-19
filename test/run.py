@@ -71,6 +71,11 @@ def access_url(parr):
         response = opener.open(url)
     except urllib2.HTTPError as e:
         response = e
+    if rest is not None and 'url' in rest:
+        expected_url = 'http://localhost:8000/{0}'.format(rest['url'])
+        if response.geturl() != expected_url:
+            status("HEADERS:\n{0}\nBODY:\n{1}\n", response.headers, response.read())
+            return fail("redirection failed! expected '{0}' got '{1}'", expected_url, response.geturl())
     if response.code != status_code:
         status("HEADERS:\n{0}\nBODY:\n{1}\n", response.headers, response.read())
         return fail("{0} responded with {1} ({2} expected)", url, response.code, status_code)
@@ -201,7 +206,7 @@ if not cmd_server_run([
     exit(1)
 note("url request checks")
 if not url_server_run([
-        [ 'example', 301 ],
+        [ 'example', 200, { 'url': 'example/' } ], # the redirection will not be visible
         [ 'example/', 200 ],
         [ 'example/index.html', 200 ],
         [ 'example/nothing_here.txt', 404 ],

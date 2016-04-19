@@ -515,9 +515,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """
         init_path = orig_path
         orig_path = urlparse.urlparse(orig_path)[2]
-        end_slash = orig_path[-1] == '/'
         needs_redirect = False
-        is_folder = len(orig_path) > 1 and end_slash
+        is_folder = len(orig_path) > 1 and orig_path[-1] == '/'
         orig_path = posixpath.normpath(urllib.unquote(orig_path))
         if is_folder:
             orig_path += '/'
@@ -552,7 +551,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 index = os.path.join(path, index)
                 if os.path.isfile(index):
                     path = index
-                    if not end_slash:
+                    if not is_folder:
                         needs_redirect = True
                     break
         if os.path.isdir(path):
