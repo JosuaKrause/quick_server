@@ -28,8 +28,15 @@ def uptime(req, args):
     res = {
         "uptime": req.log_elapsed_time_string((clock() - start) * 1000.0).strip()
     }
+
+    def convert(value):
+        try:
+            return float(value)
+        except ValueError:
+            return value
+
     for (key, value) in args["query"].items():
-        res[key] = value if value != "nan" and value != "inf" and value != "-inf" else float(value)
+        res[key] = [ convert(v) for v in value.split(',') ] if ',' in value else convert(value)
     return res
 
 def complete_requests(_args, text):

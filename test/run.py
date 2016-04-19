@@ -280,7 +280,7 @@ if not url_server_run([
         [ 'api/uptime/0/?foo=1', 200 ],
         [ 'api/uptime/0/?bar=nan', 200 ],
         [ 'api/uptime/0/?baz=inf', 200 ],
-        [ 'api/uptime/0/?fub=-inf', 200 ],
+        [ 'api/uptime/0/?fub=-inf&foo=1&bar=1,2,3&baz=string', 200 ],
     ], script="example2.py"):
     exit(6)
 
