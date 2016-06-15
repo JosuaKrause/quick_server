@@ -124,7 +124,7 @@ if hasattr(sys, '_getframe'):
 
 long_msg = True
 _msg_stderr = False
-def msg(message, *args):
+def msg(message, *args, **kwargs):
     """Prints a message from the server to the log file."""
     global log_file
     if log_file is None:
@@ -135,7 +135,7 @@ def msg(message, *args):
     else:
         head = '[SERVER] '
     out = StringIO()
-    for line in message.format(*args).split('\n'):
+    for line in message.format(*args, **kwargs).split('\n'):
         out.write('{0}{1}\n'.format(head, line))
     out.flush()
     out.seek(0)
