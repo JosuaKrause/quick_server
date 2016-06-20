@@ -104,6 +104,8 @@ def set_log_file(file):
 
 def _caller_trace(frame):
     try:
+        if '__file__' not in frame.f_globals:
+            return '???', frame.f_lineno
         return frame.f_globals['__file__'], frame.f_lineno
     finally:
         del frame
@@ -130,8 +132,8 @@ def msg(message, *args, **kwargs):
     if log_file is None:
         log_file = sys.stderr
     if long_msg:
-        file, line = caller_trace()
-        head = '{0} ({1}): '.format(os.path.basename(file), line)
+        file_name, line = caller_trace()
+        head = '{0} ({1}): '.format(os.path.basename(file_name), line)
     else:
         head = '[SERVER] '
     out = StringIO()
