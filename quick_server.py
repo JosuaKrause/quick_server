@@ -1494,9 +1494,12 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             def reserve_worker():
                 try:
                     lock.acquire()
-                    cur_key = 0
+                    cur_key = int(zlib.crc32(repr(time.clock())) & 0xFFFFFFFF)
                     while cur_key in tasks:
-                        cur_key += 1
+                        key = int(cur_key + 1)
+                        if key == cur_key:
+                            key = 0
+                        cur_key = key
                     tasks[cur_key] = {} # put marker
                     return cur_key
                 finally:
@@ -1512,6 +1515,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                         "token": cur_key,
                         "done": True,
                         "result": None,
+                        "continue": False,
                     }
                 if action == "start":
                     cur_key = reserve_worker()
@@ -1525,17 +1529,27 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                     result, exception = remove_worker(cur_key)
                     if exception is not None:
                         e, tb = exception
+                        if tb is None:
+                            # token does not exist anymore
+                            return {
+                                "token": cur_key,
+                                "done": False,
+                                "result": None,
+                                "continue": False,
+                            }
                         msg("Error in worker for {0}: {1}\n{2}", cur_key, e, tb)
                         raise ValueError("proceeding from error")
                     return {
                         "token": cur_key,
                         "done": True,
                         "result": result,
+                        "continue": False,
                     }
                 return {
                     "token": cur_key,
                     "done": False,
                     "result": None,
+                    "continue": True,
                 }
 
             self.add_json_post_mask(mask, run_worker)

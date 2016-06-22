@@ -102,7 +102,10 @@ window.quick_server.Worker = function() {
   }
 
   function monitor(ref, token, cb, delay) {
-    if(tokens[ref] !== token) return;
+    if(tokens[ref] !== token) {
+      changeStatus(false, false);
+      return;
+    }
     var url = urls[ref];
     var obj = JSON.stringify({
       "action": "get",
@@ -117,6 +120,7 @@ window.quick_server.Worker = function() {
       var cur_token = +data["token"];
       if(cur_token !== tokens[ref]) {
         // late response
+        changeStatus(false, false);
         return;
       }
       if(cur_token !== token) {
@@ -129,11 +133,13 @@ window.quick_server.Worker = function() {
         tokens[ref] = -1;
         urls[ref] = null;
         execute(cb, data["result"]);
-      } else {
+      } else if(data["continue"]) {
         setTimeout(function() {
           var newDelay = Math.min(Math.max(delay * timeMulInc, delay + timeMinInc), timeCap);
           monitor(ref, token, cb, newDelay);
         }, delay);
+      } else {
+        changeStatus(false, false);
       }
     });
   }
