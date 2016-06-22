@@ -1407,6 +1407,142 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             return fun
         return wrapper
 
+    ### special files ###
+
+    def add_special_file(self, mask, path, from_quick_server, ctype=None):
+        full_path = path if not from_quick_server else os.path.join(os.path.dirname(__file__), path)
+
+        def read_file(_req, _args):
+            with open(full_path, 'rb') as f_out:
+                return Response(f_out.read(), ctype=ctype)
+
+        self.add_text_get_mask(mask, read_file)
+        self.set_file_argc(mask, 0)
+
+    ### worker based ###
+
+    def link_worker_js(self, mask):
+        self.add_special_file(mask, 'worker.js', from_quick_server=True, ctype='application/javascript; charset=utf-8')
+
+    def json_worker(self, mask, argc=None):
+        def wrapper(fun):
+            lock = threading.Lock()
+            tasks = {}
+
+            def is_done(cur_key):
+                try:
+                    lock.acquire()
+                    return cur_key not in tasks or not tasks[cur_key]["running"]
+                finally:
+                    lock.release()
+
+            def remove_worker(cur_key):
+                try:
+                    lock.acquire()
+                    task = tasks.pop(cur_key, None)
+                    if task is None:
+                        return None, (ValueError("Task {0} not found!".format(cur_key)), None)
+                    if task["running"]:
+                        # TODO implement thread killing
+                        return None, (ValueError("Task {0} is still running!".format(cur_key)), None)
+                    return task["result"], task["exception"]
+                finally:
+                    lock.release()
+
+            def start_worker(args, cur_key):
+                try:
+                    try:
+                        lock.acquire()
+                        task = {
+                            "running": True,
+                            "result": None,
+                            "exception": None,
+                        }
+                        tasks[cur_key] = task
+                    finally:
+                        lock.release()
+                    result = fun(args)
+                    try:
+                        lock.acquire()
+                        task["running"] = False
+                        task["result"] = result
+                    finally:
+                        lock.release()
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception as e:
+                    try:
+                        lock.acquire()
+                        task["running"] = False
+                        task["exception"] = (e, traceback.format_exc())
+                    finally:
+                        lock.release()
+                    return
+                # make sure the result does not get stored forever
+                try:
+                    time.sleep(120) # remove 2 minutes after not reading the result
+                finally:
+                    _result, err = remove_worker(cur_key)
+                    if err is not None:
+                        e, tb = err
+                        if tb is not None:
+                            msg("Error in purged worker for {0}: {1}\n{2}", cur_key, e, tb)
+                            raise ValueError("proceeding from error")
+                        return
+                    msg("purged result that was never read ({0})", cur_key)
+
+            def reserve_worker():
+                try:
+                    lock.acquire()
+                    cur_key = 0
+                    while cur_key in tasks:
+                        cur_key += 1
+                    tasks[cur_key] = {} # put marker
+                    return cur_key
+                finally:
+                    lock.release()
+
+            def run_worker(req, args):
+                post = args["post"]
+                action = post["action"]
+                if action == "stop":
+                    cur_key = post["token"]
+                    remove_worker(cur_key) # throw away the result
+                    return {
+                        "token": cur_key,
+                        "done": True,
+                        "result": None,
+                    }
+                if action == "start":
+                    cur_key = reserve_worker()
+                    inner_post = post.get("payload", {})
+                    worker = threading.Thread(target=start_worker, name="{0}-Worker-{1}".format(self.__class__, cur_key), args=(inner_post, cur_key))
+                    worker.start()
+                    time.sleep(0.1) # give fast tasks a way to immediately return results
+                if action == "get":
+                    cur_key = post["token"]
+                if is_done(cur_key):
+                    result, exception = remove_worker(cur_key)
+                    if exception is not None:
+                        e, tb = exception
+                        msg("Error in worker for {0}: {1}\n{2}", cur_key, e, tb)
+                        raise ValueError("proceeding from error")
+                    return {
+                        "token": cur_key,
+                        "done": True,
+                        "result": result,
+                    }
+                return {
+                    "token": cur_key,
+                    "done": False,
+                    "result": None,
+                }
+
+            self.add_json_post_mask(mask, run_worker)
+            self.set_file_argc(mask, argc)
+            return fun
+        return wrapper
+
     ### miscellaneous ###
 
     def handle_cmd(self, cmd):
