@@ -943,6 +943,9 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         report_slow_requests : bool
             If set request that take longer than 5 seconds are reported. Defaults to False.
 
+        verbose_workers : bool
+            If set messages about worker requests are printed.
+
         done : bool
             If set to True the server will terminate.
         """
@@ -960,6 +963,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         self.cross_origin = False
         self.suppress_noise = False
         self.report_slow_requests = False
+        self.verbose_workers = False
         self.done = False
         self._folder_masks = [ ]
         self._f_mask = {}
@@ -1414,6 +1418,24 @@ class QuickServer(BaseHTTPServer.HTTPServer):
     ### special files ###
 
     def add_special_file(self, mask, path, from_quick_server, ctype=None):
+        """Adds a special file that might have a different actual path than
+           its address.
+
+        Parameters
+        ----------
+        mask : string
+            The URL that must be matched to perform this request.
+
+        path : string
+            The actual file path.
+
+        from_quick_server : bool
+            If set the file path is relative to *this* script otherwise it is
+            relative to the process.
+
+        ctype : string
+            Optional content type.
+        """
         full_path = path if not from_quick_server else os.path.join(os.path.dirname(__file__), path)
 
         def read_file(_req, _args):
@@ -1426,9 +1448,33 @@ class QuickServer(BaseHTTPServer.HTTPServer):
     ### worker based ###
 
     def link_worker_js(self, mask):
+        """Links the worker javascript.
+
+        Parameters
+        ----------
+        mask : string
+            The URL that must be matched to get the worker javascript.
+        """
         self.add_special_file(mask, 'worker.js', from_quick_server=True, ctype='application/javascript; charset=utf-8')
 
-    def json_worker(self, mask, argc=None):
+    def json_worker(self, mask):
+        """A function annotation that adds a worker request. A worker request is
+           a POST request that is computed asynchronously. That is, the actual
+           task is performed in a different thread and the network request
+           returns immediately. The client side uses polling to fetch the result
+           and can also cancel the task. The worker javascript client side must
+           be linked and used for accessing the request.
+
+        Parameters
+        ----------
+        mask : string
+            The URL that must be matched to perform this request.
+
+        fun : function(args); (The annotated function)
+            A function returning a (JSON-able) object. The function takes one
+            argument which is the dictionary containing the payload from the
+            client side. If the result is None a 404 error is sent.
+        """
         def wrapper(fun):
             lock = threading.Lock()
             tasks = {}
@@ -1465,7 +1511,8 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                                     ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), None)
                                     msg("killed too many ({0}) workers? {1}", res, cur_key)
                                 else:
-                                    msg("killed worker {0}", cur_key)
+                                    if self.verbose_workers:
+                                        msg("killed worker {0}", cur_key)
                         return None, (ValueError("Task {0} is still running!".format(cur_key)), None)
                     return task["result"], task["exception"]
                 finally:
@@ -1578,7 +1625,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                 }
 
             self.add_json_post_mask(mask, run_worker)
-            self.set_file_argc(mask, argc)
+            self.set_file_argc(mask, 0)
             return fun
         return wrapper
 
