@@ -35,6 +35,7 @@ import time
 import zlib
 import errno
 import atexit
+import ctypes
 import select
 import signal
 import socket
@@ -245,6 +246,9 @@ class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and instead
        send a customized response.
     """
+    pass
+
+class WorkerDeath(Exception):
     pass
 
 class QuickServerRequestHandler(SimpleHTTPRequestHandler):
@@ -1443,13 +1447,31 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                     if task is None:
                         return None, (ValueError("Task {0} not found!".format(cur_key)), None)
                     if task["running"]:
-                        # TODO implement thread killing
+                        th = task["thread"]
+                        if th.is_alive():
+                            # kill the thread
+                            tid = None
+                            for tk, tobj in threading._active.items():
+                                if tobj is th:
+                                    tid = tk
+                                    break
+                            if tid is not None:
+                                res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), ctypes.py_object(WorkerDeath))
+                                if res == 0:
+                                    # invalid thread id -- the thread might be done already
+                                    msg("invalid thread id for killing worker {0}", cur_key)
+                                elif res != 1:
+                                    # roll back
+                                    ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), None)
+                                    msg("killed too many ({0}) workers? {1}", res, cur_key)
+                                else:
+                                    msg("killed worker {0}", cur_key)
                         return None, (ValueError("Task {0} is still running!".format(cur_key)), None)
                     return task["result"], task["exception"]
                 finally:
                     lock.release()
 
-            def start_worker(args, cur_key):
+            def start_worker(args, cur_key, get_thread):
                 try:
                     try:
                         lock.acquire()
@@ -1457,6 +1479,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                             "running": True,
                             "result": None,
                             "exception": None,
+                            "thread": get_thread(),
                         }
                         tasks[cur_key] = task
                     finally:
@@ -1520,7 +1543,9 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                 if action == "start":
                     cur_key = reserve_worker()
                     inner_post = post.get("payload", {})
-                    worker = threading.Thread(target=start_worker, name="{0}-Worker-{1}".format(self.__class__, cur_key), args=(inner_post, cur_key))
+                    th = []
+                    worker = threading.Thread(target=start_worker, name="{0}-Worker-{1}".format(self.__class__, cur_key), args=(inner_post, cur_key, lambda: th[0]))
+                    th.append(worker)
                     worker.start()
                     time.sleep(0.1) # give fast tasks a way to immediately return results
                 if action == "get":
