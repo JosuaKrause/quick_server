@@ -194,4 +194,11 @@ window.quick_server.Worker = function() {
       }
     });
   };
+
+  window.addEventListener("beforeunload", function() {
+    Object.keys(tokens).forEach(function(ref) {
+      // we probably won't read the results but the server still cancels properly
+      that.cancel(ref);
+    });
+  });
 } // quick_server.Worker
