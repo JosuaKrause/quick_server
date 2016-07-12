@@ -1476,13 +1476,17 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             client side. If the result is None a 404 error is sent.
         """
         def wrapper(fun):
-            lock = threading.Lock()
+            lock = threading.RLock()
             tasks = {}
 
             def is_done(cur_key):
                 try:
                     lock.acquire()
-                    return cur_key not in tasks or not tasks[cur_key]["running"]
+                    if cur_key not in tasks:
+                        return True
+                    if "running" not in tasks[cur_key]:
+                        return False
+                    return not tasks[cur_key]["running"]
                 finally:
                     lock.release()
 
