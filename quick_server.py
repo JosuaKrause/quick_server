@@ -946,6 +946,12 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         verbose_workers : bool
             If set messages about worker requests are printed.
 
+        cache : quick_cache object or None
+            The cache object used when caching worker results. The API must be
+            similar to https://github.com/JosuaKrause/quick_cache
+            The cache object should use the "string" method for best performance.
+            Worker results can be cached when providing a `cache_id` function.
+
         done : bool
             If set to True the server will terminate.
         """
@@ -964,6 +970,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         self.suppress_noise = False
         self.report_slow_requests = False
         self.verbose_workers = False
+        self.cache = None
         self.done = False
         self._folder_masks = [ ]
         self._f_mask = {}
@@ -1457,7 +1464,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         """
         self.add_special_file(mask, 'worker.js', from_quick_server=True, ctype='application/javascript; charset=utf-8')
 
-    def json_worker(self, mask):
+    def json_worker(self, mask, cache_id=None):
         """A function annotation that adds a worker request. A worker request is
            a POST request that is computed asynchronously. That is, the actual
            task is performed in a different thread and the network request
@@ -1470,11 +1477,20 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         mask : string
             The URL that must be matched to perform this request.
 
+        cache_id : function(args) or None
+            Optional function for caching the result. If set the worker must be
+            idempotent. Requires a `cache` object for the server. The function
+            needs to return an object constructed from the function arguments
+            to uniquely identify the result. The object must be JSON serializable.
+            Results are cached verbatim.
+
         fun : function(args); (The annotated function)
             A function returning a (JSON-able) object. The function takes one
             argument which is the dictionary containing the payload from the
             client side. If the result is None a 404 error is sent.
         """
+        use_cache = cache_id is not None
+
         def wrapper(fun):
             lock = threading.RLock()
             tasks = {}
@@ -1535,7 +1551,15 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                         tasks[cur_key] = task
                     finally:
                         lock.release()
-                    result = fun(args)
+                    if use_cache:
+                        cache_obj = cache_id(args)
+                        with self.cache.get_hnd(cache_obj) as hnd:
+                            if hnd.has():
+                                result = hnd.read()
+                            else:
+                                result = hnd.write(json_dumps(fun(args)))
+                    else:
+                        result = json_dumps(fun(args))
                     try:
                         lock.acquire()
                         task["running"] = False

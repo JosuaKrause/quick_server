@@ -61,6 +61,10 @@ window.quick_server.Worker = function() {
     status(req);
   }
 
+  function get_payload(data) {
+    return JSON.parse(data["result"]);
+  }
+
   var starts = {};
   var tokens = {};
   var urls = {};
@@ -90,7 +94,7 @@ window.quick_server.Worker = function() {
           }
         });
         if(data["done"]) {
-          execute(cb, data["result"]);
+          execute(cb, get_payload(data));
         } else {
           var token = +data["token"];
           urls[ref] = url;
@@ -132,7 +136,7 @@ window.quick_server.Worker = function() {
       if(data["done"]) {
         tokens[ref] = -1;
         urls[ref] = null;
-        execute(cb, data["result"]);
+        execute(cb, get_payload(data));
       } else if(data["continue"]) {
         setTimeout(function() {
           var newDelay = Math.min(Math.max(delay * timeMulInc, delay + timeMinInc), timeCap);
