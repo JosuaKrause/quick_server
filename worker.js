@@ -14,7 +14,7 @@ window.quick_server.Worker = function() {
   var timeStart = 500;
   var timeCap = 1000*60; /* has to be below 2min so the server doesn't remove the result */
   var timeMinInc = 10;
-  var timeMulInc = 1.1;
+  var timeMulInc = 1.01;
 
   var status = function(req) {};
   this.status = function(_) {
