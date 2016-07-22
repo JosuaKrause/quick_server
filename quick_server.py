@@ -1464,7 +1464,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         """
         self.add_special_file(mask, 'worker.js', from_quick_server=True, ctype='application/javascript; charset=utf-8')
 
-    def json_worker(self, mask, cache_id=None):
+    def json_worker(self, mask, cache_id=None, cache_method="string"):
         """A function annotation that adds a worker request. A worker request is
            a POST request that is computed asynchronously. That is, the actual
            task is performed in a different thread and the network request
@@ -1481,8 +1481,11 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             Optional function for caching the result. If set the worker must be
             idempotent. Requires a `cache` object for the server. The function
             needs to return an object constructed from the function arguments
-            to uniquely identify the result. The object must be JSON serializable.
-            Results are cached verbatim.
+            to uniquely identify the result. Results are cached verbatim.
+
+        cache_method : string or None
+            Optional cache method string. Gets passed to get_hnd() of the cache.
+            Defaults to "string" which requires a JSON serializable cache_id.
 
         fun : function(args); (The annotated function)
             A function returning a (JSON-able) object. The function takes one
@@ -1553,7 +1556,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                         lock.release()
                     if use_cache:
                         cache_obj = cache_id(args)
-                        with self.cache.get_hnd(cache_obj) as hnd:
+                        with self.cache.get_hnd(cache_obj, method=cache_method) as hnd:
                             if hnd.has():
                                 result = hnd.read()
                             else:
