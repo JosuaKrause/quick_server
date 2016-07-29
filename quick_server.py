@@ -1464,7 +1464,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         """
         self.add_special_file(mask, 'worker.js', from_quick_server=True, ctype='application/javascript; charset=utf-8')
 
-    def json_worker(self, mask, cache_id=None, cache_method="string"):
+    def json_worker(self, mask, cache_id=None, cache_method="string", cache_section=None):
         """A function annotation that adds a worker request. A worker request is
            a POST request that is computed asynchronously. That is, the actual
            task is performed in a different thread and the network request
@@ -1486,6 +1486,10 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         cache_method : string or None
             Optional cache method string. Gets passed to get_hnd() of the cache.
             Defaults to "string" which requires a JSON serializable cache_id.
+
+        cache_section : string or None
+            Optional cache section string. Gets passed to get_hnd() of the cache.
+            Defaults to None representing the default section.
 
         fun : function(args); (The annotated function)
             A function returning a (JSON-able) object. The function takes one
@@ -1556,11 +1560,14 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                         lock.release()
                     if use_cache:
                         cache_obj = cache_id(args)
-                        with self.cache.get_hnd(cache_obj, method=cache_method) as hnd:
-                            if hnd.has():
-                                result = hnd.read()
-                            else:
-                                result = hnd.write(json_dumps(fun(args)))
+                        if cache_obj is not None:
+                            with self.cache.get_hnd(cache_obj, section=cache_section, method=cache_method) as hnd:
+                                if hnd.has():
+                                    result = hnd.read()
+                                else:
+                                    result = hnd.write(json_dumps(fun(args)))
+                        else:
+                            result = json_dumps(fun(args))
                     else:
                         result = json_dumps(fun(args))
                     try:
