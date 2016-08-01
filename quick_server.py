@@ -1464,7 +1464,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         """
         self.add_special_file(mask, 'worker.js', from_quick_server=True, ctype='application/javascript; charset=utf-8')
 
-    def json_worker(self, mask, cache_id=None, cache_method="string", cache_section=None):
+    def json_worker(self, mask, cache_id=None, cache_method="string", cache_section="www"):
         """A function annotation that adds a worker request. A worker request is
            a POST request that is computed asynchronously. That is, the actual
            task is performed in a different thread and the network request
@@ -1489,7 +1489,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
 
         cache_section : string or None
             Optional cache section string. Gets passed to get_hnd() of the cache.
-            Defaults to None representing the default section.
+            Defaults to "www".
 
         fun : function(args); (The annotated function)
             A function returning a (JSON-able) object. The function takes one
