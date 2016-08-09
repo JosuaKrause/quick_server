@@ -976,7 +976,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         self.verbose_workers = False
         self.cache = None
         self.done = False
-        self._folder_masks = [ ]
+        self._folder_masks = []
         self._f_mask = {}
         self._f_argc = {}
         self._pattern_black = []
@@ -996,9 +996,9 @@ class QuickServer(BaseHTTPServer.HTTPServer):
            that will be delivered. For including or excluding folders use
            `add_folder_mask` or `add_folder_fallback`.
         """
-        list = self._pattern_black if blacklist else self._pattern_white
+        bl = self._pattern_black if blacklist else self._pattern_white
         for pattern in patterns:
-            list.append(pattern)
+            bl.append(pattern)
 
     def add_default_white_list(self):
         """Adds a list of common file patterns to the white-list."""
@@ -1874,9 +1874,9 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         """
         timeout = self.socket.gettimeout()
         if timeout is None:
-                timeout = self.timeout
+            timeout = self.timeout
         elif self.timeout is not None:
-                timeout = min(timeout, self.timeout)
+            timeout = min(timeout, self.timeout)
         ctime = time.clock()
         done_req = False
         shutdown_latency = self.shutdown_latency
