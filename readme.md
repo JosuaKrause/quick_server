@@ -53,6 +53,7 @@ server = create_server((addr, port), parallel=True) # parallel is recommended un
 server.bind_path('/', 'www') # binds the 'www' directory to the server's root
 server.add_default_white_list() # adds typical file types to the list of files that will be served; you can use server.add_file_patterns to add more file types
 server.favicon_fallback = 'favicon.ico' # sets the default favicon file to the given file on disk (you'll need a file called 'favicon.ico')
+# you can also use server.link_empty_favicon_fallback()
 
 server.suppress_noise = True # don't report successful requests (turn off if you want to measure performance)
 server.report_slow_requests = True # reports requests that take longer than 5s
@@ -192,7 +193,7 @@ def complete_cache_clear(args, text): # args contains already completed argument
     if args: # we only allow up to one argument
         return []
     return [ section for section in cache.list_sections() if section.startswith(text) ] # cache is the quick_cache object
-    
+
 @server.cmd(complete=complete_cache_clear)
 def cache_clear(args):
     if len(args) > 1: # we only allow up to one argument

@@ -12,7 +12,7 @@ port = 8000
 server = create_server((addr, port))
 server.bind_path('/', '..')
 server.add_default_white_list()
-server.favicon_fallback = 'favicon.ico'
+server.link_empty_favicon_fallback()
 
 start = clock()
 @server.json_get('/api/uptime/')
