@@ -114,7 +114,7 @@ def url_server_run(probes, script="example.py"):
                     p.kill()
     return True
 
-def access_worker(url, args, expected_keys, max_tries):
+def access_worker(url, args, expected_keys, max_tries, force_token):
     cmd = {
         "action": "start",
         "payload": args,
@@ -125,7 +125,7 @@ def access_worker(url, args, expected_keys, max_tries):
         if tries > max_tries and max_tries > 0:
             cmd = {
                 "action": "stop",
-                "token": cmd["token"],
+                "token": cmd["token"] if force_token is None else force_token,
             }
         if not access_url([ url, 200 ], post=cmd, json_response=answer):
             return "err"
@@ -133,7 +133,7 @@ def access_worker(url, args, expected_keys, max_tries):
         answer = answer["response"]
         cmd = {
             "action": "get",
-            "token": answer["token"],
+            "token": answer["token"] if force_token is None else force_token,
         }
         if answer["done"]:
             if answer["result"] is not None:
@@ -152,8 +152,9 @@ def worker_server_run(probes, script="example.py"):
     try:
         p = Popen(PYTHON + [script], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
         time.sleep(1) # give the server some time to wake up
-        for (url, args, expected_keys, max_tries, expected) in probes:
-            if access_worker(url, args, expected_keys, max_tries) != expected:
+        access_url([ 'js/worker.js', 200 ])
+        for (url, args, expected_keys, max_tries, force_token, expected) in probes:
+            if access_worker(url, args, expected_keys, max_tries, force_token) != expected:
                 return False
         done = True
     finally:
@@ -362,9 +363,10 @@ if SKIP < 6:
 if SKIP < 7:
     note("worker")
     if not worker_server_run([
-            [ 'api/uptime_worker', { "time": 1 }, [ "uptime" ], -1, "normal" ],
-            [ 'api/uptime_worker', { "time": 0 }, [ "uptime" ], 1, "normal" ],
-            [ 'api/uptime_worker', { "time": 1 }, [ "uptime" ], 1, "cancel" ],
+            [ 'api/uptime_worker', { "time": 1 }, [ "uptime" ], -1, None, "normal" ],
+            [ 'api/uptime_worker', { "time": 0 }, [ "uptime" ], 1, None, "normal" ],
+            [ 'api/uptime_worker', { "time": 1 }, [ "uptime" ], 1, None, "cancel" ],
+            [ 'api/uptime_worker', { "time": 1 }, None, -1, 0, "cancel" ],
         ], script="example2.py"):
         exit(7)
 
