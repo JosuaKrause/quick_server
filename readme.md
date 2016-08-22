@@ -43,7 +43,7 @@ from quick_server.quick_server import create_server, msg, setup_restart
 Following we will set up a basic *quick_server*. Please refer to the [inline documentation](quick_server.py) of the methods for full information.
 
 ```python
-setup_restart() # sets up restart functionality (if not called the `restart` command of the server won't work)
+setup_restart() # sets up restart functionality (if not called the `restart` command of the server needs external help to work)
 # should be the first real executed command in the script
 # some services, like heroku, don't play well with this command and it should not be called if in such an environment
 
