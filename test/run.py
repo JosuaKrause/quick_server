@@ -27,7 +27,7 @@ def status(msg, *args):
 def note(msg, *args):
     print_msg("NOTE", msg, *args)
 
-def fail(msg, *args):
+def fail(msg, *args): # pragma: no cover
     status(msg, *args)
     status("test failed!")
     return False
@@ -38,10 +38,11 @@ def check_stream(text, requireds, fails, name):
             break
         for fo in fails:
             if fo in line:
-                return fail("invalid line encountered:\n{0}\ncontains {1}", line, fo)
+                return fail("invalid line encountered:\n{0}\ncontains {1}", line, fo) # pragma: no cover
         if requireds[0] in line:
             requireds.pop(0)
     if len(requireds):
+        # pragma: no cover
         status("complete output:\n{0}\n", text)
         return fail("not all required lines were found in {0}:\n{1}", name, '\n'.join(requireds))
     return True
@@ -52,9 +53,9 @@ def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exi
     if p.returncode != exit_code:
         return fail("wrong exit code {0} expected {1}", p.returncode, exit_code)
     if not check_stream(output, required_out, fail_out, "STD_OUT"):
-        return False
+        return False # pragma: no cover
     if not check_stream(error, required_err, fail_err, "STD_ERR"):
-        return False
+        return False # pragma: no cover
     return True
 
 user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'
