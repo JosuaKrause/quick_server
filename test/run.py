@@ -42,16 +42,15 @@ def check_stream(text, requireds, fails, name):
         if requireds[0] in line:
             requireds.pop(0)
     if len(requireds):
-        # pragma: no cover
-        status("complete output:\n{0}\n", text)
-        return fail("not all required lines were found in {0}:\n{1}", name, '\n'.join(requireds))
+        status("complete output:\n{0}\n", text) # pragma: no cover
+        return fail("not all required lines were found in {0}:\n{1}", name, '\n'.join(requireds)) # pragma: no cover
     return True
 
 def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exit_code=0):
     p = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = p.communicate('\n'.join(commands) + '\nquit\n')
     if p.returncode != exit_code:
-        return fail("wrong exit code {0} expected {1}", p.returncode, exit_code)
+        return fail("wrong exit code {0} expected {1}", p.returncode, exit_code) # pragma: no cover
     if not check_stream(output, required_out, fail_out, "STD_OUT"):
         return False # pragma: no cover
     if not check_stream(error, required_err, fail_err, "STD_ERR"):
@@ -81,11 +80,11 @@ def access_url(parr, post=None, json_response=None):
     if rest is not None and 'url' in rest:
         expected_url = 'http://localhost:8000/{0}'.format(rest['url'])
         if response.geturl() != expected_url:
-            status("HEADERS:\n{0}\nBODY:\n{1}\n", response.headers, response.read())
-            return fail("redirection failed! expected '{0}' got '{1}'", expected_url, response.geturl())
+            status("HEADERS:\n{0}\nBODY:\n{1}\n", response.headers, response.read()) # pragma: no cover
+            return fail("redirection failed! expected '{0}' got '{1}'", expected_url, response.geturl()) # pragma: no cover
     if response.code != status_code:
-        status("HEADERS:\n{0}\nBODY:\n{1}\n", response.headers, response.read())
-        return fail("{0} responded with {1} ({2} expected)", url, response.code, status_code)
+        status("HEADERS:\n{0}\nBODY:\n{1}\n", response.headers, response.read()) # pragma: no cover
+        return fail("{0} responded with {1} ({2} expected)", url, response.code, status_code) # pragma: no cover
     if json_response is not None:
         json_response["response"] = json.loads(response.read())
     return True
@@ -98,15 +97,15 @@ def url_server_run(probes, script="example.py"):
         time.sleep(1) # give the server some time to wake up
         for parr in probes:
             if not access_url(parr):
-                return False
+                return False # pragma: no cover
         done = True
     finally:
         if p is not None:
             output, err = p.communicate("quit\n")
             if not done:
-                report_output(output.split('\n'), err.split('\n'))
+                report_output(output.split('\n'), err.split('\n')) # pragma: no cover
             time.sleep(1)
-            if p.poll() is None:
+            if p.poll() is None: # pragma: no cover
                 status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
                 p.terminate()
                 time.sleep(3)
@@ -129,7 +128,7 @@ def access_worker(url, args, expected_keys, max_tries, force_token):
                 "token": cmd["token"] if force_token is None else force_token,
             }
         if not access_url([ url, 200 ], post=cmd, json_response=answer):
-            return "err"
+            return "err" # pragma: no cover
         tries += 1
         answer = answer["response"]
         cmd = {
@@ -141,7 +140,7 @@ def access_worker(url, args, expected_keys, max_tries, force_token):
                 res = answer["result"]
                 for k in expected_keys:
                     if k not in res:
-                        return "err"
+                        return "err" # pragma: no cover
                 return "normal"
         if not answer["continue"]:
             return "cancel"
@@ -156,15 +155,15 @@ def worker_server_run(probes, script="example.py"):
         access_url([ 'js/worker.js', 200 ])
         for (url, args, expected_keys, max_tries, force_token, expected) in probes:
             if access_worker(url, args, expected_keys, max_tries, force_token) != expected:
-                return False
+                return False # pragma: no cover
         done = True
     finally:
         if p is not None:
             output, err = p.communicate("quit\n")
             if not done:
-                report_output(output.split('\n'), err.split('\n'))
+                report_output(output.split('\n'), err.split('\n')) # pragma: no cover
             time.sleep(1)
-            if p.poll() is None:
+            if p.poll() is None: # pragma: no cover
                 status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
                 p.terminate()
                 time.sleep(3)
@@ -173,7 +172,7 @@ def worker_server_run(probes, script="example.py"):
                     p.kill()
     return True
 
-def report_output(output, error):
+def report_output(output, error): # pragma: no cover
     status("STD_OUT>>>")
     for s in output:
         status("{0}", s.rstrip())
@@ -201,7 +200,7 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
             try:
                 for s in sels[1]:
                     written += os.write(s.fileno(), write[written:])
-            except OSError as e:
+            except OSError as e: # pragma: no cover
                 if e.errno == 32:
                     report_output(output, error)
                 raise e
@@ -234,12 +233,12 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
             elif a[0] == "url":
                 status("url: {0}", a[1])
                 a.pop(0)
-                if not access_url(a):
+                if not access_url(a): # pragma: no cover
                     read_all("")
                     report_output(output, error)
                     return False
                 read_all("")
-            else:
+            else: # pragma: no cover
                 return fail("unknown action {0}", a[0])
         read_all("")
         time.sleep(1)
@@ -247,7 +246,7 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
         if p is not None:
             read_all("quit\n")
             time.sleep(1)
-            if p.poll() is None:
+            if p.poll() is None: # pragma: no cover
                 status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
                 p.terminate()
                 time.sleep(3)
@@ -255,17 +254,17 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
                     status("WARNING: killed server")
                     p.kill()
             elif p.returncode != exit_code:
-                return fail("wrong exit code {0} expected {1}", p.returncode, exit_code)
-        elif pr is not None:
+                return fail("wrong exit code {0} expected {1}", p.returncode, exit_code) # pragma: no cover
+        elif pr is not None: # pragma: no cover
             if pr.poll() is None:
                 status("WARNING: kill server during start-up")
                 pr.kill()
     output = ''.join(output)
     error = ''.join(error)
     if not check_stream(output, required_out, fail_out, "STD_OUT"):
-        return False
+        return False # pragma: no cover
     if not check_stream(error, required_err, fail_err, "STD_ERR"):
-        return False
+        return False # pragma: no cover
     return True
 
 if SKIP < 1:
@@ -275,7 +274,7 @@ if SKIP < 1:
             ], [], [], [
                 "requests made to uptime: 0"
             ], []):
-        exit(1)
+        exit(1) # pragma: no cover
 if SKIP < 2:
     note("url request checks")
     if not url_server_run([
@@ -294,7 +293,7 @@ if SKIP < 2:
             [ '.travis.yml', 404 ],
             [ 'example/', 304, { 'eTag': '5a73b4a0' } ],
         ]):
-        exit(2)
+        exit(2) # pragma: no cover
 if SKIP < 3:
     note("restart test")
     if not cmd_url_server_run([
@@ -315,7 +314,7 @@ if SKIP < 3:
             ], [
                 "Exception KeyError: KeyError(",
             ]):
-        exit(3)
+        exit(3) # pragma: no cover
 if SKIP < 4:
     note("api test")
     if not cmd_url_server_run([
@@ -328,7 +327,7 @@ if SKIP < 4:
                 "\"GET /api/uptime/ HTTP/1.1\"",
                 "requests made to uptime: 1"
             ], []):
-        exit(4)
+        exit(4) # pragma: no cover
 if SKIP < 5:
     note("restart loop test")
     if not cmd_url_server_run([
@@ -350,7 +349,7 @@ if SKIP < 5:
                 "] \"GET", # the server is not supposed to output normal requests
                 "Exception KeyError: KeyError(",
             ], script="example2.py"):
-        exit(5)
+        exit(5) # pragma: no cover
 if SKIP < 6:
     note("special value responses")
     if not url_server_run([
@@ -360,7 +359,7 @@ if SKIP < 6:
             [ 'api/uptime/0/?fub=-inf&foo=1&bar=1,2,3&baz=string', 200 ],
             [ 'favicon.ico', 200 ], # test favicon as well
         ], script="example2.py"):
-        exit(6)
+        exit(6) # pragma: no cover
 if SKIP < 7:
     note("worker")
     if not worker_server_run([
@@ -369,7 +368,7 @@ if SKIP < 7:
             [ 'api/uptime_worker', { "time": 1 }, [ "uptime" ], 1, None, "cancel" ],
             [ 'api/uptime_worker', { "time": 1 }, None, -1, 0, "cancel" ],
         ], script="example2.py"):
-        exit(7)
+        exit(7) # pragma: no cover
 
 note("all tests successful!")
 exit(0)
