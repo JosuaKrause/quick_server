@@ -153,7 +153,8 @@ Workers can automatically cache the server response using [quick_cache](https://
 The server needs to be set up for this:
 
 ```python
-server.cache = QuickCache(base_file, quota=500, ram_quota=100, warnings=msg)
+cache = QuickCache(base_file, quota=500, ram_quota=100, warnings=msg)
+server.cache = cache
 ```
 
 Then caching can be used for workers:
