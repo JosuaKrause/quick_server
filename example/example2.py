@@ -14,9 +14,11 @@ port = 8000
 server = create_server((addr, port))
 server.bind_path('/', '..')
 server.add_default_white_list()
-server.favicon_fallback = 'favicon.ico'
+server.link_empty_favicon_fallback = '../favicon.ico'
 server.suppress_noise = True
 server.report_slow_requests = True
+
+server.link_worker_js('/js/worker.js')
 
 start = clock()
 @server.json_get('/api/uptime/', 1)
@@ -38,6 +40,16 @@ def uptime(req, args):
     for (key, value) in args["query"].items():
         res[key] = [ convert(v) for v in value.split(',') ] if ',' in value else convert(value)
     return res
+
+@server.json_worker('/api/uptime_worker')
+def uptime_worker(args):
+    global count_uptime
+    msg("sleep {0}", int(args["time"]))
+    sleep(int(args["time"]))
+    count_uptime += 1
+    return {
+        "uptime": (clock() - start) * 1000.0
+    }
 
 def complete_requests(_args, text):
   return [ "uptime" ] if "uptime".startswith(text) else []

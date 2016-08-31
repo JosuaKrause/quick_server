@@ -1456,6 +1456,10 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         self.add_text_get_mask(mask, read_file)
         self.set_file_argc(mask, 0)
 
+    def link_empty_favicon_fallback(self):
+        """Links the empty favicon as default favicon."""
+        self.favicon_fallback = os.path.join(os.path.dirname(__file__), 'favicon.ico')
+
     ### worker based ###
 
     def link_worker_js(self, mask):
@@ -1619,52 +1623,56 @@ class QuickServer(BaseHTTPServer.HTTPServer):
 
             def run_worker(req, args):
                 post = args["post"]
-                action = post["action"]
-                if action == "stop":
-                    cur_key = post["token"]
-                    remove_worker(cur_key) # throw away the result
+                try:
+                    action = post["action"]
+                    if action == "stop":
+                        cur_key = post["token"]
+                        remove_worker(cur_key) # throw away the result
+                        return {
+                            "token": cur_key,
+                            "done": True,
+                            "result": None,
+                            "continue": False,
+                        }
+                    if action == "start":
+                        cur_key = reserve_worker()
+                        inner_post = post.get("payload", {})
+                        th = []
+                        worker = threading.Thread(target=start_worker, name="{0}-Worker-{1}".format(self.__class__, cur_key), args=(inner_post, cur_key, lambda: th[0]))
+                        th.append(worker)
+                        worker.start()
+                        time.sleep(0.1) # give fast tasks a way to immediately return results
+                    if action == "get":
+                        cur_key = post["token"]
+                    if is_done(cur_key):
+                        result, exception = remove_worker(cur_key)
+                        if exception is not None:
+                            e, tb = exception
+                            if tb is None:
+                                # token does not exist anymore
+                                return {
+                                    "token": cur_key,
+                                    "done": False,
+                                    "result": None,
+                                    "continue": False,
+                                }
+                            msg("Error in worker for {0}: {1}\n{2}", cur_key, e, tb)
+                            raise ValueError("proceeding from error")
+                        return {
+                            "token": cur_key,
+                            "done": True,
+                            "result": result,
+                            "continue": False,
+                        }
                     return {
                         "token": cur_key,
-                        "done": True,
+                        "done": False,
                         "result": None,
-                        "continue": False,
+                        "continue": True,
                     }
-                if action == "start":
-                    cur_key = reserve_worker()
-                    inner_post = post.get("payload", {})
-                    th = []
-                    worker = threading.Thread(target=start_worker, name="{0}-Worker-{1}".format(self.__class__, cur_key), args=(inner_post, cur_key, lambda: th[0]))
-                    th.append(worker)
-                    worker.start()
-                    time.sleep(0.1) # give fast tasks a way to immediately return results
-                if action == "get":
-                    cur_key = post["token"]
-                if is_done(cur_key):
-                    result, exception = remove_worker(cur_key)
-                    if exception is not None:
-                        e, tb = exception
-                        if tb is None:
-                            # token does not exist anymore
-                            return {
-                                "token": cur_key,
-                                "done": False,
-                                "result": None,
-                                "continue": False,
-                            }
-                        msg("Error in worker for {0}: {1}\n{2}", cur_key, e, tb)
-                        raise ValueError("proceeding from error")
-                    return {
-                        "token": cur_key,
-                        "done": True,
-                        "result": result,
-                        "continue": False,
-                    }
-                return {
-                    "token": cur_key,
-                    "done": False,
-                    "result": None,
-                    "continue": True,
-                }
+                except:
+                    msg("Error processing worker command: {0}", post)
+                    raise
 
             self.add_json_post_mask(mask, run_worker)
             self.set_file_argc(mask, 0)
