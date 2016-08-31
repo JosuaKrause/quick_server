@@ -1564,7 +1564,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                         lock.release()
                     if use_cache:
                         cache_obj = cache_id(args)
-                        if cache_obj is not None:
+                        if cache_obj is not None and self.cache is not None:
                             with self.cache.get_hnd(cache_obj, section=cache_section, method=cache_method) as hnd:
                                 if hnd.has():
                                     result = hnd.read()
