@@ -250,7 +250,7 @@ def setup_restart():
     """
     exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
     if exit_code is None:
-        atexit._exithandlers = filter(lambda (fun, _argv, _argo): fun != _on_exit, atexit._exithandlers)
+        atexit._exithandlers = filter(lambda exit_hnd: exit_hnd[0] != _on_exit, atexit._exithandlers)
         _start_restart_loop(None, in_atexit=False)
 
 class PreventDefaultResponse(Exception):
