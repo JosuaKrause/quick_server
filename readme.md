@@ -14,7 +14,7 @@ implementation / iteration:
 
 ## Usage
 
-You can add quick_cache to your git project via submodules.
+You can install *quick_server* with pip:
 
 ```sh
 pip install --user git+https://github.com/JosuaKrause/quick_server.git

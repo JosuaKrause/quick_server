@@ -63,9 +63,4 @@ setup(
         'quick_server': ['favicon.ico', 'worker.js'],
     },
     data_files=[],
-    entry_points={
-        'console_scripts': [
-            'quick_server=quick_server:main',
-        ],
-    },
 )
