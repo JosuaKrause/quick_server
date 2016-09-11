@@ -8,11 +8,15 @@ import sys
 import json
 import time
 import select
-import urllib2
+try:
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
+except ImportError:
+    from urllib2 import Request, urlopen, HTTPError
 from fcntl import fcntl, F_GETFL, F_SETFL
 from subprocess import Popen, PIPE
 
-os.chdir(os.path.dirname(__file__))
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 PYTHON = os.environ.get('PYTHON', sys.executable).split()
 SKIP = int(sys.argv[1]) if len(sys.argv) > 1 else 0
@@ -67,15 +71,15 @@ def access_url(parr, post=None, json_response=None):
     }
     if rest is not None and 'eTag' in rest:
         headers["if-none-match"] = rest['eTag']
-    req = urllib2.Request(url, headers=headers)
+    req = Request(url, headers=headers)
     if post is not None:
         post_str = json.dumps(post, indent=2, sort_keys=True, allow_nan=False)
         req.add_header("Content-Type", "application/json")
         req.add_header("Content-Length", len(post_str))
         req.add_data(post_str)
     try:
-        response = urllib2.urlopen(req)
-    except urllib2.HTTPError as e:
+        response = urlopen(req)
+    except HTTPError as e:
         response = e
     if rest is not None and 'url' in rest:
         expected_url = 'http://localhost:8000/{0}'.format(rest['url'])

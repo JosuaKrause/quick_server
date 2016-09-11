@@ -17,30 +17,18 @@ implementation / iteration:
 You can add quick_cache to your git project via submodules.
 
 ```sh
-git submodule add https://github.com/JosuaKrause/quick_server.git lib/quick_server/
-```
-
-when checking out the project later at a different location do
-
-```sh
-git submodule update --init --recursive
+pip install --user git+https://github.com/JosuaKrause/quick_server.git
 ```
 
 Import it in python via:
 
 ```python
-import sys
-
-sys.path.append('lib')
-# create_server creates a new server (only necessary import)
-# msg provides print functionality in the server's format (you can also overwrite it for custom message formatting)
-# setup_restart sets up restart functionality (optional)
-from quick_server.quick_server import create_server, msg, setup_restart
+from quick_server import create_server, msg, setup_restart
 ```
 
 ### Setting up a basic file server
 
-Following we will set up a basic *quick_server*. Please refer to the [inline documentation](quick_server.py) of the methods for full information.
+Following we will set up a basic *quick_server*. Please refer to the [inline documentation](quick_server/__init__.py) of the methods for full information.
 
 ```python
 setup_restart() # sets up restart functionality (if not called the `restart` command of the server needs external help to work)

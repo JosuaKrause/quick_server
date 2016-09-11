@@ -138,7 +138,14 @@ def msg(message, *args, **kwargs):
         log_file = sys.stderr
     if long_msg:
         file_name, line = caller_trace()
-        head = '{0} ({1}): '.format(os.path.basename(file_name), line)
+        file_name, file_type = os.path.splitext(file_name)
+        if file_name.endswith('/__init__'):
+            file_name = os.path.basename(os.path.dirname(file_name))
+        elif file_name.endswith('/__main__'):
+            file_name = "(-m) {0}".format(os.path.basename(os.path.dirname(file_name)))
+        else:
+            file_name = os.path.basename(file_name)
+        head = '{0}{1} ({2}): '.format(file_name, file_type, line)
     else:
         head = '[SERVER] '
     out = StringIO()

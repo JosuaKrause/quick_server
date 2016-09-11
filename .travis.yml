@@ -7,9 +7,9 @@ sudo: false
 install:
   - pip install coverage
 script:
-  - export PYTHON="coverage run --parallel-mode --source=$PWD/quick_server.py,$PWD/test/run.py"
+  - export PYTHON="coverage run --parallel-mode --source=$PWD/quick_server/quick_server.py,$PWD/test/run.py"
   - $PYTHON test/run.py
-  - find example test -name '.coverage*' | while read i; do mv "$i" ".coverage.$(basename "$i")"; done
+  - find quick_server example test -name '.coverage*' | while read i; do mv "$i" ".coverage.$(basename "$i")"; done
   - coverage combine
 after_success:
   - pip install codecov

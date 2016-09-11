@@ -14,7 +14,7 @@ port = 8000
 server = create_server((addr, port))
 server.bind_path('/', '..')
 server.add_default_white_list()
-server.link_empty_favicon_fallback = '../favicon.ico'
+server.favicon_fallback = '../quick_server/favicon.ico'
 server.suppress_noise = True
 server.report_slow_requests = True
 
