@@ -31,7 +31,7 @@ Setting up a basic file server
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Following we will set up a basic *quick\_server*. Please refer to the
-`inline documentation <quick_server/__init__.py>`__ of the methods for
+`inline documentation <https://github.com/JosuaKrause/quick_server/blob/master/quick_server/__init__.py>`__ of the methods for
 full information.
 
 .. code:: python
@@ -146,7 +146,7 @@ A worker can be cancelled using its name:
 Note that all running workers are cancelled when the page is unloaded.
 
 Workers can automatically cache the server response using
-`quick\_cache <https://github.com/JosuaKrause/quick_cache>`__. The
+`quick\_cache <https://pypi.python.org/pypi/quick-cache>`__. The
 server needs to be set up for this:
 
 .. code:: python
@@ -184,7 +184,7 @@ available commands), ``restart`` (restart the server), and ``quit``
 
 A common command to add when having caching functionality (e.g.,
 provided by
-`quick\_cache <https://github.com/JosuaKrause/quick_cache>`__) is to
+`quick\_cache <https://pypi.python.org/pypi/quick-cache>`__) is to
 clear caches. This show-cases also auto-complete functionality:
 
 .. code:: python
@@ -216,8 +216,8 @@ script like this:
 More examples
 ~~~~~~~~~~~~~
 
-`example.py <example/example.py>`__ and
-`example2.py <example/example2.py>`__ also contain minimal example
+`example.py <https://github.com/JosuaKrause/quick_server/blob/master/example/example.py>`__ and
+`example2.py <https://github.com/JosuaKrause/quick_server/blob/master/example/example2.py>`__ also contain minimal example
 servers. You can run them with ``./example.py`` and ``./example2.py``
 respectively from the examples directory. Then you can browse to
 http://localhost:8000/example/.
