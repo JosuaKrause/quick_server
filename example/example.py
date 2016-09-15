@@ -4,7 +4,6 @@ from time import clock
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from quick_server import create_server, msg
 
 addr = ''
