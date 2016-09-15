@@ -19,7 +19,7 @@ You can install *quick\_server* with pip:
 
 .. code:: sh
 
-    pip install --user git+https://github.com/JosuaKrause/quick_server.git
+    pip install --user quick-server
 
 Import it in python via:
 
