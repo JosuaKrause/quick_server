@@ -161,7 +161,7 @@ def msg(message, *args, **kwargs):
         log_file.flush()
     out.close()
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 # thread local storage for keeping track of request information (eg. time)
 thread_local = threading.local()
 
@@ -1751,7 +1751,8 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         cmd_state = {
             'suggestions': [],
             'clean_up_lock': threading.Lock(),
-            'clean': False
+            'clean': False,
+            'line': '',
         }
 
         # setup internal commands (no replace)
@@ -1806,9 +1807,10 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                             candidates.extend(cc)
                     args.insert(0, rest_cmd.pop())
                 cmd_state['suggestions'] = sorted(set(candidates))
+                cmd_state['line'] = line
             suggestions = cmd_state['suggestions']
             if len(suggestions) == 1 and text == suggestions[0]:
-                probe_cmd = line.replace(' ', '_')
+                probe_cmd = cmd_state['line'].replace(' ', '_')
                 if probe_cmd in self._cmd_argc and self._cmd_argc[probe_cmd] != 0:
                     return text + ' '
                 return None
