@@ -161,7 +161,7 @@ def msg(message, *args, **kwargs):
         log_file.flush()
     out.close()
 
-__version__ = "0.1"
+__version__ = "0.1.1"
 # thread local storage for keeping track of request information (eg. time)
 thread_local = threading.local()
 
@@ -1819,7 +1819,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         old_completer = readline.get_completer()
         readline.set_completer(complete)
         # be mac compatible
-        if 'libedit' in readline.__doc__:
+        if readline.__doc__ is not None and 'libedit' in readline.__doc__:
             readline.parse_and_bind("bind ^I rl_complete")
         else:
             readline.parse_and_bind("tab: complete")
