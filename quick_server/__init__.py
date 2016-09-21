@@ -1812,6 +1812,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             if len(suggestions) == 1 and text == suggestions[0]:
                 probe_cmd = cmd_state['line'].replace(' ', '_')
                 if probe_cmd in self._cmd_argc and self._cmd_argc[probe_cmd] != 0:
+                    cmd_state['line'] = ""
                     return text + ' '
                 return None
             if state < len(suggestions):
