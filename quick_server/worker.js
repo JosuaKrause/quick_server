@@ -28,6 +28,30 @@ window.quick_server.Worker = function() {
     active = _;
   };
 
+  var infoTitle = true;
+  this.infoTitle = function(_) {
+    if(!arguments.length) return infoTitle;
+    if(!_) {
+      setAddTitle("");
+    }
+    infoTitle = _;
+  };
+
+  var beforeTitle = null;
+  var ownTitle = null;
+  function setAddTitle(addTitle) {
+    if(!infoTitle) return;
+    var curTitle = document.title;
+    if(ownTitle && curTitle !== ownTitle) { // external change
+      beforeTitle = curTitle;
+    }
+    if(!beforeTitle) {
+      beforeTitle = curTitle;
+    }
+    ownTitle = beforeTitle + addTitle;
+    document.title = ownTitle;
+  }
+
   var sendRequest = function(url, obj, cb) {
     if(d3) { // d3 compatibility
       d3.json(url).header("Content-Type", "application/json").post(obj, function(err, data) {
@@ -58,7 +82,33 @@ window.quick_server.Worker = function() {
     } else {
       req -= 1;
     }
+    titleStatus();
     status(req);
+  }
+
+  var animationIx = 0;
+  // var animation = [ "/", "-", "\\", "|", ];
+  var animation = [ "⠋", "⠙", "⠸", "⠴", "⠦", "⠇", ];
+  var animationTime = 300;
+  var animationInFlight = false;
+  function titleStatus() {
+    if(req <= 0) {
+      setAddTitle("");
+      return;
+    }
+    var txt = " " + animation[animationIx];
+    if(req > 1) {
+      txt += " (" + req + "x)";
+    }
+    setAddTitle(txt);
+    if(infoTitle && !animationInFlight) {
+      animationIx = (animationIx + 1) % animation.length;
+      animationInFlight = true;
+      setTimeout(function() {
+        animationInFlight = false;
+        titleStatus();
+      }, animationTime);
+    }
   }
 
   function get_payload(data) {
