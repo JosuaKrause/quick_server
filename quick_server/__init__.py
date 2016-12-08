@@ -161,7 +161,7 @@ def msg(message, *args, **kwargs):
         log_file.flush()
     out.close()
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 # thread local storage for keeping track of request information (eg. time)
 thread_local = threading.local()
 
