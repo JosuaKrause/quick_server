@@ -36,9 +36,13 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
+# NOTE! steps to distribute:
+#$ python setup.py sdist bdist_wheel
+#$ twine upload dist/... <- here be the new version!
+
 setup(
     name='quick_server',
-    version='0.1.4',
+    version='0.2.0',
     description='QuickServer is a quick to use and easy to set up server implementation.',
     long_description=long_description,
     url='https://github.com/JosuaKrause/quick_server',

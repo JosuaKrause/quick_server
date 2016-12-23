@@ -57,7 +57,7 @@ from SimpleHTTPServer import SimpleHTTPRequestHandler
 import BaseHTTPServer
 import SocketServer
 
-__version__ = "0.1.4"
+__version__ = "0.2.0"
 
 def create_server(server_address, parallel=True):
     """Creates the server."""
@@ -257,6 +257,10 @@ def setup_restart():
     if exit_code is None:
         atexit._exithandlers = filter(lambda exit_hnd: exit_hnd[0] != _on_exit, atexit._exithandlers)
         _start_restart_loop(None, in_atexit=False)
+
+def is_original():
+    """Whether we are in the original process."""
+    return 'QUICK_SERVER_RESTART' not in os.environ
 
 def has_been_restarted():
     """Returns whether the process has been restarted in the past. When using a
