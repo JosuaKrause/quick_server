@@ -57,6 +57,8 @@ from SimpleHTTPServer import SimpleHTTPRequestHandler
 import BaseHTTPServer
 import SocketServer
 
+print(__file__, file=sys.stderr)
+
 __version__ = "0.2.0"
 
 def create_server(server_address, parallel=True):
