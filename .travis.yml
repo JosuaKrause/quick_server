@@ -6,7 +6,6 @@ python:
 sudo: false
 install:
   - pip install coverage
-  - pip install -e .
 script:
   - export PYTHON="coverage run --parallel-mode --source=$PWD/quick_server/__init__.py,$PWD/quick_server/quick_server.py,$PWD/test/run.py"
   - $PYTHON test/run.py
