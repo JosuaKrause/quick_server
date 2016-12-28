@@ -11,7 +11,7 @@ import select
 try: # pragma: no cover
     from urllib.request import Request, urlopen
     from urllib.error import HTTPError
-except ImportError:
+except ImportError: # pragma: no cover
     from urllib2 import Request, urlopen, HTTPError
 from fcntl import fcntl, F_GETFL, F_SETFL
 from subprocess import Popen, PIPE
