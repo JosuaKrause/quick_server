@@ -58,9 +58,6 @@ from SimpleHTTPServer import SimpleHTTPRequestHandler
 import BaseHTTPServer
 import SocketServer
 
-with open("/home/travis/build/JosuaKrause/test.txt", 'wb') as tmp_out:
-    print(__file__, file=tmp_out)
-
 __version__ = "0.2.0"
 
 def create_server(server_address, parallel=True):

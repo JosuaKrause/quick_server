@@ -8,9 +8,8 @@ install:
   - pip install coverage
   - pip install -e .
 script:
-  - export PYTHON="coverage run --parallel-mode --source=$PWD/quick_server/__init__.py,$PWD/test/run.py"
+  - export PYTHON="coverage run --parallel-mode --source=$PWD/quick_server/__init__.pyc,$PWD/quick_server/quick_server.pyc,$PWD/test/run.pyc"
   - $PYTHON test/run.py
-  - cat /home/travis/build/JosuaKrause/test.txt
   - find quick_server example test -name '.coverage*' | while read i; do mv "$i" ".coverage.$(basename "$i")"; done
   - coverage combine
 after_success:
