@@ -8,7 +8,7 @@ import sys
 import json
 import time
 import select
-try:
+try: # pragme: no cover
     from urllib.request import Request, urlopen
     from urllib.error import HTTPError
 except ImportError:
