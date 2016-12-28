@@ -8,11 +8,11 @@ import sys
 import json
 import time
 import select
-try: # pragme: no cover
-    from urllib.request import Request, urlopen
-    from urllib.error import HTTPError
+try:
+    from urllib.request import Request, urlopen # pragme: no cover
+    from urllib.error import HTTPError # pragme: no cover
 except ImportError:
-    from urllib2 import Request, urlopen, HTTPError
+    from urllib2 import Request, urlopen, HTTPError # pragme: no cover
 from fcntl import fcntl, F_GETFL, F_SETFL
 from subprocess import Popen, PIPE
 

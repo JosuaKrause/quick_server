@@ -49,10 +49,10 @@ import threading
 import traceback
 import collections
 
-try: # pragme: no cover
-    from cStringIO import StringIO
+try:
+    from cStringIO import StringIO # pragme: no cover
 except ImportError:
-    from StringIO import StringIO
+    from StringIO import StringIO # pragme: no cover
 
 from SimpleHTTPServer import SimpleHTTPRequestHandler
 import BaseHTTPServer
