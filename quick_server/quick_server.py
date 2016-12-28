@@ -49,10 +49,10 @@ import threading
 import traceback
 import collections
 
-try:
-    from cStringIO import StringIO # pragme: no cover
+try: # pragma: no cover
+    from cStringIO import StringIO
 except ImportError:
-    from StringIO import StringIO # pragme: no cover
+    from StringIO import StringIO
 
 from SimpleHTTPServer import SimpleHTTPRequestHandler
 import BaseHTTPServer
@@ -64,7 +64,7 @@ def create_server(server_address, parallel=True):
     """Creates the server."""
     if parallel:
         return ParallelQuickServer(server_address)
-    return QuickServer(server_address) # pragme: no cover
+    return QuickServer(server_address) # pragma: no cover
 
 def json_dumps(obj):
     """A safe JSON dump function that provides correct diverging numbers for a
