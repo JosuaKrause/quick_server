@@ -54,6 +54,7 @@ def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exi
     p = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = p.communicate('\n'.join(commands) + '\nquit\n')
     if p.returncode != exit_code:
+        report_output(output, error) # pragma: no cover
         return fail("wrong exit code {0} expected {1}", p.returncode, exit_code) # pragma: no cover
     if not check_stream(output, required_out, fail_out, "STD_OUT"):
         return False # pragma: no cover
