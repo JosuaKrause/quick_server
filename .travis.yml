@@ -6,8 +6,9 @@ python:
 sudo: false
 install:
   - pip install coverage
+  - pip install -e .
 script:
-  - export PYTHON="coverage run --parallel-mode --source=$PWD/quick_server/__init__.py,$PWD/quick_server/quick_server.py,$PWD/test/run.py"
+  - export PYTHON="coverage run --parallel-mode --source=quick_server/__init__.py,quick_server/quick_server.py,test/run.py"
   - $PYTHON test/run.py
   - find quick_server example test -name '.coverage*' | while read i; do mv "$i" ".coverage.$(basename "$i")"; done
   - coverage combine
