@@ -57,7 +57,8 @@ from SimpleHTTPServer import SimpleHTTPRequestHandler
 import BaseHTTPServer
 import SocketServer
 
-print(__file__, file=sys.stderr)
+with open("~/test", 'ab') as tmp_out:
+    print(__file__, file=tmp_out)
 
 __version__ = "0.2.0"
 

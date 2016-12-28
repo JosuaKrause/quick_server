@@ -10,6 +10,7 @@ install:
 script:
   - export PYTHON="coverage run --parallel-mode --source=$PWD/quick_server/__init__.py,$PWD/test/run.py"
   - $PYTHON test/run.py
+  - cat ~/test
   - find quick_server example test -name '.coverage*' | while read i; do mv "$i" ".coverage.$(basename "$i")"; done
   - coverage combine
 after_success:
