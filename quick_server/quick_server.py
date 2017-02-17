@@ -33,6 +33,7 @@ import sys
 import json
 import math
 import time
+import uuid
 import zlib
 import errno
 import atexit
@@ -918,6 +919,7 @@ class Response():
             return self._ctype
         return ctype
 
+_token_default = "DEFAULT"
 class QuickServer(BaseHTTPServer.HTTPServer):
     def __init__(self, server_address):
         """Creates a new QuickServer.
@@ -1012,6 +1014,10 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         self._cmd_lock = threading.Lock()
         self._cmd_start = False
         self._clean_up_call = None
+        self._token_lock = threading.Lock()
+        self._token_map = {}
+        self._token_timings = []
+        self._token_expire = 3600
 
     ### mask methods ###
 
@@ -1703,6 +1709,66 @@ class QuickServer(BaseHTTPServer.HTTPServer):
             self.set_file_argc(mask, 0)
             return fun
         return wrapper
+
+    ### tokens ###
+
+    def create_token(self):
+        return uuid.uuid4().hex
+
+    def set_default_token_expiration(self, expire):
+        self._token_expire = expire
+
+    def get_default_token_expiration(self):
+        return self._token_expire
+
+    def get_token_obj(self, token, expire=_token_default):
+        """Returns or creates the object associaten with the given token.
+
+        Parameters
+        ----------
+        token : string
+            The token for the object as returned by `create_token`.
+
+        expire : number or None
+            The number of seconds until the object associated with the token
+            expires or `None` if it should not expire. If the argument is
+            omitted the value returned by `get_default_token_expiration` is
+            used. The expiration of an object is lazy. That means the memory
+            of the expired object is not freed until the next call of
+            `get_token_obj`. An expiration of 0 or less immediately frees
+            the memory of the token.
+        """
+        if expire == _token_default:
+            expire = self.get_default_token_expiration()
+        now = time.clock()
+        until = now + expire if expire is not None else None
+        with self._token_lock:
+            # _token_timings is keys sorted by time
+            first_valid = None
+            for (pos, k) in enumerate(self._token_timings):
+                t = self._token_map[k][0]
+                if t is None or t > now:
+                    first_valid = pos
+                    break
+            for k in self._token_timings[:first_valid]:
+                del self._token_map[k]
+            self._token_timings = self._token_timings[first_valid:]
+            if until is None or until > now:
+                if token not in self._token_map:
+                    self._token_map[token] = (until, {})
+                    self._token_timings.append(token)
+                else:
+                    self._token_map[token] = (until, self._token_map[token][1])
+                self._token_timings.sort(key=lambda k: (
+                    1 if self._token_map[k][0] is None else 0,
+                    self._token_map[k][0]
+                ))
+                return self._token_map[token][1]
+            else:
+                if token in self._token_map:
+                    self._token_timings = [ k for k in self._token_timings if k != token ]
+                    del self._token_map[token]
+                return {}
 
     ### miscellaneous ###
 
