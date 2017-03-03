@@ -16,6 +16,8 @@ window.quick_server.Worker = function() {
   var timeMinInc = 10;
   var timeMulInc = 1.01;
 
+  this.version = "0.3.0";
+
   var status = function(req) {};
   this.status = function(_) {
     if(!arguments.length) return status;
