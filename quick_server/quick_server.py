@@ -552,7 +552,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         init_path = orig_path
         orig_path = urlparse.urlparse(orig_path)[2]
         needs_redirect = False
-        is_folder = len(orig_path) > 1 and orig_path[-1] == '/'
+        redirect_add = '/'
+        is_folder = len(orig_path) <= 1 or orig_path[-1] == '/'
         orig_path = posixpath.normpath(urllib.unquote(orig_path))
         if is_folder:
             orig_path += '/'
@@ -583,12 +584,13 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             self.send_error(404, "File not found")
             raise PreventDefaultResponse()
         if os.path.isdir(path):
-            for index in [ "index.html", "index.htm" ]:
-                index = os.path.join(path, index)
+            for orig_index in [ "index.html", "index.htm" ]:
+                index = os.path.join(path, orig_index)
                 if os.path.isfile(index):
                     path = index
                     if not is_folder:
                         needs_redirect = True
+                        redirect_add = orig_index
                     break
         if os.path.isdir(path):
             # no black-/white-list for directories
@@ -623,8 +625,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     break
         # redirect improper index requests
         if needs_redirect:
-            self.send_response(301, "Use index page with slash")
-            self.send_header("Location", "".join([ seg if ix != 2 else seg + '/' for (ix, seg) in enumerate(urlparse.urlparse(init_path)) ]))
+            self.send_response(301, "Use index page")
+            location = "".join([ seg if ix != 2 else seg + redirect_add for (ix, seg) in enumerate(urlparse.urlparse(init_path)) ])
+            self.send_header("Location", location)
             self.end_headers()
             raise PreventDefaultResponse()
         # handle ETag caching
@@ -977,6 +980,9 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         verbose_workers : bool
             If set messages about worker requests are printed.
 
+        no_command_loop : bool
+            If set the command loop won't be started.
+
         cache : quick_cache object or None
             The cache object used when caching worker results. The API must be
             similar to https://github.com/JosuaKrause/quick_cache
@@ -1001,6 +1007,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
         self.suppress_noise = False
         self.report_slow_requests = False
         self.verbose_workers = False
+        self.no_command_loop = False
         self.cache = None
         self.done = False
         self._folder_masks = []
@@ -1940,7 +1947,7 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                 close = False
                 kill = True
                 try:
-                    while not server.done and not close:
+                    while not server.done and not close and not server.no_command_loop:
                         try:
                             try:
                                 line = raw_input(server.prompt)
@@ -1966,9 +1973,11 @@ class QuickServer(BaseHTTPServer.HTTPServer):
                         server.done = True
                     else:
                         msg("no command loop - use CTRL-C to terminate")
+                        server.no_command_loop = True
                     clean_up()
 
-        threading.Thread.start(CmdLoop())
+        if not server.no_command_loop:
+            threading.Thread.start(CmdLoop())
 
     def handle_request(self):
         """Handles an HTTP request.The actual HTTP request is handled using a
