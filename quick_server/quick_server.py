@@ -552,7 +552,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         init_path = orig_path
         orig_path = urlparse.urlparse(orig_path)[2]
         needs_redirect = False
-        redirect_add = '/'
         is_folder = len(orig_path) <= 1 or orig_path[-1] == '/'
         orig_path = posixpath.normpath(urllib.unquote(orig_path))
         if is_folder:
@@ -584,14 +583,14 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             self.send_error(404, "File not found")
             raise PreventDefaultResponse()
         if os.path.isdir(path):
-            for orig_index in [ "index.html", "index.htm" ]:
-                index = os.path.join(path, orig_index)
-                if os.path.isfile(index):
-                    path = index
-                    if not is_folder:
-                        needs_redirect = True
-                        redirect_add = orig_index
-                    break
+            if not is_folder:
+                needs_redirect = True
+            else:
+                for orig_index in [ "index.html", "index.htm" ]:
+                    index = os.path.join(path, orig_index)
+                    if os.path.isfile(index):
+                        path = index
+                        break
         if os.path.isdir(path):
             # no black-/white-list for directories
             is_white = True
@@ -625,8 +624,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     break
         # redirect improper index requests
         if needs_redirect:
-            self.send_response(301, "Use index page")
-            location = "".join([ seg if ix != 2 else seg + redirect_add for (ix, seg) in enumerate(urlparse.urlparse(init_path)) ])
+            self.send_response(301, "Use index page with slash")
+            location = urlparse.urlunparse(tuple([
+                seg if ix != 2 else seg + '/' for (ix, seg) in enumerate(urlparse.urlparse(init_path))
+            ]))
             self.send_header("Location", location)
             self.end_headers()
             raise PreventDefaultResponse()
