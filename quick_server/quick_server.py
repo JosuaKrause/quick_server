@@ -59,7 +59,7 @@ from SimpleHTTPServer import SimpleHTTPRequestHandler
 import BaseHTTPServer
 import SocketServer
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 def create_server(server_address, parallel=True):
     """Creates the server."""
