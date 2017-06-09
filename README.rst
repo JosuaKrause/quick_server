@@ -213,6 +213,8 @@ script like this:
 
     cat /dev/null | python yourscript.py
 
+or use the ``no_command_loop`` flag and run the script normally.
+
 More examples
 ~~~~~~~~~~~~~
 

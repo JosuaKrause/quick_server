@@ -52,7 +52,9 @@ def check_stream(text, requireds, fails, name):
 
 def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exit_code=0):
     p = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    output, error = p.communicate('\n'.join(commands) + '\nquit\n')
+    output, error = p.communicate(b'\n'.join(commands) + b'\nquit\n')
+    output = output.decode('utf8')
+    error = error.decode('utf8')
     if p.returncode != exit_code:
         report_output(output.split('\n'), error.split('\n')) # pragma: no cover
         return fail("wrong exit code {0} expected {1}", p.returncode, exit_code) # pragma: no cover
@@ -77,7 +79,10 @@ def access_url(parr, post=None, json_response=None):
         post_str = json.dumps(post, indent=2, sort_keys=True, allow_nan=False)
         req.add_header("Content-Type", "application/json")
         req.add_header("Content-Length", len(post_str))
-        req.add_data(post_str)
+        try:
+            req.add_data(post_str)
+        except AttributeError:
+            req.data = post_str.encode('utf8')
     try:
         response = urlopen(req)
     except HTTPError as e:
@@ -106,7 +111,9 @@ def url_server_run(probes, script="example.py"):
         done = True
     finally:
         if p is not None:
-            output, err = p.communicate("quit\n")
+            output, err = p.communicate(b"quit\n")
+            output = output.decode('utf8')
+            err = err.decode('utf8')
             if not done:
                 report_output(output.split('\n'), err.split('\n')) # pragma: no cover
             time.sleep(1)
@@ -157,14 +164,17 @@ def worker_server_run(probes, script="example.py"):
     try:
         p = Popen(PYTHON + [script], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
         time.sleep(1) # give the server some time to wake up
-        access_url([ 'js/worker.js', 200 ])
+        if not access_url([ 'js/worker.js', 200 ]):
+            return False # pragma: no cover
         for (url, args, expected_keys, max_tries, force_token, expected) in probes:
             if access_worker(url, args, expected_keys, max_tries, force_token) != expected:
                 return False # pragma: no cover
         done = True
     finally:
         if p is not None:
-            output, err = p.communicate("quit\n")
+            output, err = p.communicate(b"quit\n")
+            output = output.decode('utf8')
+            err = err.decode('utf8')
             if not done:
                 report_output(output.split('\n'), err.split('\n')) # pragma: no cover
             time.sleep(1)
@@ -192,6 +202,7 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
     error = []
 
     def read_all(write):
+        write = write.encode('utf8')
         written = 0
         while True:
             sels = select.select([ p.stdout, p.stderr ], [ p.stdin ], [])
@@ -199,9 +210,9 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
                 break
             for s in sels[0]:
                 if s == p.stdout:
-                    output.append(os.read(p.stdout.fileno(), 1024))
+                    output.append(os.read(p.stdout.fileno(), 1024).decode('utf8'))
                 if s == p.stderr:
-                    error.append(os.read(p.stderr.fileno(), 1024))
+                    error.append(os.read(p.stderr.fileno(), 1024).decode('utf8'))
             try:
                 for s in sels[1]:
                     written += os.write(s.fileno(), write[written:])
@@ -275,7 +286,7 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
 if SKIP < 1:
     note("basic command check")
     if not cmd_server_run([
-                "requests uptime"
+                b"requests uptime"
             ], [], [], [
                 "requests made to uptime: 0"
             ], []):

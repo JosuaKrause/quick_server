@@ -42,7 +42,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='quick_server',
-    version='0.3.1',
+    version='0.4.0',
     description='QuickServer is a quick to use and easy to set up server implementation.',
     long_description=long_description,
     url='https://github.com/JosuaKrause/quick_server',
@@ -55,6 +55,8 @@ setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.6',
     ],
     keywords='server REST file quick easy',
     packages=['quick_server'],

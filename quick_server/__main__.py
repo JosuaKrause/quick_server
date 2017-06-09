@@ -1,4 +1,5 @@
-from quick_server import setup_restart, create_server, msg, __version__
+from quick_server import setup_restart, create_server, msg
+import quick_server
 import argparse
 import sys
 
@@ -6,7 +7,7 @@ if __name__ == "__main__":
     setup_restart()
 
     parser = argparse.ArgumentParser(prog="quick_server", description='Quick Server')
-    parser.add_argument('-v', '--version', action='version', version="quick_server version {0}".format(__version__))
+    parser.add_argument('-v', '--version', action='version', version="quick_server version {0}".format(quick_server.__version__))
     parser.add_argument('-a', type=str, default="localhost", help="specifies the server address")
     parser.add_argument('-p', type=int, default=8080, help="specifies the server port")
     parser.add_argument('--www', type=str, default='..', help="the folder to serve files from (defaults to parent folder)")
