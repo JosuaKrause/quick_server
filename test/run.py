@@ -470,7 +470,7 @@ if SKIP < 8:
                 "api/upload",
                 [ "file=@example2.py" ],
                 [
-                    "Error code 413.",
+                    "Error code 413",
                     "Message: Uploaded file is too large!",
                 ], [
                     "--",
