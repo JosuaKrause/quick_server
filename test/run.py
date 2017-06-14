@@ -470,6 +470,7 @@ if SKIP < 8:
                 "api/upload",
                 [ "file=@example2.py" ],
                 [
+                    "<html>",
                     "413",
                     "Uploaded file is too large!",
                 ], [
