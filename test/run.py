@@ -45,13 +45,12 @@ def fail(msg, *args): # pragma: no cover
 
 
 def check_stream(text, requireds, fails, name):
+    requireds = requireds[:]
     for line in text.split('\n'):
-        if not len(requireds):
-            break
         for fo in fails:
             if fo in line:
                 return fail("invalid line encountered:\n{0}\ncontains {1}", line, fo) # pragma: no cover
-        if requireds[0] in line:
+        if len(requireds) and requireds[0] in line:
             requireds.pop(0)
     if len(requireds):
         status("complete output:\n{0}\n", text) # pragma: no cover
