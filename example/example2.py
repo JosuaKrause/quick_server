@@ -40,6 +40,19 @@ def uptime(req, args):
         res[key] = [ convert(v) for v in value.split(',') ] if ',' in value else convert(value)
     return res
 
+@server.json_post('/api/upload')
+def upload_file(req, args):
+    ix = 0
+    res = {}
+    for (name, f) in args['files'].items():
+        fcontent = f.read().decode('utf8')
+        res[ix] = "{0} is {1} bytes\n".format(name, len(fcontent))
+        ix += 1
+        for line in fcontent.split('\n'):
+            res[ix] = line
+            ix += 1
+    return res
+
 @server.json_worker('/api/uptime_worker')
 def uptime_worker(args):
     global count_uptime

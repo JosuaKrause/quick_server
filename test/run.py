@@ -19,22 +19,30 @@ from subprocess import Popen, PIPE
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 PYTHON = os.environ.get('PYTHON', sys.executable).split()
+if len(sys.argv) > 1 and (sys.argv[1] == '-h' or sys.argv[1] == '--help'):
+    print("usage: {0} [skip]".format(sys.argv[0]), file=sys.stderr)
+    exit(1)
 SKIP = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+
 
 def print_msg(prefix, msg, *args):
     for line in msg.format(*args).split('\n'):
         print("[{0}] {1}".format(prefix, line), file=sys.stderr)
 
+
 def status(msg, *args):
     print_msg("TEST", msg, *args)
 
+
 def note(msg, *args):
     print_msg("NOTE", msg, *args)
+
 
 def fail(msg, *args): # pragma: no cover
     status(msg, *args)
     status("test failed!")
     return False
+
 
 def check_stream(text, requireds, fails, name):
     for line in text.split('\n'):
@@ -50,6 +58,7 @@ def check_stream(text, requireds, fails, name):
         return fail("not all required lines were found in {0}:\n{1}", name, '\n'.join(requireds)) # pragma: no cover
     return True
 
+
 def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exit_code=0):
     p = Popen(PYTHON + ["example.py"], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = p.communicate(b'\n'.join(commands) + b'\nquit\n')
@@ -63,6 +72,56 @@ def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exi
     if not check_stream(error, required_err, fail_err, "STD_ERR"):
         return False # pragma: no cover
     return True
+
+
+def access_curl(url, fields, required_out, fail_out, required_err, fail_err, exit_code=0):
+    full_url = 'http://localhost:8000/{0}'.format(url)
+    call = [ "curl" ]
+    for f in fields:
+        call.append("-F")
+        call.append(f)
+    call.append(full_url)
+    p = Popen(call, cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    output, error = p.communicate()
+    output = output.decode('utf8')
+    error = error.decode('utf8')
+    if p.returncode != exit_code:
+        report_output(output.split('\n'), error.split('\n')) # pragma: no cover
+        return fail("wrong exit code {0} expected {1}", p.returncode, exit_code) # pragma: no cover
+    if not check_stream(output, required_out, fail_out, "STD_OUT"):
+        return False # pragma: no cover
+    if not check_stream(error, required_err, fail_err, "STD_ERR"):
+        return False # pragma: no cover
+    return True
+
+
+def curl_server_run(probes, script="example.py"):
+    p = None
+    done = False
+    try:
+        p = Popen(PYTHON + [script], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        time.sleep(1) # give the server some time to wake up
+        for parr in probes:
+            if not access_curl(*parr):
+                return False # pragma: no cover
+        done = True
+    finally:
+        if p is not None:
+            output, err = p.communicate(b"quit\n")
+            output = output.decode('utf8')
+            err = err.decode('utf8')
+            if not done:
+                report_output(output.split('\n'), err.split('\n')) # pragma: no cover
+            time.sleep(1)
+            if p.poll() is None: # pragma: no cover
+                status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
+                p.terminate()
+                time.sleep(3)
+                if p.poll() is None:
+                    status("WARNING: killed server")
+                    p.kill()
+    return True
+
 
 user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'
 def access_url(parr, post=None, json_response=None):
@@ -99,6 +158,7 @@ def access_url(parr, post=None, json_response=None):
         json_response["response"] = json.loads(response.read())
     return True
 
+
 def url_server_run(probes, script="example.py"):
     p = None
     done = False
@@ -125,6 +185,7 @@ def url_server_run(probes, script="example.py"):
                     status("WARNING: killed server")
                     p.kill()
     return True
+
 
 def access_worker(url, args, expected_keys, max_tries, force_token):
     cmd = {
@@ -158,6 +219,7 @@ def access_worker(url, args, expected_keys, max_tries, force_token):
             return "cancel"
         time.sleep(0.1) # don't spam the server
 
+
 def worker_server_run(probes, script="example.py"):
     p = None
     done = False
@@ -187,6 +249,7 @@ def worker_server_run(probes, script="example.py"):
                     p.kill()
     return True
 
+
 def report_output(output, error): # pragma: no cover
     status("STD_OUT>>>")
     for s in output:
@@ -196,6 +259,7 @@ def report_output(output, error): # pragma: no cover
     for s in error:
         status("{0}", s.rstrip())
     status("<<<STD_ERR")
+
 
 def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, exit_code=0, script="example.py"):
     output = []
@@ -282,6 +346,7 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
     if not check_stream(error, required_err, fail_err, "STD_ERR"):
         return False # pragma: no cover
     return True
+
 
 if SKIP < 1:
     note("basic command check")
@@ -385,6 +450,24 @@ if SKIP < 7:
             [ 'api/uptime_worker', { "time": 1 }, None, -1, 0, "cancel" ],
         ], script="example2.py"):
         exit(7) # pragma: no cover
+if SKIP < 8:
+    note("file uploads")
+    if not curl_server_run([
+            # url, fields, required_out, fail_out, required_err, fail_err
+            [
+                "api/upload",
+                [ "file=@test.upload" ],
+                [
+                    "file is 33 bytes",
+                    "example file",
+                    "meaningless content",
+                ], [
+                    "--",
+                    "Content-Disposition"
+                ], [], [],
+            ],
+        ], script="example2.py"):
+        exit(8) # pragma: no cover
 
 note("all tests successful!")
 exit(0)

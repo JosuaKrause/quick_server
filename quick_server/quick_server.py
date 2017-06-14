@@ -98,7 +98,7 @@ else:
     basestring = basestring
 
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -440,14 +440,14 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
         no_impl_msg = "only one file and no additional fields implemented in multipart/form-data\n got: {0}"
         while True:
-            line = read_line()
+            line = read_line().decode('utf8')
             if line.strip():
                 if line != ('--' + boundary):
                     raise NotImplementedError(no_impl_msg.format(line))
                 break
         headers = {}
         while True:
-            line = read_line()
+            line = read_line().decode('utf8')
             if not line:
                 break
             key, value = line.split(':', 1)
@@ -476,12 +476,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 self.send_error(413, "Uploaded file is too large!")
                 raise PreventDefaultResponse()
 
-        buff = ""
+        buff = b""
         while True:
             add_buff = f_in.read(min(lens['clen'], buff_size))
             buff = buff + add_buff
             lens['clen'] -= len(add_buff)
-            bix = buff.find(end_boundary)
+            bix = buff.find(end_boundary.encode('utf8'))
             if bix >= 0:
                 write_buff(buff[:bix])
                 buff = buff[bix + len(end_boundary):]
@@ -499,9 +499,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if buff.strip():
                 raise NotImplementedError(no_impl_msg.format(buff))
         f.seek(0)
-        return {
-            name: f
-        }
+        obj = {}
+        obj[name] = f
+        return obj
 
 
     def handle_special(self, send_body, method_str):
