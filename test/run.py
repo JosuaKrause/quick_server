@@ -463,7 +463,21 @@ if SKIP < 8:
                     "meaningless content",
                 ], [
                     "--",
-                    "Content-Disposition"
+                    "Content-Disposition",
+                ], [], [],
+            ],
+            [
+                "api/upload",
+                [ "file=@example2.py" ],
+                [
+                    "Error code 413.",
+                    "Message: Uploaded file is too large!",
+                ], [
+                    "--",
+                    "Content-Disposition",
+                    "#!/usr/bin/env python",
+                    "# -*- coding: utf-8 -*-",
+                    "from time import clock, sleep",
                 ], [], [],
             ],
         ], script="example2.py"):

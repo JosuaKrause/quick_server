@@ -18,6 +18,7 @@ server.suppress_noise = True
 server.report_slow_requests = True
 
 server.link_worker_js('/js/worker.js')
+server.max_file_size = 50
 
 start = clock()
 @server.json_get('/api/uptime/', 1)
