@@ -18,7 +18,7 @@ server.suppress_noise = True
 server.report_slow_requests = True
 
 server.link_worker_js('/js/worker.js')
-server.max_file_size = 50
+server.max_file_size = 78
 
 start = clock()
 @server.json_get('/api/uptime/', 1)
@@ -45,9 +45,17 @@ def uptime(req, args):
 def upload_file(req, args):
     ix = 0
     res = {}
-    for (name, f) in args['files'].items():
-        fcontent = f.read().decode('utf8')
-        res[ix] = "{0} is {1} bytes\n".format(name, len(fcontent))
+    for (k, v) in sorted(args['post'].items(), key=lambda e: e[0]):
+        res[ix] = "{0} is {1}".format(k, v)
+        ix += 1
+    for (name, f) in sorted(args['files'].items(), key=lambda e: e[0]):
+        fcontent = f.read()
+        size = len(fcontent)
+        try:
+            fcontent = fcontent.decode('utf8')
+        except UnicodeDecodeError:
+            fcontent = repr(fcontent)
+        res[ix] = "{0} is {1} bytes".format(name, size)
         ix += 1
         for line in fcontent.split('\n'):
             res[ix] = line

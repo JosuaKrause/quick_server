@@ -98,7 +98,7 @@ else:
     basestring = basestring
 
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -419,89 +419,127 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         return args
 
 
-    def get_post_file(self, hdr, f_in, clen):
-        """Reads a single file from a multipart/form-data which can only contain
-           this file.
-        """
+    def get_post_file(self, hdr, f_in, clen, post, files):
+        """Reads from a multipart/form-data."""
         lens = {
-            'clen': clen
+            'clen': clen,
+            'push': [],
         }
         prefix = "boundary="
         if not hdr.startswith(prefix):
             return None
-        boundary = hdr[len(prefix):].strip()
+        boundary = hdr[len(prefix):].strip().encode('utf8')
         if not boundary:
             return None
+        boundary = b'--' + boundary
+        raw_boundary = b'\r\n' + boundary
+        end_boundary = boundary + b'--'
+
+        def push_back(line):
+            l = BytesIO()
+            l.write(line)
+            l.flush()
+            l.seek(0)
+            lens['clen'] += len(line)
+            lens['push'].append(l)
 
         def read_line():
-            line = f_in.readline(lens['clen'])
+            line = b''
+            while not line.endswith(b'\n') and lens['push']:
+                br = lens['push'].pop()
+                line += br.readline()
+                tmp = br.read(1)
+                if tmp != b'':
+                    br.seek(br.tell() - 1)
+                    lens['push'].append(br)
+            if not line.endswith(b'\n'):
+                line += f_in.readline(lens['clen'])
             lens['clen'] -= len(line)
+            if line == b'' or lens['clen'] < 0:
+                raise ValueError("Unexpected EOF")
             return line.strip()
 
-        no_impl_msg = "only one file and no additional fields implemented in multipart/form-data\n got: {0}"
-        while True:
-            line = read_line().decode('utf8')
-            if line.strip():
-                if line != ('--' + boundary):
-                    raise NotImplementedError(no_impl_msg.format(line))
-                break
-        headers = {}
-        while True:
-            line = read_line().decode('utf8')
-            if not line:
-                break
-            key, value = line.split(':', 1)
-            headers[key.lower()] = value
-        name = 'file'
-        if 'content-disposition' in headers:
-            cdis = headers['content-disposition']
-            name_field = 'name="'
-            ix = cdis.find(name_field)
-            if ix >= 0:
-                name = cdis[ix + len(name_field):]
-                name = name[:name.index('"')]
-        end_boundary = '\r\n--' + boundary + '--\r\n'
-        if lens['clen'] - len(end_boundary) > self.server.max_file_size:
-            self.send_error(413, "Uploaded file is too large!")
-            raise PreventDefaultResponse()
-        # NOTE: we store the file in a BytesIO file for now but this could be
-        # transparently changed later
-        f = BytesIO()
-        buff_size = 10 * 1024
+        def read(length):
+            res = b''
+            while len(res) < length and lens['push']:
+                br = lens['push'].pop()
+                res += br.read(length - len(res))
+                tmp = br.read(1)
+                if tmp != b'':
+                    br.seek(br.tell() - 1)
+                    lens['push'].append(br)
+            if len(res) < length:
+                res += f_in.read(length - len(res))
+            lens['clen'] -= len(res)
+            if res == b'' or lens['clen'] < 0:
+                raise ValueError("Unexpected EOF")
+            return res
 
-        def write_buff(buff):
-            f.write(buff)
-            f.flush()
-            if f.tell() > self.server.max_file_size:
-                self.send_error(413, "Uploaded file is too large!")
-                raise PreventDefaultResponse()
+        def parse_file():
+            f = BytesIO()
+            buff_size = 10 * 1024
 
-        buff = b""
+            def write_buff(buff):
+                if f.tell() + len(buff) > self.server.max_file_size:
+                    self.send_error(413, "Uploaded file is too large! {0} > {1}".format(
+                        f.tell() + len(buff), self.server.max_file_size)
+                    )
+                    raise PreventDefaultResponse()
+                f.write(buff)
+                f.flush()
+
+            buff = b""
+            while True:
+                buff += read(min(lens['clen'], buff_size))
+                bix = buff.find(raw_boundary)
+                if bix >= 0:
+                    write_buff(buff[:bix])
+                    push_back(buff[bix + len(raw_boundary) - len(boundary):])
+                    break
+                out_split = max(len(buff) - len(raw_boundary), 0)
+                if out_split > 0:
+                    write_buff(buff[:out_split])
+                    buff = buff[out_split:]
+            f.seek(0)
+            return f
+
+        def parse_field():
+            return parse_file().read().decode('utf8')
+
         while True:
-            add_buff = f_in.read(min(lens['clen'], buff_size))
-            buff = buff + add_buff
-            lens['clen'] -= len(add_buff)
-            bix = buff.find(end_boundary.encode('utf8'))
-            if bix >= 0:
-                write_buff(buff[:bix])
-                buff = buff[bix + len(end_boundary):]
-                if buff.strip():
-                    raise NotImplementedError(no_impl_msg.format(buff))
-                break
-            if lens['clen'] == 0:
-                raise ValueError("Unexpected EOF: '{0}' has no '{1}'".format(buff, end_boundary))
-            out_split = max(len(buff) - len(end_boundary), 0)
-            if out_split > 0:
-                write_buff(buff[:out_split])
-                buff = buff[out_split:]
-        if lens['clen'] > 0:
-            buff = f_in.read(lens['clen'])
-            if buff.strip():
-                raise NotImplementedError(no_impl_msg.format(buff))
-        f.seek(0)
-        obj = {}
-        obj[name] = f
-        return obj
+            line = read_line()
+            if line == end_boundary:
+                if lens['clen'] > 0:
+                    raise ValueError("Expected EOF got: {0}".format(repr(f_in.read(lens['clen']))))
+                return
+            if line != boundary:
+                raise ValueError("Expected boundary got: {0}".format(repr(line)))
+            headers = {}
+            while True:
+                line = read_line()
+                if not line:
+                    break
+                key, value = line.split(b':', 1)
+                headers[key.lower()] = value.strip()
+            name = None
+            if b'content-disposition' in headers:
+                cdis = headers[b'content-disposition']
+                if not cdis.startswith(b'form-data'):
+                    raise ValueError("Unknown content-disposition: {0}".format(repr(cdis)))
+                name_field = b'name="'
+                ix = cdis.find(name_field)
+                if ix >= 0:
+                    name = cdis[ix + len(name_field):]
+                    name = name[:name.index(b'"')].decode('utf8')
+            ctype = None
+            if b'content-type' in headers:
+                ctype = headers[b'content-type']
+            if ctype == b'application/octet-stream':
+                files[name] = parse_file()
+            elif ctype is None:
+                post[name] = parse_field()
+            else:
+                raise ValueError("Unknown content-type: {0}".format(repr(ctype)))
 
 
     def handle_special(self, send_body, method_str):
@@ -574,10 +612,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 if ctype == 'multipart/form-data':
                     post_res = {}
                     args['post'] = {}
-                    files = self.get_post_file(crest, self.rfile, clen)
                     args['files'] = {}
-                    for (key, value) in files.items():
-                        args['files'][key] = value
+                    self.get_post_file(crest, self.rfile, clen, args['post'], args['files'])
                 else:
                     content = self.rfile.read(clen)
                     post_res = {}

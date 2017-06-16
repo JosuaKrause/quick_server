@@ -16,6 +16,21 @@ except ImportError: # pragma: no cover
 from fcntl import fcntl, F_GETFL, F_SETFL
 from subprocess import Popen, PIPE
 
+try:
+    unicode = unicode
+except NameError:
+    # python 3
+    str = str
+    unicode = str
+    bytes = bytes
+    basestring = (str, bytes)
+else:
+    # python 2
+    str = str
+    unicode = unicode
+    bytes = str
+    basestring = basestring
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 PYTHON = os.environ.get('PYTHON', sys.executable).split()
@@ -26,6 +41,11 @@ SKIP = int(sys.argv[1]) if len(sys.argv) > 1 else 0
 
 
 def print_msg(prefix, msg, *args):
+    if isinstance(msg, bytes):
+        try:
+            msg = msg.decode('utf8')
+        except UnicodeDecodeError:
+            msg = '\n'.join([ repr(m) for m in msg.split(b'\n') ])
     for line in msg.format(*args).split('\n'):
         print("[{0}] {1}".format(prefix, line), file=sys.stderr)
 
@@ -50,7 +70,7 @@ def check_stream(text, requireds, fails, name):
         for fo in fails:
             if fo in line:
                 return fail("invalid line encountered:\n{0}\ncontains {1}", line, fo) # pragma: no cover
-        if len(requireds) and requireds[0] in line:
+        while len(requireds) and requireds[0] in line:
             requireds.pop(0)
     if len(requireds):
         status("complete output:\n{0}\n", text) # pragma: no cover
@@ -455,11 +475,12 @@ if SKIP < 8:
             # url, fields, required_out, fail_out, required_err, fail_err
             [
                 "api/upload",
-                [ "file=@test.upload" ],
+                [ "foo=@test.upload" ],
                 [
-                    "file is 33 bytes",
+                    "foo is 33 bytes",
                     "example file",
                     "meaningless content",
+                    "\"\"",
                 ], [
                     "--",
                     "Content-Disposition",
@@ -478,6 +499,24 @@ if SKIP < 8:
                     "#!/usr/bin/env python",
                     "# -*- coding: utf-8 -*-",
                     "from time import clock, sleep",
+                ], [], [],
+            ],
+            [
+                "api/upload",
+                [ "name=foo", "abc=@test.upload", "bin=@binary.upload", "def=ghi" ],
+                [
+                    "def is ghi",
+                    "name is foo",
+                    "abc is 33 bytes",
+                    "example file",
+                    "meaningless content",
+                    "\"\"",
+                    "bin is 78 bytes",
+                    repr(b"\x00\x00\x01\x00\x01\x00\x01\x01\x02\x00\x01\x00\x01\x00\x38\x00")[2:-1].replace('\\', '\\\\'),
+                    repr(b"\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")[2:-1].replace('\\', '\\\\'),
+                ], [
+                    "--",
+                    "Content-Disposition",
                 ], [], [],
             ],
         ], script="example2.py"):
