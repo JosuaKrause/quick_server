@@ -95,7 +95,7 @@ def cmd_server_run(commands, required_out, fail_out, required_err, fail_err, exi
 
 def access_curl(url, fields, required_out, fail_out, required_err, fail_err, exit_code=0):
     full_url = 'http://localhost:8000/{0}'.format(url)
-    call = [ "curl" ]
+    call = [ "curl", "--output", "-" ]
     for f in fields:
         call.append("-F")
         call.append(f)
