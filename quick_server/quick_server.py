@@ -98,7 +98,7 @@ else:
     basestring = basestring
 
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -534,12 +534,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             ctype = None
             if b'content-type' in headers:
                 ctype = headers[b'content-type']
-            if ctype == b'application/octet-stream':
+            if ctype is not None: # b'application/octet-stream': # we treat all files the same
                 files[name] = parse_file()
-            elif ctype is None:
-                post[name] = parse_field()
             else:
-                raise ValueError("Unknown content-type: {0}".format(repr(ctype)))
+                post[name] = parse_field()
 
 
     def handle_special(self, send_body, method_str):
