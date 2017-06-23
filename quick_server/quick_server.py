@@ -1193,7 +1193,6 @@ class QuickServer(http_server.HTTPServer):
             '*.jpg',
             '*.js',
             '*.json',
-            '*.json',
             '*.md',
             '*.otf',
             '*.pdf',
