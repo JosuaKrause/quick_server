@@ -40,6 +40,10 @@ if len(sys.argv) > 1 and (sys.argv[1] == '-h' or sys.argv[1] == '--help'):
 SKIP = int(sys.argv[1]) if len(sys.argv) > 1 else 0
 
 
+def convert_b(bdata):
+    return repr(bdata).lstrip('b').strip("'\"").replace('\\', '\\\\')
+
+
 def print_msg(prefix, msg, *args):
     if isinstance(msg, bytes):
         try:
@@ -531,8 +535,8 @@ if SKIP < 8:
                     "meaningless content",
                     "\"\"",
                     "bin is 78 bytes",
-                    repr(b"\x00\x00\x01\x00\x01\x00\x01\x01\x02\x00\x01\x00\x01\x00\x38\x00")[2:-1].replace('\\', '\\\\'),
-                    repr(b"\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")[2:-1].replace('\\', '\\\\'),
+                    convert_b(b"\x00\x00\x01\x00\x01\x00\x01\x01\x02\x00\x01\x00\x01\x00\x38\x00"),
+                    convert_b(b"\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"),
                 ], [
                     "--",
                     "Content-Disposition",
