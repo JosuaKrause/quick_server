@@ -364,7 +364,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     protocol_version = "HTTP/1.1"
 
-
     def convert_argmap(self, query):
         """Converts the query string of an URL to a map.
 
@@ -387,7 +386,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             else:
                 res[name] = True
         return res
-
 
     def convert_args(self, rem_path, args):
         """Splits the rest of a URL into its argument parts. The URL is assumed to
@@ -417,7 +415,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         args['query'] = query
         args['fragment'] = urlparse_unquote(fragment_split[1]).decode('utf8') if len(fragment_split) > 1 else ''
         return args
-
 
     def get_post_file(self, hdr, f_in, clen, post, files):
         """Reads from a multipart/form-data."""
@@ -539,7 +536,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             else:
                 post[name] = parse_field()
 
-
     def handle_special(self, send_body, method_str):
         """Handles a dynamic request. If this method returns False the request is
            interpreted as static file request. Methods can be registered using the
@@ -578,7 +574,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if alarm is not None:
                 alarm.cancel()
             ongoing = False
-
 
     def _handle_special(self, send_body, method_str):
         path = self.path
@@ -640,14 +635,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 f.close()
         return True
 
-
     # optionally block the listing of directories
     def list_directory(self, path):
         if not self.server.directory_listing:
             self.send_error(404, "No permission to list directory")
             return None
         return SimpleHTTPRequestHandler.list_directory(self, path)
-
 
     def translate_path(self, orig_path):
         """Translates a path for a static file request. The server base path could
@@ -759,7 +752,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 self.send_header("Cache-Control", "max-age={0}".format(self.server.max_age), end_header=True)
         return path
 
-
     def check_cache(self, e_tag, match):
         """Checks the ETag and sends a cache match response if it matches."""
         if e_tag != match:
@@ -770,7 +762,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         thread_local.size = 0
         return True
-
 
     def handle_error(self):
         """Tries to send an 500 error after encountering an exception."""
@@ -787,10 +778,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     return
                 msg("ERROR: Cannot send error status code:\n{0}", traceback.format_exc())
 
-
     def is_cross_origin(self):
         return self.server.cross_origin
-
 
     def cross_origin_headers(self):
         """Sends cross origin headers."""
@@ -804,7 +793,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Credentials", "true")
         return allow_headers is not None
-
 
     def do_OPTIONS(self):
         """Handles an OPTIONS request."""
@@ -821,7 +809,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", 0)
         self.end_headers()
         thread_local.size = 0
-
 
     def do_DELETE(self):
         """Handles a DELETE request."""
@@ -841,7 +828,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         except Exception:
             self.handle_error()
 
-
     def do_PUT(self):
         """Handles a PUT request."""
         thread_local.clock_start = time.clock()
@@ -860,7 +846,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         except Exception:
             self.handle_error()
 
-
     def do_POST(self):
         """Handles a POST request."""
         thread_local.clock_start = time.clock()
@@ -878,7 +863,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             raise
         except Exception:
             self.handle_error()
-
 
     def do_GET(self):
         """Handles a GET request."""
@@ -900,7 +884,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         except Exception:
             self.handle_error()
 
-
     def do_HEAD(self):
         """Handles a HEAD request."""
         thread_local.clock_start = time.clock()
@@ -921,13 +904,11 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         except Exception:
             self.handle_error()
 
-
     # responses and headers are not sent until end headers to enable
     # changing them if needed
     def send_response(self, status_code, message=None):
         thread_local.status_code = status_code
         thread_local.message = message
-
 
     def send_header(self, key, value, replace=False, end_header=False):
         thread_local.headers = getattr(thread_local, 'headers', [])
@@ -955,7 +936,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             hd = thread_local.end_headers
         hd.append((key, value))
 
-
     def end_headers(self):
         thread_local.headers = getattr(thread_local, 'headers', [])
         thread_local.end_headers = getattr(thread_local, 'end_headers', [])
@@ -975,11 +955,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.message = None
         thread_local.end_headers = []
 
-
     def log_date_time_string(self):
         """Server log date time format."""
         return time.strftime("%Y-%m-%d %H:%M:%S")
-
 
     def _convert_unit(self, fmt, value, units):
         cur = ''
@@ -990,7 +968,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 break
         return cur
 
-
     # time units for logging request durations
     elapsed_units = [
         (1e-3, 'ms'),
@@ -1000,11 +977,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         (60*60*24, 'd')
     ]
 
-
     def log_elapsed_time_string(self, elapsed):
         """Convert elapsed time into a readable string."""
         return self._convert_unit("{0:8.3f}", elapsed, self.elapsed_units)
-
 
     # size units for logging request sizes
     size_units = [
@@ -1014,11 +989,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         (1024*1024*1024, ' GB')
     ]
 
-
     def log_size_string(self, size):
         """Convert buffer sizes into a readable string."""
         return self._convert_unit("{0:.3g}", size, self.size_units)
-
 
     def log_message(self, format, *args):
         """Logs a message. All messages get prefixed with '[SERVER]'
@@ -1028,7 +1001,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = None
         timing = self.log_elapsed_time_string(time.clock() - clock_start) if clock_start is not None else ''
         msg("%s[%s] %s" % (timing + ' ' if len(timing) else '', self.log_date_time_string(), format % args))
-
 
     def log_request(self, code='-', size='-'):
         """Logs the current request."""
@@ -1051,7 +1023,6 @@ class Response():
         self.response = response
         self.code = code
         self._ctype = ctype
-
 
     def get_ctype(self, ctype):
         """Returns the content type with the given default value."""
@@ -1105,6 +1076,9 @@ class QuickServer(http_server.HTTPServer):
         max_file_size : number
             The maximal size for uploaded files. Defaults to 50MB.
 
+        max_chunk_size : number
+            The maximal chunk size for worker responses. Defaults to 100MB.
+
         cross_origin : bool
             Whether to allow cross origin requests. Defaults to False.
 
@@ -1141,6 +1115,7 @@ class QuickServer(http_server.HTTPServer):
         self.favicon_fallback = None
         self.max_age = 0
         self.max_file_size = 50 * 1024 * 1024
+        self.max_chunk_size = 100 * 1024 * 1024
         self.cross_origin = False
         self.suppress_noise = False
         self.report_slow_requests = False
@@ -1164,9 +1139,7 @@ class QuickServer(http_server.HTTPServer):
         self._token_timings = []
         self._token_expire = 3600
 
-
     ### mask methods ###
-
 
     def add_file_patterns(self, patterns, blacklist):
         """Adds a list of file patterns to either the black- or white-list.
@@ -1177,7 +1150,6 @@ class QuickServer(http_server.HTTPServer):
         bl = self._pattern_black if blacklist else self._pattern_white
         for pattern in patterns:
             bl.append(pattern)
-
 
     def add_default_white_list(self):
         """Adds a list of common file patterns to the white-list."""
@@ -1205,20 +1177,17 @@ class QuickServer(http_server.HTTPServer):
             '*.woff2',
         ], blacklist=False)
 
-
     def bind_path(self, name, folder):
         """Adds a mask that maps to a given folder relative to `base_path`."""
         if not len(name) or name[0] != '/' or name[-1] != '/':
             raise ValueError("name must start and end with '/': {0}".format(name))
         self._folder_masks.insert(0, (name, folder))
 
-
     def bind_path_fallback(self, name, folder):
         """Adds a fallback for a given folder relative to `base_path`."""
         if not len(name) or name[0] != '/' or name[-1] != '/':
             raise ValueError("name must start and end with '/': {0}".format(name))
         self._folder_masks.append((name, folder))
-
 
     def add_cmd_method(self, name, method, argc=None, complete=None):
         """Adds a command to the command line interface loop.
@@ -1248,7 +1217,6 @@ class QuickServer(http_server.HTTPServer):
         self._cmd_argc[name] = argc
         self._cmd_complete[name] = complete
 
-
     def set_file_argc(self, mask, argc):
         """Sets the number of allowed further path segments to a request.
 
@@ -1262,7 +1230,6 @@ class QuickServer(http_server.HTTPServer):
             may be arbitrary.
         """
         self._f_argc[mask] = argc
-
 
     def _add_file_mask(self, start, method_str, method):
         """Adds a raw file mask for dynamic requests.
@@ -1291,7 +1258,6 @@ class QuickServer(http_server.HTTPServer):
         fm.sort(key=lambda k: len(k[0]), reverse=True)
         self._f_mask[method_str] = fm
         self._f_argc[method_str] = None
-
 
     def add_json_mask(self, start, method_str, json_producer):
         """Adds a handler that produces a JSON response.
@@ -1353,7 +1319,6 @@ class QuickServer(http_server.HTTPServer):
             return f
         self._add_file_mask(start, method_str, send_json)
 
-
     def add_json_get_mask(self, start, json_producer):
         """Adds a GET handler that produces a JSON response.
 
@@ -1371,7 +1336,6 @@ class QuickServer(http_server.HTTPServer):
             result is None a 404 error is sent.
         """
         self.add_json_mask(start, 'GET', json_producer)
-
 
     def add_json_put_mask(self, start, json_producer):
         """Adds a PUT handler that produces a JSON response.
@@ -1391,7 +1355,6 @@ class QuickServer(http_server.HTTPServer):
         """
         self.add_json_mask(start, 'PUT', json_producer)
 
-
     def add_json_delete_mask(self, start, json_producer):
         """Adds a DELETE handler that produces a JSON response.
 
@@ -1410,7 +1373,6 @@ class QuickServer(http_server.HTTPServer):
         """
         self.add_json_mask(start, 'DELETE', json_producer)
 
-
     def add_json_post_mask(self, start, json_producer):
         """Adds a POST handler that produces a JSON response.
 
@@ -1428,7 +1390,6 @@ class QuickServer(http_server.HTTPServer):
             form content 'post'). If the result is None a 404 error is sent.
         """
         self.add_json_mask(start, 'POST', json_producer)
-
 
     def add_text_mask(self, start, method_str, text_producer):
         """Adds a handler that produces a plain text response.
@@ -1489,7 +1450,6 @@ class QuickServer(http_server.HTTPServer):
             return f
         self._add_file_mask(start, method_str, send_text)
 
-
     def add_text_get_mask(self, start, text_producer):
         """Adds a GET handler that produces a plain text response.
 
@@ -1507,7 +1467,6 @@ class QuickServer(http_server.HTTPServer):
             If the result is None a 404 error is sent.
         """
         self.add_text_mask(start, 'GET', text_producer)
-
 
     def add_text_put_mask(self, start, text_producer):
         """Adds a PUT handler that produces a plain text response.
@@ -1527,7 +1486,6 @@ class QuickServer(http_server.HTTPServer):
         """
         self.add_text_mask(start, 'PUT', text_producer)
 
-
     def add_text_delete_mask(self, start, text_producer):
         """Adds a DELETE handler that produces a plain text response.
 
@@ -1545,7 +1503,6 @@ class QuickServer(http_server.HTTPServer):
             If the result is None a 404 error is sent.
         """
         self.add_text_mask(start, 'DELETE', text_producer)
-
 
     def add_text_post_mask(self, start, text_producer):
         """Adds a POST handler that produces a plain text response.
@@ -1565,9 +1522,7 @@ class QuickServer(http_server.HTTPServer):
         """
         self.add_text_mask(start, 'POST', text_producer)
 
-
     ### wrappers ###
-
 
     def cmd(self, argc=None, complete=None, no_replace=False):
         def wrapper(fun):
@@ -1577,14 +1532,12 @@ class QuickServer(http_server.HTTPServer):
             return fun
         return wrapper
 
-
     def json_get(self, mask, argc=None):
         def wrapper(fun):
             self.add_json_get_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
         return wrapper
-
 
     def json_put(self, mask, argc=None):
         def wrapper(fun):
@@ -1593,14 +1546,12 @@ class QuickServer(http_server.HTTPServer):
             return fun
         return wrapper
 
-
     def json_delete(self, mask, argc=None):
         def wrapper(fun):
             self.add_json_delete_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
         return wrapper
-
 
     def json_post(self, mask, argc=None):
         def wrapper(fun):
@@ -1609,14 +1560,12 @@ class QuickServer(http_server.HTTPServer):
             return fun
         return wrapper
 
-
     def text_get(self, mask, argc=None):
         def wrapper(fun):
             self.add_text_get_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
         return wrapper
-
 
     def text_put(self, mask, argc=None):
         def wrapper(fun):
@@ -1625,14 +1574,12 @@ class QuickServer(http_server.HTTPServer):
             return fun
         return wrapper
 
-
     def text_delete(self, mask, argc=None):
         def wrapper(fun):
             self.add_text_delete_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
         return wrapper
-
 
     def text_post(self, mask, argc=None):
         def wrapper(fun):
@@ -1641,9 +1588,7 @@ class QuickServer(http_server.HTTPServer):
             return fun
         return wrapper
 
-
     ### special files ###
-
 
     def add_special_file(self, mask, path, from_quick_server, ctype=None):
         """Adds a special file that might have a different actual path than
@@ -1673,14 +1618,11 @@ class QuickServer(http_server.HTTPServer):
         self.add_text_get_mask(mask, read_file)
         self.set_file_argc(mask, 0)
 
-
     def link_empty_favicon_fallback(self):
         """Links the empty favicon as default favicon."""
         self.favicon_fallback = os.path.join(os.path.dirname(__file__), 'favicon.ico')
 
-
     ### worker based ###
-
 
     def link_worker_js(self, mask):
         """Links the worker javascript.
@@ -1691,7 +1633,6 @@ class QuickServer(http_server.HTTPServer):
             The URL that must be matched to get the worker javascript.
         """
         self.add_special_file(mask, 'worker.js', from_quick_server=True, ctype='application/javascript; charset=utf-8')
-
 
     def json_worker(self, mask, cache_id=None, cache_method="string", cache_section="www"):
         """A function annotation that adds a worker request. A worker request is
@@ -1730,21 +1671,90 @@ class QuickServer(http_server.HTTPServer):
         def wrapper(fun):
             lock = threading.RLock()
             tasks = {}
+            cargo = {}
+            cargo_cleaner = [ None ]
 
             def is_done(cur_key):
-                try:
-                    lock.acquire()
+                with lock:
                     if cur_key not in tasks:
                         return True
                     if "running" not in tasks[cur_key]:
                         return False
                     return not tasks[cur_key]["running"]
-                finally:
-                    lock.release()
+
+            def start_cargo_cleaner():
+
+                def get_next_cargo():
+                    with lock:
+                        next_ttl = None
+                        for value in cargo.values():
+                            ttl, _ = value
+                            if next_ttl is None or ttl < next_ttl:
+                                next_ttl = ttl
+                        return next_ttl
+
+                def clean_for(timestamp):
+                    with lock:
+                        keys = []
+                        for (key, value) in cargo.items():
+                            ttl, _ = value
+                            if ttl > timestamp:
+                                continue
+                            keys.append(key)
+                        for k in keys:
+                            cargo.pop(k)
+                            msg("purged cargo that was never read ({0})", k)
+
+                def remove_cleaner():
+                    with lock:
+                        if get_next_cargo() is not None:
+                            return False
+                        cargo_cleaner[0] = None
+                        return True
+
+                def clean():
+                    while True:
+                        next_ttl = get_next_cargo()
+                        if next_ttl is None:
+                            if remove_cleaner():
+                                break
+                            else:
+                                continue
+                        time_until = next_ttl - time.time()
+                        if time_until > 0:
+                            time.sleep(time_until)
+                        clean_for(time.time())
+
+                with lock:
+                    if cargo_cleaner[0] is not None:
+                        return
+                    cleaner = threading.Thread(target=clean, name="{0}-Cargo-Cleaner".format(self.__class__), daemon=True)
+                    cargo_cleaner[0] = cleaner
+                    cleaner.start()
+
+            def add_cargo(content):
+                with lock:
+                    mcs = self.max_chunk_size
+                    if mcs < 1:
+                        raise ValueError("invalid chunk size: {0}".format(mcs))
+                    ttl = time.time() + 10 * 60 # 10 minutes
+                    chunks = []
+                    while len(content) > 0:
+                        chunk = content[:mcs]
+                        content = content[mcs:]
+                        cur_key = get_key()
+                        cargo[cur_key] = (ttl, chunk)
+                        chunks.append(cur_key)
+                    start_cargo_cleaner()
+                    return chunks
+
+            def remove_cargo(cur_key):
+                with lock:
+                    _, result = cargo.pop(cur_key)
+                    return result
 
             def remove_worker(cur_key):
-                try:
-                    lock.acquire()
+                with lock:
                     task = tasks.pop(cur_key, None)
                     if task is None:
                         return None, (ValueError("Task {0} not found!".format(cur_key)), None)
@@ -1771,13 +1781,10 @@ class QuickServer(http_server.HTTPServer):
                                         msg("killed worker {0}", cur_key)
                         return None, (ValueError("Task {0} is still running!".format(cur_key)), None)
                     return task["result"], task["exception"]
-                finally:
-                    lock.release()
 
             def start_worker(args, cur_key, get_thread):
                 try:
-                    try:
-                        lock.acquire()
+                    with lock:
                         task = {
                             "running": True,
                             "result": None,
@@ -1785,8 +1792,6 @@ class QuickServer(http_server.HTTPServer):
                             "thread": get_thread(),
                         }
                         tasks[cur_key] = task
-                    finally:
-                        lock.release()
                     if use_cache:
                         cache_obj = cache_id(args)
                         if cache_obj is not None and self.cache is not None:
@@ -1799,21 +1804,15 @@ class QuickServer(http_server.HTTPServer):
                             result = json_dumps(fun(args))
                     else:
                         result = json_dumps(fun(args))
-                    try:
-                        lock.acquire()
+                    with lock:
                         task["running"] = False
                         task["result"] = result
-                    finally:
-                        lock.release()
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except Exception as e:
-                    try:
-                        lock.acquire()
+                    with lock:
                         task["running"] = False
                         task["exception"] = (e, traceback.format_exc())
-                    finally:
-                        lock.release()
                     return
                 # make sure the result does not get stored forever
                 try:
@@ -1828,19 +1827,21 @@ class QuickServer(http_server.HTTPServer):
                         return
                     msg("purged result that was never read ({0})", cur_key)
 
-            def reserve_worker():
-                try:
-                    lock.acquire()
+            def get_key():
+                with lock:
                     cur_key = int(zlib.crc32(repr(time.clock()).encode('utf8')) & 0xFFFFFFFF)
-                    while cur_key in tasks:
+                    while cur_key in tasks or cur_key in cargo:
                         key = int(cur_key + 1)
                         if key == cur_key:
                             key = 0
                         cur_key = key
+                    return cur_key
+
+            def reserve_worker():
+                with lock:
+                    cur_key = get_key()
                     tasks[cur_key] = {} # put marker
                     return cur_key
-                finally:
-                    lock.release()
 
             def run_worker(req, args):
                 post = args["post"]
@@ -1863,6 +1864,13 @@ class QuickServer(http_server.HTTPServer):
                         th.append(worker)
                         worker.start()
                         time.sleep(0.1) # give fast tasks a way to immediately return results
+                    if action == "cargo":
+                        cur_key = post["token"]
+                        result = remove_cargo(cur_key)
+                        return {
+                            "token": cur_key,
+                            "result": result,
+                        }
                     if action == "get":
                         cur_key = post["token"]
                     if is_done(cur_key):
@@ -1879,6 +1887,14 @@ class QuickServer(http_server.HTTPServer):
                                 }
                             msg("Error in worker for {0}: {1}\n{2}", cur_key, e, tb)
                             raise ValueError("proceeding from error")
+                        if len(result) > self.max_chunk_size:
+                            cargo_keys = add_cargo(result)
+                            return {
+                                "token": cur_key,
+                                "done": True,
+                                "result": cargo_keys,
+                                "continue": True,
+                            }
                         return {
                             "token": cur_key,
                             "done": True,
@@ -1900,21 +1916,16 @@ class QuickServer(http_server.HTTPServer):
             return fun
         return wrapper
 
-
     ### tokens ###
-
 
     def create_token(self):
         return uuid.uuid4().hex
 
-
     def set_default_token_expiration(self, expire):
         self._token_expire = expire
 
-
     def get_default_token_expiration(self):
         return self._token_expire
-
 
     def get_token_obj(self, token, expire=_token_default):
         """Returns or creates the object associaten with the given token.
@@ -1965,9 +1976,7 @@ class QuickServer(http_server.HTTPServer):
                     del self._token_map[token]
                 return {}
 
-
     ### miscellaneous ###
-
 
     def handle_cmd(self, cmd):
         """Handles a single server command."""
@@ -2011,7 +2020,6 @@ class QuickServer(http_server.HTTPServer):
         else:
             msg('command "{0}" invalid; type help or use <TAB> for a list of commands', ' '.join(args))
 
-
     def start_cmd_loop(self):
         """Starts the command line loop. This method is called automatically by the
            serve_forever method. The function call is idempotent so you can call the
@@ -2020,12 +2028,9 @@ class QuickServer(http_server.HTTPServer):
            terminates the server as well.
         """
         # thread-safe check if the loop is already running
-        try:
-            self._cmd_lock.acquire()
+        with self._cmd_lock:
             cmd_start = self._cmd_start
             self._cmd_start = True
-        finally:
-            self._cmd_lock.release()
 
         if cmd_start:
             return
@@ -2111,12 +2116,9 @@ class QuickServer(http_server.HTTPServer):
 
         # remember to clean up before exit -- the call must be idempotent!
         def clean_up():
-            try:
-                cmd_state['clean_up_lock'].acquire()
+            with cmd_state['clean_up_lock']:
                 clean = cmd_state['clean']
                 cmd_state['clean'] = True
-            finally:
-                cmd_state['clean_up_lock'].release()
 
             if clean:
                 return
@@ -2147,7 +2149,9 @@ class QuickServer(http_server.HTTPServer):
                                 if e.errno == errno.EBADF:
                                     close = True
                                     kill = False
-                                elif e.errno == errno.EWOULDBLOCK or e.errno == errno.EAGAIN or e.errno == errno.EINTR:
+                                elif e.errno == errno.EWOULDBLOCK or \
+                                     e.errno == errno.EAGAIN or \
+                                     e.errno == errno.EINTR:
                                     continue
                                 else:
                                     raise e
@@ -2170,7 +2174,6 @@ class QuickServer(http_server.HTTPServer):
 
         if not server.no_command_loop:
             threading.Thread.start(CmdLoop())
-
 
     def handle_request(self):
         """Handles an HTTP request.The actual HTTP request is handled using a
@@ -2203,7 +2206,6 @@ class QuickServer(http_server.HTTPServer):
             # don't handle timeouts if we should shut down the server instead
             self.handle_timeout()
 
-
     def serve_forever(self):
         """Starts the server handling commands and HTTP requests.
            The server will loop until done is True or a KeyboardInterrupt is
@@ -2222,7 +2224,6 @@ class QuickServer(http_server.HTTPServer):
                 self._clean_up_call()
             self.done = True
 
-
     def can_ignore_error(self, reqhnd=None):
         """Tests if the error is worth reporting.
         """
@@ -2235,7 +2236,6 @@ class QuickServer(http_server.HTTPServer):
         if need_close and reqhnd is not None:
             reqhnd.close_connection = 1
         return need_close
-
 
     def handle_error(self, request, client_address):
         """Handle an error gracefully.

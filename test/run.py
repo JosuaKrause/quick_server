@@ -207,6 +207,22 @@ def url_server_run(probes, script="example.py"):
 
 
 def access_worker(url, args, expected_keys, max_tries, force_token):
+
+    def rebuild(keys):
+        res = ""
+        for k in keys:
+            ans = {}
+            if not access_url([ url, 200 ], post={
+                        "action": "cargo",
+                        "token": k,
+                    }, json_response=ans):
+                raise ValueError("Error collecting results!") # pragma: no cover
+            ans = ans["response"]
+            if ans["token"] != k:
+                raise ValueError("Token mismatch {0} != {1}".format(ans["token"], k))
+            res += ans["result"]
+        return res
+
     cmd = {
         "action": "start",
         "payload": args,
@@ -229,7 +245,10 @@ def access_worker(url, args, expected_keys, max_tries, force_token):
         }
         if answer["done"]:
             if answer["result"] is not None:
-                res = answer["result"]
+                if answer["continue"]:
+                    res = rebuild(answer["result"])
+                else:
+                    res = answer["result"]
                 for k in expected_keys:
                     if k not in res:
                         return "err" # pragma: no cover
@@ -521,6 +540,20 @@ if SKIP < 8:
             ],
         ], script="example2.py"):
         exit(8) # pragma: no cover
+if SKIP < 9:
+    note("split worker")
+    if not worker_server_run([
+            [ 'api/message', { "split": False, }, [
+                    "1234567890 the quick brown fox jumps over the lazy dog"
+                ], -1, None, "normal" ],
+            [ 'api/message', { "split": True, }, [
+                    "1234567890 the quick brown fox jumps over the lazy dog"
+                ], -1, None, "normal" ],
+            [ 'api/message', { "split": False, }, [
+                    "1234567890 the quick brown fox jumps over the lazy dog"
+                ], -1, None, "normal" ],
+        ], script="example2.py"):
+        exit(9) # pragma: no cover
 
 note("all tests successful!")
 exit(0)

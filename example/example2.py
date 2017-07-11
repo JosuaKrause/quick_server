@@ -72,6 +72,16 @@ def uptime_worker(args):
         "uptime": (clock() - start) * 1000.0
     }
 
+mcs = server.max_chunk_size
+@server.json_worker('/api/message')
+def message(args):
+    if args["split"]:
+        server.max_chunk_size = 10
+    else:
+        server.max_chunk_size = mcs
+    sleep(2)
+    return "1234567890 the quick brown fox jumps over the lazy dog"
+
 def complete_requests(_args, text):
   return [ "uptime" ] if "uptime".startswith(text) else []
 

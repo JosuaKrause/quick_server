@@ -18,7 +18,7 @@ window.quick_server.Worker = function() {
 
   this.version = "0.3.0";
 
-  var status = function(req) {};
+  var status = (req) => {};
   this.status = function(_) {
     if(!arguments.length) return status;
     status = _;
@@ -52,15 +52,16 @@ window.quick_server.Worker = function() {
     }
     ownTitle = beforeTitle + addTitle;
     document.title = ownTitle;
-  }
+  } // setAddTitle
 
   var sendRequest = function(url, obj, cb) {
     if(d3) { // d3 compatibility
-      d3.json(url).header("Content-Type", "application/json").post(obj, function(err, data) {
+      d3.json(url).header("Content-Type", "application/json").post(obj, (err, data) => {
         cb(err, data);
       });
       return;
     }
+    // TODO implement general request
     throw { "err": "unimplemented", };
   };
   this.sendRequest = function(_) {
@@ -86,7 +87,7 @@ window.quick_server.Worker = function() {
     }
     titleStatus();
     status(req);
-  }
+  } // changeStatus
 
   var animationIx = 0;
   // var animation = [ "/", "-", "\\", "|", ];
@@ -106,22 +107,56 @@ window.quick_server.Worker = function() {
     if(infoTitle && !animationInFlight) {
       animationIx = (animationIx + 1) % animation.length;
       animationInFlight = true;
-      setTimeout(function() {
+      setTimeout(() => {
         animationInFlight = false;
         titleStatus();
       }, animationTime);
     }
-  }
+  } // titleStatus
 
-  function get_payload(data) {
-    return JSON.parse(data["result"]);
-  }
+  function get_payload(data, url, cb) {
+    if(!data["continue"]) {
+      cb(JSON.parse(data["result"]));
+      return;
+    }
+    var keys = data["result"];
+    var res = {};
+    keys.forEach((k) => {
+      var obj = JSON.stringify({
+        "action": "cargo",
+        "token": k,
+      });
+      sendRequest(url, obj, (err, data) => {
+        if(err) {
+          console.warn("Failed to retrieve cargo " + k);
+          changeStatus(false, true);
+          return console.warn(err);
+        }
+        if(k !== data["token"]) {
+          console.warn("Mismatching token " + k + " !== " + data["token"]);
+          changeStatus(false, true);
+          return;
+        }
+        res[k] = data["result"];
+        check_finished();
+      });
+    });
+
+    function check_finished() {
+      if(!keys.every((k) => k in res)) {
+        return;
+      }
+      var d = keys.map((k) => res[k]).join('');
+      cb(JSON.parse(d));
+    } // check_finished
+
+  } // get_payload
 
   var starts = {};
   var tokens = {};
   var urls = {};
   function postTask(ref) {
-    setTimeout(function() {
+    setTimeout(() => {
       if(!starts[ref]) return;
       var s = starts[ref];
       var url = s["url"];
@@ -132,13 +167,13 @@ window.quick_server.Worker = function() {
         "action": "start",
         "payload": s["payload"],
       });
-      sendRequest(url, obj, function(err, data) {
+      sendRequest(url, obj, (err, data) => {
         if(err) {
           console.warn("Failed to start " + ref);
           changeStatus(false, true);
           return console.warn(err);
         }
-        cancel(ref, function(err) {
+        cancel(ref, (err) => {
           if(err) {
             console.warn("Failed to cancel " + ref);
             changeStatus(false, true);
@@ -146,7 +181,9 @@ window.quick_server.Worker = function() {
           }
         });
         if(data["done"]) {
-          execute(cb, get_payload(data));
+          get_payload(data, url, (d) => {
+            execute(cb, d);
+          });
         } else {
           var token = +data["token"];
           urls[ref] = url;
@@ -155,7 +192,7 @@ window.quick_server.Worker = function() {
         }
       });
     }, preDelay);
-  }
+  } // postTask
 
   function monitor(ref, token, cb, delay) {
     if(tokens[ref] !== token) {
@@ -167,7 +204,7 @@ window.quick_server.Worker = function() {
       "action": "get",
       "token": token,
     });
-    sendRequest(url, obj, function(err, data) {
+    sendRequest(url, obj, (err, data) => {
       if(err) {
         console.warn("Error while retrieving " + ref + " token: " + token);
         changeStatus(false, true);
@@ -188,9 +225,11 @@ window.quick_server.Worker = function() {
       if(data["done"]) {
         tokens[ref] = -1;
         urls[ref] = null;
-        execute(cb, get_payload(data));
+        get_payload(data, url, (d) => {
+          execute(cb, d);
+        });
       } else if(data["continue"]) {
-        setTimeout(function() {
+        setTimeout(() => {
           var newDelay = Math.min(Math.max(delay * timeMulInc, delay + timeMinInc), timeCap);
           monitor(ref, token, cb, newDelay);
         }, delay);
@@ -198,7 +237,7 @@ window.quick_server.Worker = function() {
         changeStatus(false, false);
       }
     });
-  }
+  } // monitor
 
   function cancel(ref, cb) {
     if(!(ref in tokens && tokens[ref] >= 0)) return;
@@ -210,13 +249,13 @@ window.quick_server.Worker = function() {
     });
     tokens[ref] = -1;
     urls[ref] = null;
-    sendRequest(url, obj, function(err, data) {
+    sendRequest(url, obj, (err, data) => {
       if(err) {
         return cb(err);
       }
       return cb(+data["token"] !== token && { "err": "token mismatch: " + data["token"] + " instead of " + token, });
     });
-  }
+  } // cancel
 
   function execute(cb, data) {
     var err = true;
@@ -230,7 +269,7 @@ window.quick_server.Worker = function() {
         changeStatus(false, false);
       }
     }
-  }
+  } // execute
 
   this.post = function(ref, url, payload, cb) {
     if(!active) return;
@@ -242,7 +281,7 @@ window.quick_server.Worker = function() {
     postTask(ref);
   };
   this.cancel = function(ref) {
-    cancel(ref, function(err) {
+    cancel(ref, (err) => {
       changeStatus(false, !!err);
       if(err) {
         console.warn("Failed to cancel " + ref);
@@ -251,8 +290,8 @@ window.quick_server.Worker = function() {
     });
   };
 
-  window.addEventListener("beforeunload", function() {
-    Object.keys(tokens).forEach(function(ref) {
+  window.addEventListener("beforeunload", () => {
+    Object.keys(tokens).forEach((ref) => {
       // we probably won't read the results but the server still cancels properly
       that.cancel(ref);
     });
