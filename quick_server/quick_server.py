@@ -98,7 +98,7 @@ else:
     basestring = basestring
 
 
-__version__ = "0.4.4"
+__version__ = "0.4.5"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -1115,7 +1115,7 @@ class QuickServer(http_server.HTTPServer):
         self.favicon_fallback = None
         self.max_age = 0
         self.max_file_size = 50 * 1024 * 1024
-        self.max_chunk_size = 100 * 1024 * 1024
+        self.max_chunk_size = 10 * 1024 * 1024
         self.cross_origin = False
         self.suppress_noise = False
         self.report_slow_requests = False

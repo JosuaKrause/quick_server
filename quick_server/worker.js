@@ -146,7 +146,10 @@ window.quick_server.Worker = function() {
       if(!keys.every((k) => k in res)) {
         return;
       }
-      var d = keys.map((k) => res[k]).join('');
+      var d = keys.map((k) => res[k]).join(''); // string may be too long :(
+      keys.forEach((k) => { // free memory
+        res[k] = null;
+      });
       cb(JSON.parse(d));
     } // check_finished
 
