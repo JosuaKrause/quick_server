@@ -31,7 +31,7 @@ Setting up a basic file server
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Following we will set up a basic *quick\_server*. Please refer to the
-`inline documentation <https://github.com/JosuaKrause/quick_server/blob/master/quick_server/__init__.py>`__ of the methods for
+`inline documentation <https://github.com/JosuaKrause/quick_server/blob/master/quick_server/quick_server.py>`__ of the methods for
 full information.
 
 .. code:: python
