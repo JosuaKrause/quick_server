@@ -118,7 +118,7 @@ needed:
 .. code:: javascript
 
     var work = new quick_server.Worker();
-    work.status(function(req) {
+    work.status((req) => {
       // req contains the number of currently active requests (-1 indicates an error state)
       // it can be used to tell the user that something is happening
     });
@@ -132,7 +132,7 @@ Accessing the worker:
     // the second argument is the URL
     work.post("worker_name", "json_worker", {
       // this object will appear as args on the server side
-    }, function(data) {
+    }, (data) => {
       // data is the result of the worker function of the server side
       // this function is only called if the request was successful
     });

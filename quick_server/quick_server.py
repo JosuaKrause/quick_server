@@ -98,7 +98,7 @@ else:
     basestring = basestring
 
 
-__version__ = "0.4.3"
+__version__ = "0.4.4"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -1728,7 +1728,8 @@ class QuickServer(http_server.HTTPServer):
                 with lock:
                     if cargo_cleaner[0] is not None:
                         return
-                    cleaner = threading.Thread(target=clean, name="{0}-Cargo-Cleaner".format(self.__class__), daemon=True)
+                    cleaner = threading.Thread(target=clean, name="{0}-Cargo-Cleaner".format(self.__class__))
+                    cleaner.daemon = True
                     cargo_cleaner[0] = cleaner
                     cleaner.start()
 
