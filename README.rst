@@ -5,7 +5,7 @@ QuickServer
 implementation. It has the following goals / features and is primarily
 meant to speed up back end implementation / iteration:
 
--  serve local files as is with basic black-listing
+-  serve local files as is with basic black- and white-listing
 -  provide functionality for dynamic requests
 -  provide easy access to worker threads (and caching)
 -  provide a basic command interpret loop for server commands
@@ -214,6 +214,25 @@ script like this:
     cat /dev/null | python yourscript.py
 
 or use the ``no_command_loop`` flag and run the script normally.
+
+HTTPS
+~~~~~
+
+You can wrap the server socket to support HTTPS:
+
+.. code:: python
+
+    import ssl
+
+    addr = '' # empty address is equivalent to 'localhost'
+    port = 443 # the HTTPS default port 443 might require root privileges
+    server = create_server((addr, port), parallel=True)
+    server.socket = ssl.wrap_socket(server.socket, certfile='path/to/localhost.pem', server_side=True)
+
+    # setup your server
+
+    server.serve_forever()
+    server.server_close()
 
 More examples
 ~~~~~~~~~~~~~
