@@ -378,6 +378,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         '=' in the URL are interpreted as flags and the value is set to True.
         """
         res = {}
+        if isinstance(query, bytes):
+            query = query.decode('utf8')
         for section in query.split('&'):
             eqs = section.split('=', 1)
             name = urlparse_unquote(eqs[0])
