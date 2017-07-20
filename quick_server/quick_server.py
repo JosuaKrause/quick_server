@@ -98,7 +98,7 @@ else:
     basestring = basestring
 
 
-__version__ = "0.4.5"
+__version__ = "0.4.6"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -221,6 +221,18 @@ def msg(message, *args, **kwargs):
     out.close()
 
 
+DEBUG = None
+def debug(fun):
+    global DEBUG
+    if DEBUG is None:
+        DEBUG = bool(int(os.environ.get('QUICK_SERVER_DEBUG', '0')))
+    if DEBUG:
+        msg("[DEBUG] {0}", fun())
+
+
+debug(lambda: sys.version)
+
+
 # thread local storage for keeping track of request information (eg. time)
 thread_local = threading.local()
 
@@ -287,6 +299,7 @@ def _start_restart_loop(exit_code, in_atexit):
             if in_atexit:
                 msg("restarting: {0}", ' '.join(exec_arr))
 
+            debug(lambda: exec_arr)
             exit_code = _restart_exit_code
             child_code = exit_code
             is_subsequent = False
@@ -378,6 +391,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         '=' in the URL are interpreted as flags and the value is set to True.
         """
         res = {}
+        query = query.decode('utf8') if not isinstance(query, str) else query
         for section in query.split('&'):
             eqs = section.split('=', 1)
             name = urlparse_unquote(eqs[0])
