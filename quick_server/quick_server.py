@@ -66,6 +66,12 @@ except ImportError:
     urlparse_unquote = urlparse.unquote
 
 try:
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
+except ImportError:
+    from urllib2 import Request, urlopen, HTTPError
+
+try:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
     import BaseHTTPServer as http_server
 except ModuleNotFoundError:
@@ -700,6 +706,22 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 break
         # if pass is still None here the file cannot be found
         if path is None:
+            # try proxies
+            for (name, pxy) in self.server._folder_proxys:
+                if not orig_path.startswith(name):
+                    continue
+                remain = orig_path[len(name) - 1:]
+                proxy = urlparse.urlparse(pxy)
+                reala = urlparse.urlparse(init_path)
+                pxya = urlparse.urlunparse((
+                    proxy[0], # scheme
+                    proxy[1], # netloc
+                    "{0}{1}".format(proxy[2], remain), # path
+                    reala[3], # params
+                    reala[4], # query
+                    reala[5], # fragment
+                ))
+                self.send_to_proxy(pxya) # raises PreventDefaultResponse
             msg("no matching folder alias: {0}".format(orig_path))
             self.send_error(404, "File not found")
             raise PreventDefaultResponse()
@@ -778,6 +800,41 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.size = 0
         return True
 
+    def send_to_proxy(self, proxy_url):
+        clen = _getheader(self.headers, 'content-length')
+        clen = int(clen) if clen is not None else 0
+        if clen > 0:
+            payload = self.rfile.read(clen)
+        else:
+            payload = None
+        # print(proxy_url, list(self.headers.items()))
+        req = Request(proxy_url, data=payload, headers=dict(
+            (hk.encode('ascii'), hv.encode('ascii'))
+            for (hk, hv) in
+            self.headers.items()
+        ), method=thread_local.method)
+        try:
+            response = urlopen(req)
+        except HTTPError as e:
+            response = e
+        self.send_response(response.code)
+        for (hk, hv) in response.headers.items():
+            self.send_header(hk, hv)
+        self.end_headers()
+        if _getheader(response.headers, 'transfer-encoding') == 'chunked':
+            # FIXME implement proper
+            while True:
+                cur = response.read(1024)
+                if cur:
+                    self.wfile.write(cur)
+                    self.wfile.flush()
+                else:
+                    break # FIXME no better solution now..
+        else:
+            self.wfile.write(response.read())
+            self.wfile.flush()
+        raise PreventDefaultResponse()
+
     def handle_error(self):
         """Tries to send an 500 error after encountering an exception."""
         if self.server.can_ignore_error(self):
@@ -817,6 +874,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
+        thread_local.method = 'OPTIONS'
         self.send_response(200)
         if self.is_cross_origin():
             no_caching = self.cross_origin_headers()
@@ -833,6 +891,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
+        thread_local.method = 'DELETE'
         try:
             self.cross_origin_headers()
             self.handle_special(True, 'DELETE')
@@ -851,6 +910,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
+        thread_local.method = 'PUT'
         try:
             self.cross_origin_headers()
             self.handle_special(True, 'PUT')
@@ -869,6 +929,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
+        thread_local.method = 'POST'
         try:
             self.cross_origin_headers()
             self.handle_special(True, 'POST')
@@ -887,6 +948,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
+        thread_local.method = 'GET'
         try:
             self.cross_origin_headers()
             if self.handle_special(True, 'GET'):
@@ -907,6 +969,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
+        thread_local.method = 'HEAD'
         try:
             self.cross_origin_headers()
             if self.handle_special(False, 'GET'):
@@ -1139,6 +1202,7 @@ class QuickServer(http_server.HTTPServer):
         self.cache = None
         self.done = False
         self._folder_masks = []
+        self._folder_proxys = []
         self._f_mask = {}
         self._f_argc = {}
         self._pattern_black = []
@@ -1203,6 +1267,12 @@ class QuickServer(http_server.HTTPServer):
         if not len(name) or name[0] != '/' or name[-1] != '/':
             raise ValueError("name must start and end with '/': {0}".format(name))
         self._folder_masks.append((name, folder))
+
+    def bind_proxy(self, name, proxy):
+        """Adds a mask that maps to a given proxy."""
+        if not len(name) or name[0] != '/' or name[-1] != '/':
+            raise ValueError("name must start and end with '/': {0}".format(name))
+        self._folder_proxys.insert(0, (name, proxy))
 
     def add_cmd_method(self, name, method, argc=None, complete=None):
         """Adds a command to the command line interface loop.
