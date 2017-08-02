@@ -61,7 +61,27 @@ window.quick_server.Worker = function() {
       });
       return;
     }
-    // TODO implement general request
+    if(fetch) {
+      var content = JSON.stringify(obj);
+      fetch(url, {
+        "method": "POST",
+        "headers": new Headers({
+          "Content-Type": "application/json",
+          "Content-Length": "" + content.length,
+        }),
+        "body": content,
+      }).then((data) => {
+        if(data.status !== 200 || !data.ok) {
+          throw { msg: "response not okay", data };
+        }
+        var ct = data.headers.get("content-type");
+        if(ct && ct.includes("application/json")) {
+          return data.json();
+        }
+        throw new TypeError("response not JSON encoded");
+      }).then((data) => cb(null, data)).catch((e) cb(e, null));
+      return;
+    }
     throw { "err": "unimplemented", };
   };
   this.sendRequest = function(_) {
