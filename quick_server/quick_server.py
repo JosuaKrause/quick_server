@@ -1703,6 +1703,26 @@ class QuickServer(http_server.HTTPServer):
         self.add_text_get_mask(mask, read_file)
         self.set_file_argc(mask, 0)
 
+    def mirror_file(self, path_to, path_from, from_quick_server=True):
+        """Mirrors a file to a different location. Each time the file changes
+           while the process is running it will be copied to 'path_to',
+           overwriting the destination.
+
+        Parameters
+        ----------
+        path_to : string
+            The mirror destination.
+
+        path_from : string
+            The mirror origin.
+
+        from_quick_server : bool
+            If set the origin path is relative to *this* script otherwise it is
+            relative to the process.
+        """
+        full_path = path_from if not from_quick_server else os.path.join(os.path.dirname(__file__), path_from)
+        msg("[WARNING] Mirroring not implemented yet!")
+
     def link_empty_favicon_fallback(self):
         """Links the empty favicon as default favicon."""
         self.favicon_fallback = os.path.join(os.path.dirname(__file__), 'favicon.ico')
@@ -1718,6 +1738,16 @@ class QuickServer(http_server.HTTPServer):
             The URL that must be matched to get the worker javascript.
         """
         self.add_special_file(mask, 'worker.js', from_quick_server=True, ctype='application/javascript; charset=utf-8')
+
+    def mirror_worker_js(self, path):
+        """Mirrors the worker javascript.
+
+        Parameters
+        ----------
+        path : string
+            The path to mirror to.
+        """
+        self.mirror_file(path, 'worker.js', from_quick_server=True)
 
     def json_worker(self, mask, cache_id=None, cache_method="string", cache_section="www"):
         """A function annotation that adds a worker request. A worker request is
