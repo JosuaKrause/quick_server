@@ -1781,7 +1781,7 @@ class QuickServer(http_server.HTTPServer):
                     raise ValueError("cannot chain mirrors: {0} -> {1} -> {2}".format(f_from, f_to, path_to))
                 if f_from == path_to:
                     raise ValueError("cannot chain mirrors: {0} -> {1} -> {2}".format(path_from, path_to, f_to))
-            self._mirror["files"].append((path_from, path_to, get_time(path_from)))
+            self._mirror["files"].append((path_from, path_to, 0)) # forces an initial write
 
     def link_empty_favicon_fallback(self):
         """Links the empty favicon as default favicon."""
