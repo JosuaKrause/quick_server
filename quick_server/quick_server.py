@@ -1723,15 +1723,29 @@ class QuickServer(http_server.HTTPServer):
         """
         full_path = path_from if not from_quick_server else os.path.join(os.path.dirname(__file__), path_from)
         if self._mirror is None:
-            # TODO implement watchdog opt-in
-            self._poll_mirror(path_to, full_path, init=True)
+            if not self._symlink_mirror(path_to, full_path, init=True):
+                self._poll_mirror(path_to, full_path, init=True)
             return
         impl = self._mirror["impl"]
-        if impl == "poll":
+        if impl == "symlink":
+            self._symlink_mirror(path_to, full_path, init=False)
+        elif impl == "poll":
             self._poll_mirror(path_to, full_path, init=False)
         else:
             raise ValueError("unknown mirror implementation: {0}".format(impl))
 
+    def _symlink_mirror(self, path_to, path_from, init):
+        if init:
+            os_symlink = getattr(os, "symlink", None)
+            if not callable(os_symlink):
+                return False
+            self._mirror = {
+                "impl": "symlink",
+            }
+        if os.path.exists(path_to):
+            os.remove(path_to)
+        os.symlink(path_from, path_to)
+        return True
 
     def _poll_mirror(self, path_to, path_from, init):
 
@@ -1782,6 +1796,7 @@ class QuickServer(http_server.HTTPServer):
                 if f_from == path_to:
                     raise ValueError("cannot chain mirrors: {0} -> {1} -> {2}".format(path_from, path_to, f_to))
             self._mirror["files"].append((path_from, path_to, 0)) # forces an initial write
+        return True
 
     def link_empty_favicon_fallback(self):
         """Links the empty favicon as default favicon."""
