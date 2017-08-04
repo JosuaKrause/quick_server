@@ -1217,6 +1217,7 @@ class QuickServer(http_server.HTTPServer):
         self._token_map = {}
         self._token_timings = []
         self._token_expire = 3600
+        self._mirror = None
 
     ### mask methods ###
 
@@ -1721,7 +1722,66 @@ class QuickServer(http_server.HTTPServer):
             relative to the process.
         """
         full_path = path_from if not from_quick_server else os.path.join(os.path.dirname(__file__), path_from)
-        msg("[WARNING] Mirroring not implemented yet!")
+        if self._mirror is None:
+            # TODO implement watchdog opt-in
+            self._poll_mirror(path_to, full_path, init=True)
+            return
+        impl = self._mirror["impl"]
+        if impl == "poll":
+            self._poll_mirror(path_to, full_path, init=False)
+        else:
+            raise ValueError("unknown mirror implementation: {0}".format(impl))
+
+
+    def _poll_mirror(self, path_to, path_from, init):
+
+        def get_time(path):
+            return os.path.getmtime(path)
+
+        if init:
+            self._mirror = {
+                "impl": "poll",
+                "files": [],
+                "lock": threading.RLock(),
+            }
+
+            def act(ix, f_from, f_to):
+                with self._mirror["lock"]:
+                    # TODO probably should use shutil
+                    with open(f_from, "rb") as f_in:
+                        with open(f_to, "wb") as f_out:
+                            f_out.write(f_in.read())
+                    self._mirror["files"][ix] = (f_from, f_to, get_time(f_from))
+
+            def monitor():
+                while True:
+                    time.sleep(1)
+                    with self._mirror["lock"]:
+                        for (ix, f) in enumerate(self._mirror["files"]):
+                            f_from, f_to, f_time = f
+                            if f_time < get_time(f_from):
+                                act(ix, f_from, f_to)
+
+            poll_monitor = threading.Thread(target=monitor, name="{0}-Poll-Monitor".format(self.__class__))
+            poll_monitor.daemon = True
+            poll_monitor.start()
+        if not os.path.exists(path_from):
+            raise ValueError("file does not exist: {0}".format(path_from))
+        if path_from == path_to:
+            raise ValueError("cannot mirror itself: {0}".format(path_from))
+        with self._mirror["lock"]:
+            for f in self._mirror["files"]:
+                # sanity checks
+                f_from, f_to, f_time = f
+                if f_to == path_to:
+                    if f_from == path_from:
+                        return # nothing to do here!
+                    raise ValueError("cannot point two different files to the same location: ({0} != {1}) -> {2}".format(f_from, path_from, f_to))
+                if f_to == path_from:
+                    raise ValueError("cannot chain mirrors: {0} -> {1} -> {2}".format(f_from, f_to, path_to))
+                if f_from == path_to:
+                    raise ValueError("cannot chain mirrors: {0} -> {1} -> {2}".format(path_from, path_to, f_to))
+            self._mirror["files"].append((path_from, path_to, get_time(path_from)))
 
     def link_empty_favicon_fallback(self):
         """Links the empty favicon as default favicon."""
