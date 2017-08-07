@@ -55,21 +55,20 @@ window.quick_server.Worker = function() {
   } // setAddTitle
 
   var sendRequest = function(url, obj, cb) {
-    if(d3) { // d3 compatibility
+    if(typeof d3 !== 'undefined') { // d3 compatibility
       d3.json(url).header("Content-Type", "application/json").post(obj, (err, data) => {
         cb(err, data);
       });
       return;
     }
-    if(fetch) {
-      var content = JSON.stringify(obj);
+    if(typeof fetch === "function") {
       fetch(url, {
         "method": "POST",
         "headers": new Headers({
           "Content-Type": "application/json",
-          "Content-Length": "" + content.length,
+          "Content-Length": "" + obj.length,
         }),
-        "body": content,
+        "body": obj,
       }).then((data) => {
         if(data.status !== 200 || !data.ok) {
           throw { msg: "response not okay", data };
@@ -79,7 +78,7 @@ window.quick_server.Worker = function() {
           return data.json();
         }
         throw new TypeError("response not JSON encoded");
-      }).then((data) => cb(null, data)).catch((e) cb(e, null));
+      }).then((data) => cb(null, data)).catch((e) => cb(e, null));
       return;
     }
     throw { "err": "unimplemented", };
