@@ -88,7 +88,7 @@ A ``GET`` request as ``plain text``:
     def text_request(req, args):
         return "plain text"
 
-Other forms of requests are also supported, namely delete and put.
+Other forms of requests are also supported, namely ``delete`` and ``put``.
 
 ``args`` is an object holding all request arguments.
 ``args['query']`` contains URL query arguments.
