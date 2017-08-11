@@ -344,8 +344,10 @@ You can wrap the server socket to support HTTPS:
 
     # setup your server
 
-    server.serve_forever()
-    server.server_close()
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
 
 More examples
 ~~~~~~~~~~~~~
