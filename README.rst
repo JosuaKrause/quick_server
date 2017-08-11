@@ -125,6 +125,7 @@ A worker request can be set up on the server side with
 
     @server.json_worker('/json_worker')
     def json_worker(args):
+        # args contains all post arguments
         # ...
         # long, slow computation
         return myresult # myresult must be JSON convertible
