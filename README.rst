@@ -169,7 +169,7 @@ Then caching can be used for workers:
 Using workers with babel or react
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you're using `babel` (e.g., with `react`) you can also
+If you're using ``babel`` (e.g., with ``react``) you can also
 mirror the file into your source folder:
 
 .. code:: python
@@ -183,28 +183,36 @@ and then import it:
     import './worker.js';
     
     const WORKER = new window.quick_server.Worker();
+    export function registerStatus(cb) {
+      WORKER.status(cb);
+    }
+    
     export function fetchWorker(ref, url, post, cb) {
       WORKER.post(ref, url, post, cb);
     }
     
+    export function cancelWorker(ref) {
+      WORKER.cancel(ref);
+    }
+    
 Note that for a build you need to actually copy
-`worker.js` into you source folder since the build
+``worker.js`` into you source folder since the build
 system gets confused with filesystem links.
-To use `quick_server` with a build bind the build folder:
+To use ``quick_server`` with a build bind the build folder:
 
 .. code:: python
 
     server.bind_path('/', 'build/')
     
 During development it is recommended to forward
-requests from the `react` server to `quick_server`.
-For this add the following line to your `package.json`:
+requests from the ``react`` server to ``quick_server``.
+For this add the following line to your ``package.json``:
 
 .. code:: javascript
 
     "proxy": "http://localhost:8080"
 
-where the proxy field redirects to the `quick_server`.
+where the proxy field redirects to the ``quick_server``.
 
 Custom server commands
 ~~~~~~~~~~~~~~~~~~~~~~
