@@ -8,6 +8,7 @@
 "use strict";
 
 window.quick_server = window.quick_server || {}; // init namespace
+var d3 = window.d3;
 
 window.quick_server.Worker = function() {
   var that = this;
