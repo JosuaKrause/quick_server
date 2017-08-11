@@ -74,7 +74,7 @@ A ``POST`` request in ``JSON`` format:
 
 .. code:: python
 
-    @server.json_post('/json_request', 0) # creates a request at http://localhost:8080/json_request
+    @server.json_post('/json_request', 0) # creates a request at http://localhost:8080/json_request -- 0 additional path segments are allowed
     def json_request(req, args):
         return {
             "post": args["post"],
@@ -84,9 +84,18 @@ A ``GET`` request as ``plain text``:
 
 .. code:: python
 
-    @server.text_get('/text_request', 0) # creates a request at http://localhost:8080/text_request
+    @server.text_get('/text_request') # creates a request at http://localhost:8080/text_request -- additional path segments are allowed
     def text_request(req, args):
         return "plain text"
+
+Other forms of requests are also supported, namely delete and put.
+
+``args`` is an object holding all request arguments.
+``args['query']`` contains URL query arguments.
+``args['fragment']`` contains the URL fragment part.
+``args['paths']`` contains the remaining path segments.
+``args['post']`` contains the posted content.
+``args['files']`` contains uploaded files.
 
 Worker threads and caching
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -224,6 +233,47 @@ For this add the following line to your ``package.json``:
 
 where the proxy field redirects to the ``quick_server``.
 
+Tokens
+~~~~~~
+
+Tokens are means to store client information on the server.
+For that the server must send the token-id to the client:
+
+.. code:: python
+
+    server.create_token() # creates a new token -- send this to the client
+    
+The server can now access (read / write) data associated with this token:
+
+.. code:: python
+
+    @server.json_post('/json_request', 0)
+    def json_request(req, args):
+        # assuming the token-id was sent via post
+        # expire can be the expiration time in seconds of a token,
+        # None for no expiration, or be omitted for the default expiration (1h)
+        obj = server.get_token_obj(args['post']['token'], expire=None)
+        # do stuff with obj
+        # ...
+
+CORS and proxying
+~~~~~~~~~~~~~~~~~
+
+CORS can be activated with:
+
+.. code:: python
+
+    server.cross_origin = True
+    
+and requests can be redirected via proxy (if you want to avoid CORS):
+
+.. code:: python
+
+    server.bind_proxy('/foo/', 'http://localhost:12345')
+
+redirects every request that begins with ``/foo/`` and
+has not been handled by ``quick_server`` to ``http://localhost:12345``.
+
 Custom server commands
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -271,7 +321,11 @@ script like this:
 
     cat /dev/null | python yourscript.py
 
-or use the ``no_command_loop`` flag and run the script normally.
+or use the ``no_command_loop`` flag and run the script normally:
+
+.. code:: python
+
+    server.no_command_loop = True
 
 HTTPS
 ~~~~~
