@@ -188,7 +188,7 @@ Note that caching can also be used for other types of requests.
 Using workers with babel or react
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you're using ``babel`` (e.g., with ``react``) you can also
+If you're using *babel* (e.g., with *react*) you can also
 mirror the file into your source folder:
 
 .. code:: python
@@ -217,21 +217,21 @@ and then import it:
 Note that for a build you need to actually copy
 ``worker.js`` into you source folder since the build
 system gets confused with filesystem links.
-To use ``quick_server`` with a build bind the build folder:
+To use *quick\_server* with a build bind the build folder:
 
 .. code:: python
 
     server.bind_path('/', 'build/')
     
 During development it is recommended to forward
-requests from the ``react`` server to ``quick_server``.
+requests from the *react* server to *quick\_server*.
 For this add the following line to your ``package.json``:
 
 .. code:: javascript
 
     "proxy": "http://localhost:8080"
 
-where the proxy field redirects to the ``quick_server``.
+where the proxy field redirects to the *quick\_server*.
 
 Tokens
 ~~~~~~
@@ -272,7 +272,7 @@ and requests can be redirected via proxy (if you want to avoid CORS):
     server.bind_proxy('/foo/', 'http://localhost:12345')
 
 redirects every request that begins with ``/foo/`` and
-has not been handled by ``quick_server`` to ``http://localhost:12345``.
+has not been handled by *quick\_server* to ``http://localhost:12345``.
 
 Custom server commands
 ~~~~~~~~~~~~~~~~~~~~~~
