@@ -1,7 +1,7 @@
 QuickServer
 ===========
 
-*QuickServer* is a quick to use and easy to set up server
+*quick\_server* is a quick to use and easy to set up server
 implementation. It has the following goals / features and is primarily
 meant to speed up back end implementation / iteration:
 
