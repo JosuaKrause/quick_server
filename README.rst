@@ -88,6 +88,11 @@ A ``GET`` request as ``plain text``:
 Worker threads and caching
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Worker threads are long running server side computations.
+The client can start a request, gets an immediate response,
+and will check periodically if the computation has finished.
+From the client's perspective it looks like a normal request.
+
 Worker threads require support from the client side.
 
 First, provide the necessary JavaScript file via
@@ -165,6 +170,8 @@ Then caching can be used for workers:
         # ...
         # long, slow computation
         return myresult # myresult must be JSON convertible
+        
+Note that caching can also be used for other types of requests.
 
 Using workers with babel or react
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
