@@ -104,7 +104,7 @@ else:
     basestring = basestring
 
 
-__version__ = "0.4.6"
+__version__ = "0.4.7"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
