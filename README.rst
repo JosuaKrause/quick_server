@@ -124,8 +124,8 @@ A worker request can be set up on the server side with
 .. code:: python
 
     @server.json_worker('/json_worker')
-    def json_worker(args):
-        # args contains all post arguments
+    def json_worker(post):
+        # post contains all post arguments
         # ...
         # long, slow computation
         return myresult # myresult must be JSON convertible
@@ -179,7 +179,7 @@ Then caching can be used for workers:
     @server.json_worker('/json_worker', cache_id=lambda args: {
             # uniquely identify the task from its arguments (must be JSON convertible)
         })
-    def json_worker(args):
+    def json_worker(post):
         # ...
         # long, slow computation
         return myresult # myresult must be JSON convertible
