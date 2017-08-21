@@ -103,8 +103,13 @@ else:
     bytes = str
     basestring = basestring
 
+if hasattr(time, "process_time"):
+    get_time = lambda: time.process_time()
+else:
+    get_time = lambda: time.clock()
 
-__version__ = "0.4.7"
+
+__version__ = "0.4.8"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -868,7 +873,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def do_OPTIONS(self):
         """Handles an OPTIONS request."""
-        thread_local.clock_start = time.clock()
+        thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
@@ -885,7 +890,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         """Handles a DELETE request."""
-        thread_local.clock_start = time.clock()
+        thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
@@ -904,7 +909,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def do_PUT(self):
         """Handles a PUT request."""
-        thread_local.clock_start = time.clock()
+        thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
@@ -923,7 +928,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         """Handles a POST request."""
-        thread_local.clock_start = time.clock()
+        thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
@@ -942,7 +947,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         """Handles a GET request."""
-        thread_local.clock_start = time.clock()
+        thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
@@ -963,7 +968,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def do_HEAD(self):
         """Handles a HEAD request."""
-        thread_local.clock_start = time.clock()
+        thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
@@ -1017,7 +1022,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
         thread_local.headers = getattr(thread_local, 'headers', [])
         thread_local.end_headers = getattr(thread_local, 'end_headers', [])
-        thread_local.clock_start = getattr(thread_local, 'clock_start', time.clock())
+        thread_local.clock_start = getattr(thread_local, 'clock_start', get_time())
         thread_local.status_code = getattr(thread_local, 'status_code', 500)
         thread_local.message = getattr(thread_local, 'message', None)
         thread_local.headers.extend(thread_local.end_headers)
@@ -1077,7 +1082,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """
         clock_start = getattr(thread_local, 'clock_start', None)
         thread_local.clock_start = None
-        timing = self.log_elapsed_time_string(time.clock() - clock_start) if clock_start is not None else ''
+        timing = self.log_elapsed_time_string(get_time() - clock_start) if clock_start is not None else ''
         msg("%s[%s] %s" % (timing + ' ' if len(timing) else '', self.log_date_time_string(), format % args))
 
     def log_request(self, code='-', size='-'):
@@ -2020,7 +2025,7 @@ class QuickServer(http_server.HTTPServer):
 
             def get_key():
                 with lock:
-                    cur_key = int(zlib.crc32(repr(time.clock()).encode('utf8')) & 0xFFFFFFFF)
+                    cur_key = int(zlib.crc32(repr(get_time()).encode('utf8')) & 0xFFFFFFFF)
                     while cur_key in tasks or cur_key in cargo:
                         key = int(cur_key + 1)
                         if key == cur_key:
@@ -2137,7 +2142,7 @@ class QuickServer(http_server.HTTPServer):
         """
         if expire == _token_default:
             expire = self.get_default_token_expiration()
-        now = time.clock()
+        now = get_time()
         until = now + expire if expire is not None else None
         with self._token_lock:
             # _token_timings is keys sorted by time
@@ -2375,12 +2380,12 @@ class QuickServer(http_server.HTTPServer):
             timeout = self.timeout
         elif self.timeout is not None:
             timeout = min(timeout, self.timeout)
-        ctime = time.clock()
+        ctime = get_time()
         done_req = False
         shutdown_latency = self.shutdown_latency
         if timeout is not None:
             shutdown_latency = min(shutdown_latency, timeout) if shutdown_latency is not None else timeout
-        while not (self.done or done_req) and (timeout is None or timeout == 0 or (time.clock() - ctime) < timeout):
+        while not (self.done or done_req) and (timeout is None or timeout == 0 or (get_time() - ctime) < timeout):
             try:
                 fd_sets = select.select([ self ], [], [], shutdown_latency)
             except (OSError, select.error) as e:
