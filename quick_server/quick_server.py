@@ -103,13 +103,13 @@ else:
     bytes = str
     basestring = basestring
 
-if hasattr(time, "process_time"):
-    get_time = lambda: time.process_time()
+if hasattr(time, "monotonic"):
+    get_time = lambda: time.monotonic()
 else:
     get_time = lambda: time.clock()
 
 
-__version__ = "0.4.8"
+__version__ = "0.4.9"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
