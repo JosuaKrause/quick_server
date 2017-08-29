@@ -845,7 +845,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if self.server.can_ignore_error(self):
             return
         if thread_local.status_code is None:
-            msg("ERROR: Cannot send error status code! Header already sent!")
+            msg("ERROR: Cannot send error status code! Header already sent!\n{0}", traceback.format_exc())
         else:
             msg("ERROR: Error while processing request:\n{0}", traceback.format_exc())
             try:
