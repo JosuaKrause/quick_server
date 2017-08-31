@@ -19,7 +19,7 @@ You can install *quick\_server* with pip:
 
 .. code:: sh
 
-    pip install --user quick-server
+    pip install --user quick_server
 
 Import it in python via:
 
@@ -183,7 +183,7 @@ Then caching can be used for workers:
         # ...
         # long, slow computation
         return myresult # myresult must be JSON convertible
-        
+
 Note that caching can also be used for other types of requests.
 
 Using workers with babel or react
@@ -195,26 +195,26 @@ mirror the file into your source folder:
 .. code:: python
 
     server.mirror_worker_js('src/worker.js')
-    
+
 and then import it:
 
 .. code:: javascript
 
     import './worker.js';
-    
+
     const WORKER = new window.quick_server.Worker();
     export function registerStatus(cb) {
       WORKER.status(cb);
     }
-    
+
     export function fetchWorker(ref, url, post, cb) {
       WORKER.post(ref, url, post, cb);
     }
-    
+
     export function cancelWorker(ref) {
       WORKER.cancel(ref);
     }
-    
+
 Note that for a build you need to actually copy
 ``worker.js`` into you source folder since the build
 system gets confused with filesystem links.
@@ -223,7 +223,7 @@ To use *quick\_server* with a build bind the build folder:
 .. code:: python
 
     server.bind_path('/', 'build/')
-    
+
 During development it is recommended to forward
 requests from the *react* server to *quick\_server*.
 For this add the following line to your ``package.json``:
@@ -243,7 +243,7 @@ For that the server must send the token-id to the client:
 .. code:: python
 
     server.create_token() # creates a new token -- send this to the client
-    
+
 The server can now access (read / write) data associated with this token:
 
 .. code:: python
@@ -265,7 +265,7 @@ CORS can be activated with:
 .. code:: python
 
     server.cross_origin = True
-    
+
 and requests can be redirected via proxy (if you want to avoid CORS):
 
 .. code:: python

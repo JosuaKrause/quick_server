@@ -1747,7 +1747,8 @@ class QuickServer(http_server.HTTPServer):
             self._mirror = {
                 "impl": "symlink",
             }
-        if os.path.exists(path_to):
+        if os.path.lexists(path_to):
+            print("remove")
             os.remove(path_to)
         os.symlink(path_from, path_to)
         return True
