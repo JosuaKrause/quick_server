@@ -42,7 +42,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='quick_server',
-    version='0.4.9',
+    version='0.4.10',
     description='QuickServer is a quick to use and easy to set up server implementation.',
     long_description=long_description,
     url='https://github.com/JosuaKrause/quick_server',

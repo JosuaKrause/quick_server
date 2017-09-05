@@ -109,7 +109,7 @@ else:
     get_time = lambda: time.clock()
 
 
-__version__ = "0.4.9"
+__version__ = "0.4.10"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -2424,9 +2424,11 @@ class QuickServer(http_server.HTTPServer):
     def can_ignore_error(self, reqhnd=None):
         """Tests if the error is worth reporting.
         """
+        value = sys.exc_info()[1]
+        if isinstance(value, BrokenPipeError):
+            return True
         if not self.done:
             return False
-        value = sys.exc_info()[1]
         if not isinstance(value, socket.error):
             return False
         need_close = value.errno == 9
