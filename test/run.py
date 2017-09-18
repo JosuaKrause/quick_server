@@ -48,7 +48,10 @@ else:
     hot_loop = True
 
 
-def do_sleep(seconds):
+def do_sleep(seconds, ensure=False):
+    if not ensure:
+        time.sleep(seconds)
+        return
     now = get_time()
     while get_time() - now < seconds:
         time.sleep(seconds)
@@ -432,7 +435,7 @@ def token_test():
     if not chk("a", 0, False):
         return False
     note("wait: {0}", get_time())
-    do_sleep(0.2)
+    do_sleep(0.2, ensure=True)
     note("time: {0}", get_time())
     qs.get_token_obj("b", None)["foo"] = True
     if not chk(tkn, 0.1, False):
@@ -440,7 +443,7 @@ def token_test():
     if not chk("b", 0.1, True):
         return False
     note("wait: {0}", get_time())
-    do_sleep(0.2)
+    do_sleep(0.2, ensure=True)
     note("time: {0}", get_time())
     if not chk("b", 0.1, False):
         return False
