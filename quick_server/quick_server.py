@@ -2429,8 +2429,11 @@ class QuickServer(http_server.HTTPServer):
         """Tests if the error is worth reporting.
         """
         value = sys.exc_info()[1]
-        if isinstance(value, BrokenPipeError) or isinstance(value, ConnectionResetError):
-            return True
+        try:
+            if isinstance(value, BrokenPipeError) or isinstance(value, ConnectionResetError):
+                return True
+        except NameError:
+            pass
         if not self.done:
             return False
         if not isinstance(value, socket.error):
