@@ -109,7 +109,7 @@ else:
     get_time = lambda: time.clock()
 
 
-__version__ = "0.4.10"
+__version__ = "0.4.11"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -2153,9 +2153,13 @@ class QuickServer(http_server.HTTPServer):
                 if t is None or t > now:
                     first_valid = pos
                     break
-            for k in self._token_timings[:first_valid]:
-                del self._token_map[k]
-            self._token_timings = self._token_timings[first_valid:]
+            if first_valid is None:
+                self._token_map = {}
+                self._token_timings = []
+            else:
+                for k in self._token_timings[:first_valid]:
+                    del self._token_map[k]
+                self._token_timings = self._token_timings[first_valid:]
             if until is None or until > now:
                 if token not in self._token_map:
                     self._token_map[token] = (until, {})

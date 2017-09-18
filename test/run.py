@@ -40,6 +40,23 @@ if len(sys.argv) > 1 and (sys.argv[1] == '-h' or sys.argv[1] == '--help'):
 SKIP = int(sys.argv[1]) if len(sys.argv) > 1 else 0
 
 
+if hasattr(time, "monotonic"):
+    get_time = lambda: time.monotonic()
+    hot_loop = False
+else:
+    get_time = lambda: time.clock()
+    hot_loop = True
+
+
+def do_sleep(seconds):
+    now = get_time()
+    while get_time() - now < seconds:
+        time.sleep(seconds)
+        if hot_loop:
+            for _ in range(10000000):
+                pass
+
+
 def convert_b(bdata):
     return repr(bdata).lstrip('b').strip("'\"").replace('\\', '\\\\')
 
@@ -123,7 +140,7 @@ def curl_server_run(probes, script="example.py"):
     done = False
     try:
         p = Popen(PYTHON + [script], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        time.sleep(1) # give the server some time to wake up
+        do_sleep(1) # give the server some time to wake up
         for parr in probes:
             if not access_curl(*parr):
                 return False # pragma: no cover
@@ -135,11 +152,11 @@ def curl_server_run(probes, script="example.py"):
             err = err.decode('utf8')
             if not done:
                 report_output(output.split('\n'), err.split('\n')) # pragma: no cover
-            time.sleep(1)
+            do_sleep(1)
             if p.poll() is None: # pragma: no cover
                 status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
                 p.terminate()
-                time.sleep(3)
+                do_sleep(3)
                 if p.poll() is None:
                     status("WARNING: killed server")
                     p.kill()
@@ -187,7 +204,7 @@ def url_server_run(probes, script="example.py"):
     done = False
     try:
         p = Popen(PYTHON + [script], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        time.sleep(1) # give the server some time to wake up
+        do_sleep(1) # give the server some time to wake up
         for parr in probes:
             if not access_url(parr):
                 return False # pragma: no cover
@@ -199,11 +216,11 @@ def url_server_run(probes, script="example.py"):
             err = err.decode('utf8')
             if not done:
                 report_output(output.split('\n'), err.split('\n')) # pragma: no cover
-            time.sleep(1)
+            do_sleep(1)
             if p.poll() is None: # pragma: no cover
                 status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
                 p.terminate()
-                time.sleep(3)
+                do_sleep(3)
                 if p.poll() is None:
                     status("WARNING: killed server")
                     p.kill()
@@ -259,7 +276,7 @@ def access_worker(url, args, expected_keys, max_tries, force_token):
                 return "normal"
         if not answer["continue"]:
             return "cancel"
-        time.sleep(0.1) # don't spam the server
+        do_sleep(0.1) # don't spam the server
 
 
 def worker_server_run(probes, script="example.py"):
@@ -267,7 +284,7 @@ def worker_server_run(probes, script="example.py"):
     done = False
     try:
         p = Popen(PYTHON + [script], cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        time.sleep(1) # give the server some time to wake up
+        do_sleep(1) # give the server some time to wake up
         if not access_url([ 'js/worker.js', 200 ]):
             return False # pragma: no cover
         for (url, args, expected_keys, max_tries, force_token, expected) in probes:
@@ -281,11 +298,11 @@ def worker_server_run(probes, script="example.py"):
             err = err.decode('utf8')
             if not done:
                 report_output(output.split('\n'), err.split('\n')) # pragma: no cover
-            time.sleep(1)
+            do_sleep(1)
             if p.poll() is None: # pragma: no cover
                 status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
                 p.terminate()
-                time.sleep(3)
+                do_sleep(3)
                 if p.poll() is None:
                     status("WARNING: killed server")
                     p.kill()
@@ -341,7 +358,7 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
         # start-up done
         p = pr
         read_all("")
-        time.sleep(1) # give the server some time to wake up
+        do_sleep(1) # give the server some time to wake up
         read_all("")
         for a in actions:
             if a[0] == "cmd":
@@ -350,7 +367,7 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
                 read_all(cmd)
                 if cmd == 'restart\n':
                     read_all("")
-                    time.sleep(1) # give the server some time to restart
+                    do_sleep(1) # give the server some time to restart
                     read_all("")
             elif a[0] == "url":
                 status("url: {0}", a[1])
@@ -363,15 +380,15 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
             else: # pragma: no cover
                 return fail("unknown action {0}", a[0])
         read_all("")
-        time.sleep(1)
+        do_sleep(1)
     finally:
         if p is not None:
             read_all("quit\n")
-            time.sleep(1)
+            do_sleep(1)
             if p.poll() is None: # pragma: no cover
                 status("WARNING: server takes unusually long to terminate -- coverage might report incorrect results")
                 p.terminate()
-                time.sleep(3)
+                do_sleep(3)
                 if p.poll() is None:
                     status("WARNING: killed server")
                     p.kill()
@@ -387,6 +404,46 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err, 
         return False # pragma: no cover
     if not check_stream(error, required_err, fail_err, "STD_ERR"):
         return False # pragma: no cover
+    return True
+
+
+def token_test():
+    from quick_server import QuickServer
+    qs = QuickServer(("", 0))
+    tkn = qs.create_token()
+    note("time: {0}", get_time())
+
+    def chk(name, expire, live):
+        obj = qs.get_token_obj(name, expire)
+        if live and "foo" not in obj:
+            note("time: {0}", get_time())
+            note("{0}\n{1}", qs._token_timings, qs._token_map)
+            return fail("'{0}' expected to live: {1}", name, obj)
+        elif not live and "foo" in obj:
+            note("time: {0}", get_time())
+            note("{0}\n{1}", qs._token_timings, qs._token_map)
+            return fail("'{0}' should be cleared: {1}", name, obj)
+        return True
+
+    qs.get_token_obj(tkn, 0.1)["foo"] = True
+    qs.get_token_obj("a", 0)["foo"] = True
+    if not chk(tkn, 0.1, True):
+        return False
+    if not chk("a", 0, False):
+        return False
+    note("wait: {0}", get_time())
+    do_sleep(0.2)
+    note("time: {0}", get_time())
+    qs.get_token_obj("b", None)["foo"] = True
+    if not chk(tkn, 0.1, False):
+        return False
+    if not chk("b", 0.1, True):
+        return False
+    note("wait: {0}", get_time())
+    do_sleep(0.2)
+    note("time: {0}", get_time())
+    if not chk("b", 0.1, False):
+        return False
     return True
 
 
@@ -558,6 +615,10 @@ if SKIP < 9:
                 ], -1, None, "normal" ],
         ], script="example2.py"):
         exit(9) # pragma: no cover
+if SKIP < 10:
+    note("token")
+    if not token_test():
+        exit(10)
 
 note("all tests successful!")
 exit(0)
