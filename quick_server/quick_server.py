@@ -109,7 +109,7 @@ else:
     get_time = lambda: time.clock()
 
 
-__version__ = "0.4.11"
+__version__ = "0.4.12"
 
 
 _getheader = lambda obj, key: _getheader_p2(obj, key)
@@ -122,11 +122,9 @@ def _getheader_p2(obj, key):
         return _getheader(obj, key)
 
 
-def create_server(server_address, parallel=True):
+def create_server(server_address, parallel=True, thread_factory=None):
     """Creates the server."""
-    if parallel:
-        return ParallelQuickServer(server_address)
-    return QuickServer(server_address) # pragma: no cover
+    return QuickServer(server_address, parallel, thread_factory)
 
 
 def json_dumps(obj):
@@ -1116,13 +1114,19 @@ class Response():
 
 _token_default = "DEFAULT"
 class QuickServer(http_server.HTTPServer):
-    def __init__(self, server_address):
+    def __init__(self, server_address, parallel=True, thread_factory=None):
         """Creates a new QuickServer.
 
         Parameters
         ----------
         server_address : (addr : string, port : int)
             The server address as interpreted by HTTPServer.
+
+        parallel : bool
+            Whether requests should be processed in parallel.
+
+        thread_factory : lambda *args
+            A callback to create a thread or None to use the standard thread.
 
         Attributes
         ----------
@@ -1206,6 +1210,10 @@ class QuickServer(http_server.HTTPServer):
         self.no_command_loop = False
         self.cache = None
         self.done = False
+        self._parallel = parallel
+        self._thread_factory = thread_factory
+        if self._thread_factory is None:
+            self._thread_factory = lambda *args, **kwargs: threading.Thread(*args, **kwargs)
         self._folder_masks = []
         self._folder_proxys = []
         self._f_mask = {}
@@ -1223,6 +1231,26 @@ class QuickServer(http_server.HTTPServer):
         self._token_timings = []
         self._token_expire = 3600
         self._mirror = None
+
+    ### request processing ###
+
+    def _process_request(self, request, client_address):
+        """Actually processes the request."""
+        try:
+            self.finish_request(request, client_address)
+        except Exception:
+            self.handle_error(request, client_address)
+        finally:
+            self.shutdown_request(request)
+
+    def process_request(self, request, client_address):
+        """Processes the request by delegating to `_process_request`."""
+        if not self._parallel:
+            self._process_request(request, client_address)
+            return
+        t = self._thread_factory(target=self._process_request, args=(request, client_address))
+        t.daemon = True
+        t.start()
 
     ### mask methods ###
 
@@ -1782,7 +1810,7 @@ class QuickServer(http_server.HTTPServer):
                             if f_time < get_time(f_from):
                                 act(ix, f_from, f_to)
 
-            poll_monitor = threading.Thread(target=monitor, name="{0}-Poll-Monitor".format(self.__class__))
+            poll_monitor = self._thread_factory(target=monitor, name="{0}-Poll-Monitor".format(self.__class__))
             poll_monitor.daemon = True
             poll_monitor.start()
         if not os.path.exists(path_from):
@@ -1924,7 +1952,7 @@ class QuickServer(http_server.HTTPServer):
                 with lock:
                     if cargo_cleaner[0] is not None:
                         return
-                    cleaner = threading.Thread(target=clean, name="{0}-Cargo-Cleaner".format(self.__class__))
+                    cleaner = self._thread_factory(target=clean, name="{0}-Cargo-Cleaner".format(self.__class__))
                     cleaner.daemon = True
                     cargo_cleaner[0] = cleaner
                     cleaner.start()
@@ -2044,6 +2072,7 @@ class QuickServer(http_server.HTTPServer):
                 post = args["post"]
                 try:
                     action = post["action"]
+                    cur_key = None
                     if action == "stop":
                         cur_key = post["token"]
                         remove_worker(cur_key) # throw away the result
@@ -2057,7 +2086,7 @@ class QuickServer(http_server.HTTPServer):
                         cur_key = reserve_worker()
                         inner_post = post.get("payload", {})
                         th = []
-                        worker = threading.Thread(target=start_worker, name="{0}-Worker-{1}".format(self.__class__, cur_key), args=(inner_post, cur_key, lambda: th[0]))
+                        worker = self._thread_factory(target=start_worker, name="{0}-Worker-{1}".format(self.__class__, cur_key), args=(inner_post, cur_key, lambda: th[0]))
                         th.append(worker)
                         worker.start()
                         time.sleep(0.1) # give fast tasks a way to immediately return results
@@ -2070,6 +2099,8 @@ class QuickServer(http_server.HTTPServer):
                         }
                     if action == "get":
                         cur_key = post["token"]
+                    if cur_key is None:
+                        raise ValueError("invalid action: {0}".format(action))
                     if is_done(cur_key):
                         result, exception = remove_worker(cur_key)
                         if exception is not None:
@@ -2329,52 +2360,46 @@ class QuickServer(http_server.HTTPServer):
         atexit.register(clean_up)
         self._clean_up_call = clean_up
 
-        # start the server
-        server = self
-
-        class CmdLoop(threading.Thread):
-            def __init__(self):
-                threading.Thread.__init__(self)
-                self.daemon = True
-
-            def run(self):
-                close = False
-                kill = True
-                try:
-                    while not server.done and not close and not server.no_command_loop:
-                        line = ""
+        def cmd_loop():
+            close = False
+            kill = True
+            try:
+                while not self.done and not close and not self.no_command_loop:
+                    line = ""
+                    try:
                         try:
-                            try:
-                                line = input(server.prompt)
-                            except IOError as e:
-                                if e.errno == errno.EBADF:
-                                    close = True
-                                    kill = False
-                                elif e.errno == errno.EWOULDBLOCK or \
-                                     e.errno == errno.EAGAIN or \
-                                     e.errno == errno.EINTR:
-                                    continue
-                                else:
-                                    raise e
-                            server.handle_cmd(line)
-                        except EOFError:
-                            close = True
-                            kill = False
-                        except KeyboardInterrupt:
-                            close = True
-                        except Exception:
-                            msg("{0}", traceback.format_exc())
-                            msg("^ exception executing command {0} ^", line)
-                finally:
-                    if kill:
-                        server.done = True
-                    else:
-                        msg("no command loop - use CTRL-C to terminate")
-                        server.no_command_loop = True
-                    clean_up()
+                            line = input(self.prompt)
+                        except IOError as e:
+                            if e.errno == errno.EBADF:
+                                close = True
+                                kill = False
+                            elif e.errno == errno.EWOULDBLOCK or \
+                                 e.errno == errno.EAGAIN or \
+                                 e.errno == errno.EINTR:
+                                continue
+                            else:
+                                raise e
+                        self.handle_cmd(line)
+                    except EOFError:
+                        close = True
+                        kill = False
+                    except KeyboardInterrupt:
+                        close = True
+                    except Exception:
+                        msg("{0}", traceback.format_exc())
+                        msg("^ exception executing command {0} ^", line)
+            finally:
+                if kill:
+                    self.done = True
+                else:
+                    msg("no command loop - use CTRL-C to terminate")
+                    self.no_command_loop = True
+                clean_up()
 
-        if not server.no_command_loop:
-            threading.Thread.start(CmdLoop())
+        if not self.no_command_loop:
+            t = self._thread_factory(target=cmd_loop)
+            t.daemon = True
+            t.start()
 
     def handle_request(self):
         """Handles an HTTP request.The actual HTTP request is handled using a
@@ -2450,7 +2475,3 @@ class QuickServer(http_server.HTTPServer):
             return
         thread = threading.current_thread()
         msg("Error in request ({0}): {1} in {2}\n{3}", client_address, repr(request), thread.name, traceback.format_exc())
-
-
-class ParallelQuickServer(socketserver.ThreadingMixIn, QuickServer):
-    daemon_threads = True
