@@ -5,156 +5,158 @@
  *
  * Created by krause on 2016-06-22.
  */
-"use strict";
 
-window.quick_server = window.quick_server || {}; // init namespace
-var d3 = window.d3;
+export let PRE_DELAY = 500;
+export let TIME_START = 500;
+// has to be below 2min so the server doesn't remove the result
+export let TIME_CAP = 1000*60;
+export let TIME_MIN_INC = 10;
+export let TIME_MUL_INC = 1.01;
+export let ANIMATION = ["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"];
+// ANIMATION = ["/", "-", "\\", "|"];
+export let ANIMATION_TIME = 300;
+export const VERSION = "0.5.0";
 
-window.quick_server.Worker = function() {
-  var that = this;
-  var timeStart = 500;
-  var timeCap = 1000*60; /* has to be below 2min so the server doesn't remove the result */
-  var timeMinInc = 10;
-  var timeMulInc = 1.01;
+export class Worker {
+  constructor() {
+    const that = this;
+    window.addEventListener("beforeunload", () => {
+      Object.keys(tokens).forEach((ref) => {
+        // we probably won't read the results but
+        // the server still cancels properly
+        that.cancel(ref);
+      });
+    });
+    this._status = (req) => {};
+    this._active = true;
+    this._infoTitle = true;
+    this._beforeTitle = null;
+    this._ownTitle = null;
+    this._req = 0;
+    this._animationIx = 0;
+    this._animationInFlight = false;
+    this._starts = {};
+    this._tokens = {};
+    this._urls = {};
+  }
 
-  this.version = "0.3.0";
+  set status(status) {
+    this._status = status;
+  }
 
-  var status = (req) => {};
-  this.status = function(_) {
-    if(!arguments.length) return status;
-    status = _;
-  };
+  get status() {
+    return this._status;
+  }
 
-  var active = true;
-  this.active = function(_) {
-    if(!arguments.length) return active;
-    active = _;
-  };
+  set active(active) {
+    this._active = active;
+  }
 
-  var infoTitle = true;
-  this.infoTitle = function(_) {
-    if(!arguments.length) return infoTitle;
-    if(!_) {
-      setAddTitle("");
+  get active() {
+    return this._active;
+  }
+
+  set infoTitle(infoTitle) {
+    if(!infoTitle) {
+      this.setAddTitle("");
     }
-    infoTitle = _;
-  };
+    this._infoTitle = infoTitle;
+  }
 
-  var beforeTitle = null;
-  var ownTitle = null;
-  function setAddTitle(addTitle) {
-    if(!infoTitle) return;
-    var curTitle = document.title;
-    if(ownTitle && curTitle !== ownTitle) { // external change
-      beforeTitle = curTitle;
+  get infoTitle() {
+    return this._infoTitle;
+  }
+
+  setAddTitle(addTitle) {
+    if(!this._infoTitle) return;
+    const curTitle = document.title;
+    if(this._ownTitle && curTitle !== this._ownTitle) { // external change
+      this._beforeTitle = curTitle;
     }
-    if(!beforeTitle) {
-      beforeTitle = curTitle;
+    if(!this._beforeTitle) {
+      this._beforeTitle = curTitle;
     }
-    ownTitle = beforeTitle + addTitle;
-    document.title = ownTitle;
+    this._ownTitle = this._beforeTitle + addTitle;
+    document.title = this._ownTitle;
   } // setAddTitle
 
-  var sendRequest = function(url, obj, cb) {
-    if(typeof d3 !== 'undefined') { // d3 compatibility
-      d3.json(url).header("Content-Type", "application/json").post(obj, (err, data) => {
-        cb(err, data);
-      });
-      return;
-    }
-    if(typeof fetch === "function") {
-      fetch(url, {
-        "method": "POST",
-        "headers": new Headers({
-          "Content-Type": "application/json",
-          "Content-Length": "" + obj.length,
-        }),
-        "body": obj,
-      }).then((data) => {
-        if(data.status !== 200 || !data.ok) {
-          throw { msg: "response not okay", data };
-        }
-        var ct = data.headers.get("content-type");
-        if(ct && ct.includes("application/json")) {
-          return data.json();
-        }
-        throw new TypeError("response not JSON encoded");
-      }).then((data) => cb(null, data)).catch((e) => cb(e, null));
-      return;
-    }
-    throw { "err": "unimplemented", };
-  };
-  this.sendRequest = function(_) {
-    if(!arguments.length) return sendRequest;
-    sendRequest = _;
-  };
+  sendRequest(url, obj, cb) {
+    fetch(url, {
+      "method": "POST",
+      "headers": new Headers({
+        "Content-Type": "application/json",
+        "Content-Length": "" + obj.length,
+      }),
+      "body": obj,
+    }).then((data) => {
+      if(data.status !== 200 || !data.ok) {
+        console.warn("response not okay", data);
+        throw new Error("response not okay");
+      }
+      const ct = data.headers.get("content-type");
+      if(ct && ct.includes("application/json")) {
+        return data.json();
+      }
+      throw new TypeError("response not JSON encoded");
+    }).then((data) => cb(null, data)).catch((e) => cb(e, null));
+  }
 
-  var preDelay = 500;
-  this.preDelay = function(_) {
-    if(!arguments.length) return preDelay;
-    preDelay = _;
-  };
-
-  var req = 0;
-  function changeStatus(inc, error) {
-    if(req < 0) return;
+  changeStatus(inc, error) {
+    if(this._req < 0) return;
     if(error) {
-      req = -1;
+      this._req = -1;
     } else if(inc) {
-      req += 1;
+      this._req += 1;
     } else {
-      req -= 1;
+      this._req -= 1;
     }
-    titleStatus();
-    status(req);
+    this.titleStatus();
+    this._status(this._req);
   } // changeStatus
 
-  var animationIx = 0;
-  // var animation = [ "/", "-", "\\", "|", ];
-  var animation = [ "⠋", "⠙", "⠸", "⠴", "⠦", "⠇", ];
-  var animationTime = 300;
-  var animationInFlight = false;
-  function titleStatus() {
-    if(req <= 0) {
-      setAddTitle("");
+  titleStatus() {
+    if(this._req <= 0) {
+      this.setAddTitle("");
       return;
     }
-    var txt = " " + animation[animationIx];
-    if(req > 1) {
-      txt += " (" + req + "x)";
+    let txt = " " + ANIMATION[this._animationIx % ANIMATION.length];
+    if(this._req > 1) {
+      txt += " (" + this._req + "x)";
     }
-    setAddTitle(txt);
-    if(infoTitle && !animationInFlight) {
-      animationIx = (animationIx + 1) % animation.length;
-      animationInFlight = true;
+    this.setAddTitle(txt);
+    if(this._infoTitle && !this._animationInFlight) {
+      this._animationIx = (this._animationIx + 1) % ANIMATION.length;
+      this._animationInFlight = true;
+      const that = this;
       setTimeout(() => {
-        animationInFlight = false;
-        titleStatus();
-      }, animationTime);
+        that._animationInFlight = false;
+        that.titleStatus();
+      }, ANIMATION_TIME);
     }
   } // titleStatus
 
-  function get_payload(data, url, cb) {
+  get_payload(data, url, cb) {
     if(!data["continue"]) {
       cb(JSON.parse(data["result"]));
       return;
     }
-    var keys = data["result"];
-    var res = {};
+    const that = this;
+    const keys = data["result"];
+    const res = {};
     keys.forEach((k) => {
-      var obj = JSON.stringify({
+      const obj = JSON.stringify({
         "action": "cargo",
         "token": k,
       });
-      sendRequest(url, obj, (err, data) => {
+      that.sendRequest(url, obj, (err, data) => {
         if(err) {
           console.warn("Failed to retrieve cargo " + k);
-          changeStatus(false, true);
+          that.changeStatus(false, true);
           return console.warn(err);
         }
         if(k !== data["token"]) {
           console.warn("Mismatching token " + k + " !== " + data["token"]);
-          changeStatus(false, true);
+          that.changeStatus(false, true);
           return;
         }
         res[k] = data["result"];
@@ -162,161 +164,201 @@ window.quick_server.Worker = function() {
       });
     });
 
-    function check_finished() {
+    const check_finished = () => {
       if(!keys.every((k) => k in res)) {
         return;
       }
-      var d = keys.map((k) => res[k]).join(''); // string may be too long :(
+      const d = keys.map((k) => res[k]).join(''); // string may be too long :(
       keys.forEach((k) => { // free memory
         res[k] = null;
       });
       cb(JSON.parse(d));
     } // check_finished
-
   } // get_payload
 
-  var starts = {};
-  var tokens = {};
-  var urls = {};
-  function postTask(ref) {
+  postTask(ref) {
+    const that = this;
     setTimeout(() => {
-      if(!starts[ref]) return;
-      var s = starts[ref];
-      var url = s["url"];
-      var cb = s["cb"];
-      starts[ref] = null;
-      changeStatus(true, false);
-      var obj = JSON.stringify({
+      if(!that._starts[ref]) return;
+      const s = that._starts[ref];
+      const url = s["url"];
+      const cb = s["cb"];
+      that._starts[ref] = null;
+      that.changeStatus(true, false);
+      const obj = JSON.stringify({
         "action": "start",
         "payload": s["payload"],
       });
-      sendRequest(url, obj, (err, data) => {
+      that.sendRequest(url, obj, (err, data) => {
         if(err) {
           console.warn("Failed to start " + ref);
-          changeStatus(false, true);
+          that.changeStatus(false, true);
           return console.warn(err);
         }
-        cancel(ref, (err) => {
+        that._cancel(ref, (err) => {
           if(err) {
             console.warn("Failed to cancel " + ref);
-            changeStatus(false, true);
+            that.changeStatus(false, true);
             return console.warn(err);
           }
         });
         if(data["done"]) {
-          get_payload(data, url, (d) => {
-            execute(cb, d);
+          that.get_payload(data, url, (d) => {
+            that.execute(cb, d);
           });
         } else {
-          var token = +data["token"];
-          urls[ref] = url;
-          tokens[ref] = token;
-          monitor(ref, token, cb, timeStart);
+          const token = +data["token"];
+          that._urls[ref] = url;
+          that._tokens[ref] = token;
+          that.monitor(ref, token, cb, TIME_START);
         }
       });
-    }, preDelay);
+    }, PRE_DELAY);
   } // postTask
 
-  function monitor(ref, token, cb, delay) {
-    if(tokens[ref] !== token) {
-      changeStatus(false, false);
+  monitor(ref, token, cb, delay) {
+    if(this._tokens[ref] !== token) {
+      this.changeStatus(false, false);
       return;
     }
-    var url = urls[ref];
-    var obj = JSON.stringify({
+    const url = this._urls[ref];
+    const obj = JSON.stringify({
       "action": "get",
       "token": token,
     });
-    sendRequest(url, obj, (err, data) => {
+    const that = this;
+    this.sendRequest(url, obj, (err, data) => {
       if(err) {
         console.warn("Error while retrieving " + ref + " token: " + token);
-        changeStatus(false, true);
+        that.changeStatus(false, true);
         return console.warn(err);
       }
-      var cur_token = +data["token"];
-      if(cur_token !== tokens[ref]) {
+      const cur_token = +data["token"];
+      if(cur_token !== that._tokens[ref]) {
         // late response
-        changeStatus(false, false);
+        that.changeStatus(false, false);
         return;
       }
       if(cur_token !== token) {
         // wrong response
         console.warn("Error while retrieving " + ref);
-        changeStatus(false, true);
-        return console.warn({ "err": "token mismatch: " + cur_token + " instead of " + token, });
+        that.changeStatus(false, true);
+        return console.warn({
+          "err": "token mismatch: " + cur_token + " instead of " + token,
+        });
       }
       if(data["done"]) {
-        tokens[ref] = -1;
-        urls[ref] = null;
-        get_payload(data, url, (d) => {
-          execute(cb, d);
+        that._tokens[ref] = -1;
+        that._urls[ref] = null;
+        that.get_payload(data, url, (d) => {
+          that.execute(cb, d);
         });
       } else if(data["continue"]) {
         setTimeout(() => {
-          var newDelay = Math.min(Math.max(delay * timeMulInc, delay + timeMinInc), timeCap);
-          monitor(ref, token, cb, newDelay);
+          const newDelay = Math.min(Math.max(
+            delay * TIME_MUL_INC, delay + TIME_MIN_INC), TIME_CAP);
+          that.monitor(ref, token, cb, newDelay);
         }, delay);
       } else {
-        changeStatus(false, false);
+        that.changeStatus(false, false);
       }
     });
   } // monitor
 
-  function cancel(ref, cb) {
-    if(!(ref in tokens && tokens[ref] >= 0)) return;
-    var token = tokens[ref];
-    var url = urls[ref];
-    var obj = JSON.stringify({
+  _cancel(ref, cb) {
+    if(!(ref in this._tokens && this._tokens[ref] >= 0)) return;
+    const token = this._tokens[ref];
+    const url = this._urls[ref];
+    const obj = JSON.stringify({
       "action": "stop",
       "token": token,
     });
-    tokens[ref] = -1;
-    urls[ref] = null;
-    sendRequest(url, obj, (err, data) => {
+    this._tokens[ref] = -1;
+    this._urls[ref] = null;
+    this.sendRequest(url, obj, (err, data) => {
       if(err) {
         return cb(err);
       }
-      return cb(+data["token"] !== token && { "err": "token mismatch: " + data["token"] + " instead of " + token, });
+      return cb(+data["token"] !== token && {
+        "err": "token mismatch: " + data["token"] + " instead of " + token,
+      });
     });
-  } // cancel
+  } // _cancel
 
-  function execute(cb, data) {
-    var err = true;
+  execute(cb, data) {
+    let err = true;
     try {
       cb(data);
       err = false;
     } finally {
       if(err) {
-        changeStatus(false, true);
+        this.changeStatus(false, true);
       } else {
-        changeStatus(false, false);
+        this.changeStatus(false, false);
       }
     }
   } // execute
 
-  this.post = function(ref, url, payload, cb) {
-    if(!active) return;
-    starts[ref] = {
+  post(ref, url, payload, cb) {
+    if(!this._active) return;
+    this._starts[ref] = {
       "url": url,
       "cb": cb,
       "payload": payload,
     };
-    postTask(ref);
-  };
-  this.cancel = function(ref) {
-    cancel(ref, (err) => {
-      changeStatus(false, !!err);
+    this.postTask(ref);
+  }
+
+  cancel(ref) {
+    const that = this;
+    this._cancel(ref, (err) => {
+      that.changeStatus(false, !!err);
       if(err) {
         console.warn("Failed to cancel " + ref);
         return console.warn(err);
       }
     });
-  };
+  }
+} // Worker
 
-  window.addEventListener("beforeunload", () => {
-    Object.keys(tokens).forEach((ref) => {
-      // we probably won't read the results but the server still cancels properly
-      that.cancel(ref);
-    });
-  });
-} // quick_server.Worker
+export class VariableHandler {
+  constructor(worker, objectPath) {
+    this._worker = worker;
+    this._objectPath = objectPath;
+    this._curQuery = {};
+  }
+
+
+} // VariableHandler
+
+class Variable {
+  constructor(hnd) {
+    this._hnd = hnd;
+    this._sync = false;
+    this._value = null;
+  }
+
+  has() {
+    return this._sync;
+  }
+
+  get value() {
+    if(!this.has()) {
+      throw new Error("variable not in sync");
+    }
+    return this._value;
+  }
+
+} // Variable
+
+class Value extends Variable {
+
+} // Value
+
+class LazyValue extends Variable {
+
+} // LazyValue
+
+class LazyMap extends Variable {
+
+} // LazyMap

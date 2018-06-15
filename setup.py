@@ -21,7 +21,8 @@ You can bind static paths with the `bind_path` method.
 Commands can be added via the `cmd` annotation where the function name is
 the command. 'help', 'restart', and 'quit' are built-in commands ready to use.
 
-Note: The server is thread based so all callback functions should be thread-safe.
+Note: The server is thread based so all callback functions should be
+thread-safe.
 
 Please refer to the example folder for usage examples.
 """
@@ -37,13 +38,14 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 # NOTE! steps to distribute:
-#$ python setup.py sdist bdist_wheel
-#$ twine upload dist/... <- here be the new version!
+# $ python setup.py sdist bdist_wheel
+# $ twine upload dist/... <- here be the new version!
 
 setup(
     name='quick_server',
-    version='0.4.12',
-    description='QuickServer is a quick to use and easy to set up server implementation.',
+    version='0.5.0',
+    description='QuickServer is a quick to use and ' +
+                'easy to set up server implementation.',
     long_description=long_description,
     url='https://github.com/JosuaKrause/quick_server',
     author='Josua Krause',
