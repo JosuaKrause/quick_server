@@ -6,25 +6,26 @@
  * Created by krause on 2016-06-22.
  */
 
-export let PRE_DELAY = 500;
-export let TIME_START = 500;
-// has to be below 2min so the server doesn't remove the result
-export let TIME_CAP = 1000*60;
-export let TIME_MIN_INC = 10;
-export let TIME_MUL_INC = 1.01;
-export let ANIMATION = ["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"];
-// ANIMATION = ["/", "-", "\\", "|"];
-export let ANIMATION_TIME = 300;
+export const CONFIG = {
+  preDelay: 500,
+  timeStart: 500,
+  // has to be below 2min so the server doesn't remove the result
+  timeCap: 1000*60,
+  timeMinInc: 10,
+  timeMulInc: 1.01,
+  animation: ["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"],
+  // animation: ["/", "-", "\\", "|"],
+  animationTime: 300,
+};
 export const VERSION = "0.5.0";
 
 export class Worker {
   constructor() {
-    const that = this;
     window.addEventListener("beforeunload", () => {
       Object.keys(tokens).forEach((ref) => {
         // we probably won't read the results but
-        // the server still cancels properly
-        that.cancel(ref);
+        // the server still should cancel properly
+        this.cancel(ref);
       });
     });
     this._status = (req) => {};
@@ -119,19 +120,19 @@ export class Worker {
       this.setAddTitle("");
       return;
     }
-    let txt = " " + ANIMATION[this._animationIx % ANIMATION.length];
+    const anim = CONFIG.animation;
+    let txt = " " + anim[this._animationIx % anim.length];
     if(this._req > 1) {
-      txt += " (" + this._req + "x)";
+      txt += ` (${this._req}x)`;
     }
     this.setAddTitle(txt);
     if(this._infoTitle && !this._animationInFlight) {
-      this._animationIx = (this._animationIx + 1) % ANIMATION.length;
+      this._animationIx = (this._animationIx + 1) % anim.length;
       this._animationInFlight = true;
-      const that = this;
       setTimeout(() => {
-        that._animationInFlight = false;
-        that.titleStatus();
-      }, ANIMATION_TIME);
+        this._animationInFlight = false;
+        this.titleStatus();
+      }, CONFIG.animationTime);
     }
   } // titleStatus
 
@@ -140,7 +141,6 @@ export class Worker {
       cb(JSON.parse(data["result"]));
       return;
     }
-    const that = this;
     const keys = data["result"];
     const res = {};
     keys.forEach((k) => {
@@ -148,15 +148,15 @@ export class Worker {
         "action": "cargo",
         "token": k,
       });
-      that.sendRequest(url, obj, (err, data) => {
+      this.sendRequest(url, obj, (err, data) => {
         if(err) {
-          console.warn("Failed to retrieve cargo " + k);
-          that.changeStatus(false, true);
+          console.warn(`Failed to retrieve cargo ${k}`);
+          this.changeStatus(false, true);
           return console.warn(err);
         }
         if(k !== data["token"]) {
-          console.warn("Mismatching token " + k + " !== " + data["token"]);
-          that.changeStatus(false, true);
+          console.warn(`Mismatching token ${k} !== ${data["token"]}`);
+          this.changeStatus(false, true);
           return;
         }
         res[k] = data["result"];
@@ -177,43 +177,42 @@ export class Worker {
   } // get_payload
 
   postTask(ref) {
-    const that = this;
     setTimeout(() => {
-      if(!that._starts[ref]) return;
-      const s = that._starts[ref];
+      if(!this._starts[ref]) return;
+      const s = this._starts[ref];
       const url = s["url"];
       const cb = s["cb"];
-      that._starts[ref] = null;
-      that.changeStatus(true, false);
+      this._starts[ref] = null;
+      this.changeStatus(true, false);
       const obj = JSON.stringify({
         "action": "start",
         "payload": s["payload"],
       });
-      that.sendRequest(url, obj, (err, data) => {
+      this.sendRequest(url, obj, (err, data) => {
         if(err) {
-          console.warn("Failed to start " + ref);
-          that.changeStatus(false, true);
+          console.warn(`Failed to start ${ref}`);
+          this.changeStatus(false, true);
           return console.warn(err);
         }
-        that._cancel(ref, (err) => {
+        this._cancel(ref, (err) => {
           if(err) {
-            console.warn("Failed to cancel " + ref);
-            that.changeStatus(false, true);
+            console.warn(`Failed to cancel ${ref}`);
+            this.changeStatus(false, true);
             return console.warn(err);
           }
         });
         if(data["done"]) {
-          that.get_payload(data, url, (d) => {
-            that.execute(cb, d);
+          this.get_payload(data, url, (d) => {
+            this.execute(cb, d);
           });
         } else {
           const token = +data["token"];
-          that._urls[ref] = url;
-          that._tokens[ref] = token;
-          that.monitor(ref, token, cb, TIME_START);
+          this._urls[ref] = url;
+          this._tokens[ref] = token;
+          this.monitor(ref, token, cb, CONFIG.timeStart);
         }
       });
-    }, PRE_DELAY);
+    }, CONFIG.preDelay);
   } // postTask
 
   monitor(ref, token, cb, delay) {
@@ -226,41 +225,43 @@ export class Worker {
       "action": "get",
       "token": token,
     });
-    const that = this;
     this.sendRequest(url, obj, (err, data) => {
       if(err) {
-        console.warn("Error while retrieving " + ref + " token: " + token);
-        that.changeStatus(false, true);
+        console.warn(`Error while retrieving ${ref} token: ${token}`);
+        this.changeStatus(false, true);
         return console.warn(err);
       }
       const cur_token = +data["token"];
-      if(cur_token !== that._tokens[ref]) {
+      if(cur_token !== this._tokens[ref]) {
         // late response
-        that.changeStatus(false, false);
+        this.changeStatus(false, false);
         return;
       }
       if(cur_token !== token) {
         // wrong response
-        console.warn("Error while retrieving " + ref);
-        that.changeStatus(false, true);
+        console.warn(`Error while retrieving ${ref}`);
+        this.changeStatus(false, true);
         return console.warn({
-          "err": "token mismatch: " + cur_token + " instead of " + token,
+          "err": `token mismatch: ${cur_token} instead of ${token}`,
         });
       }
       if(data["done"]) {
-        that._tokens[ref] = -1;
-        that._urls[ref] = null;
-        that.get_payload(data, url, (d) => {
-          that.execute(cb, d);
+        this._tokens[ref] = -1;
+        this._urls[ref] = null;
+        this.get_payload(data, url, (d) => {
+          this.execute(cb, d);
         });
       } else if(data["continue"]) {
         setTimeout(() => {
-          const newDelay = Math.min(Math.max(
-            delay * TIME_MUL_INC, delay + TIME_MIN_INC), TIME_CAP);
-          that.monitor(ref, token, cb, newDelay);
+          const newDelay = Math.min(
+            Math.max(
+              delay * CONFIG.timeMulInc, delay + CONFIG.timeMinInc
+            ), CONFIG.timeCap
+          );
+          this.monitor(ref, token, cb, newDelay);
         }, delay);
       } else {
-        that.changeStatus(false, false);
+        this.changeStatus(false, false);
       }
     });
   } // monitor
@@ -280,7 +281,7 @@ export class Worker {
         return cb(err);
       }
       return cb(+data["token"] !== token && {
-        "err": "token mismatch: " + data["token"] + " instead of " + token,
+        "err": `token mismatch: ${data["token"]} instead of ${token}`,
       });
     });
   } // _cancel
@@ -307,18 +308,17 @@ export class Worker {
       "payload": payload,
     };
     this.postTask(ref);
-  }
+  } // post
 
   cancel(ref) {
-    const that = this;
     this._cancel(ref, (err) => {
-      that.changeStatus(false, !!err);
+      this.changeStatus(false, !!err);
       if(err) {
-        console.warn("Failed to cancel " + ref);
+        console.warn(`Failed to cancel ${ref}`);
         return console.warn(err);
       }
     });
-  }
+  } // cancel
 } // Worker
 
 export class VariableHandler {
@@ -326,22 +326,134 @@ export class VariableHandler {
     this._worker = worker;
     this._objectPath = objectPath;
     this._curQuery = {};
+    this._variables = {};
+    this._count = 0;
+    this._timer = null;
   }
 
+  executeQuery() {
+    const query = this._curQuery;
+    if(Object.keys(query).length === 0) return;
+    const count = this._count;
+    this._curQuery = {};
+    this._count += 1;
+    this._worker.post(`query${count}`, this._objectPath, {
+      "query": query,
+    }, (data) => {
+      this._applyValues(this._variables, data)
+    });
+  }
 
+  _queueQuery(chg) {
+    if(!chg) return;
+    if(this._timer !== null) return;
+    this._timer = setTimeout(() => {
+      this.executeQuery();
+      this._timer = null;
+    }, 1);
+  }
+
+  _applyValues(vars, data) {
+    Object.keys(data).forEach((k) => {
+      if(k in vars) {
+        vars[k]._apply(data[k]);
+      }
+    });
+  }
+
+  _addAction(qobj, path, type, value) {
+    if(path.length >= 2) {
+      const key = path[0];
+      if(!(key in qobj)) {
+        qobj[key] = {
+          "type": "get",
+          "queries": {},
+        };
+      } else if(!("queries" in qobj[key])) {
+        qobj[key]["queries"] = {};
+      }
+      const kname = path[1];
+      if(!(kname in qobj[key]["queries"])) {
+        qobj[key]["queries"][kname] = {};
+      }
+      return this._addAction(
+        qobj[key]["queries"][kname], path.slice(2), type, value);
+    }
+    const name = path[0];
+    if(!(name in qobj)) {
+      qobj[name] = {};
+    } else {
+      if(qobj[name]["type"] === "set" && type !== "set") {
+        return false;
+      }
+    }
+    if(type !== "get" && type !== "set") {
+      throw new Error(`invalid type: ${type}`);
+    }
+    qobj[name]["type"] = type;
+    if(type === "set") {
+      qobj[name]["value"] = value;
+    }
+    return true;
+  }
+
+  addGetAction(path) {
+    const chg = this._addAction(this._curQuery, path, "get", undefined);
+  }
+
+  addSetAction(path, value) {
+    const chg = this._addAction(this._curQuery, path, "set", value);
+
+  }
+
+  getValue(name) {
+    if(!(name in this._variables)) {
+      this._variables[name] = Value(this, [name]);
+    }
+    if(this._variables[name] instanceof LazyMap) {
+      throw new Error(`${name} is a map`);
+    }
+    return this._variables[name];
+  }
+
+  getMap(name) {
+    if(!(name in this._variables)) {
+      this._variables[name] = LazyMap(this, [name]);
+    }
+    if(!(this._variables[name] instanceof LazyMap)) {
+      throw new Error(`${name} is not a map`);
+    }
+    return this._variables[name];
+  }
 } // VariableHandler
 
 class Variable {
-  constructor(hnd) {
+  constructor(hnd, path) {
     this._hnd = hnd;
+    this._path = path;
     this._sync = false;
     this._value = null;
   }
 
-  has() {
-    return this._sync;
+  _apply(obj) {
+    this._value = obj["value"];
+    this._sync = true;
   }
 
+  update() {
+    this._sync = false;
+    this._hnd.addGetAction(this._path);
+  }
+
+  has() {
+    if(!this._sync) {
+      this.update();
+    }
+    return this._sync;
+  }
+} // Variable
+
+class Value extends Variable {
   get value() {
     if(!this.has()) {
       throw new Error("variable not in sync");
@@ -349,16 +461,54 @@ class Variable {
     return this._value;
   }
 
-} // Variable
-
-class Value extends Variable {
-
+  set value(val) {
+    this._hnd.addSetAction(this._path, val);
+    this._value = val;
+    this._sync = true;
+  }
 } // Value
 
-class LazyValue extends Variable {
-
-} // LazyValue
-
 class LazyMap extends Variable {
+  constructor(hnd, path) {
+    super(hnd, path);
+    this._value = {};
+  }
 
+  _apply(obj) {
+    Object.keys(obj).forEach((k) => {
+      if(k in this._value) {
+        this._hnd._applyValues(this._value[k], obj[k]);
+      }
+    });
+    this._sync = true;
+  }
+
+  _getForKey(key) {
+    if(!(key in this._value)) {
+      this._value[key] = {};
+    }
+    return this._value[key];
+  }
+
+  getValue(key, name) {
+    const variables = this._getForKey(key);
+    if(!(name in variables)) {
+      variables[name] = Value(this._hnd, this._path + [key, name])
+    }
+    if(variables[name] instanceof LazyMap) {
+      throw new Error(`${name} is a map`);
+    }
+    return variables[name];
+  }
+
+  getMap(key, name) {
+    const variables = this._getForKey(key);
+    if(!(name in variables)) {
+      variables[name] = LazyMap(this._hnd, this._path + [key, name]);
+    }
+    if(!(variables[name] instanceof LazyMap)) {
+      throw new Error(`${name} is not a map`);
+    }
+    return variables[name];
+  }
 } // LazyMap

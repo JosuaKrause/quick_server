@@ -1296,7 +1296,7 @@ class QuickServer(http_server.HTTPServer):
         self.verbose_workers = False
         self.no_command_loop = False
         self.cache = None
-        self.object_path = "objects"
+        self.object_path = "/objects/"
         self.done = False
         self._parallel = parallel
         self._thread_factory = thread_factory
