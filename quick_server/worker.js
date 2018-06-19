@@ -321,7 +321,7 @@ export class Worker {
   } // cancel
 } // Worker
 
-export class VariableHandler {
+export class VariablePool {
   constructor(worker, objectPath) {
     this._worker = worker;
     this._objectPath = objectPath;
@@ -340,7 +340,7 @@ export class VariableHandler {
     this._worker.post(`query${count}`, this._objectPath, {
       "query": query,
     }, (data) => {
-      this._applyValues(this._variables, data)
+      this._applyValues(this._variables, data, []);
     });
   }
 
@@ -353,10 +353,24 @@ export class VariableHandler {
     }, 1);
   }
 
-  _applyValues(vars, data) {
+  _applyValues(vars, data, path) {
     Object.keys(data).forEach((k) => {
-      if(k in vars) {
-        vars[k]._apply(data[k]);
+      const d = data[k];
+      if("map" in d) {
+        if(!(k in vars)) {
+          vars[k] = new WeakMap();
+        }
+        Object.keys(d.map).forEach((innerK) => {
+          if(!(innerK in vars[k])) {
+            vars[k][innerK] = {};
+          }
+          this._applyValues(vars[k][innerK], d.map[innerK], path + [k, innerK]);
+        });
+      } else if("value" in d) {
+        vars[k] = Object.seal(new Variable(this, path + [k], true, d.value));
+      } else {
+        console.warn("incorrect response", d);
+        throw new Error("internal error")
       }
     });
   }
@@ -399,50 +413,49 @@ export class VariableHandler {
 
   addGetAction(path) {
     const chg = this._addAction(this._curQuery, path, "get", undefined);
+    this._queueQuery(chg);
   }
 
   addSetAction(path, value) {
     const chg = this._addAction(this._curQuery, path, "set", value);
-
+    this._queueQuery(chg);
   }
 
-  getValue(name) {
-    if(!(name in this._variables)) {
-      this._variables[name] = Value(this, [name]);
+  getValue(path) {
+    const full = path.slice();
+    let vars = this._variables;
+    while(path.length > 1) {
+      const mapName = path.shift();
+      const key = path.shift();
+      if(!(mapName in vars)) {
+        vars[mapName] = new WeakMap();
+      }
+      if(!(key in vars[mapName][key])) {
+        vars[mapName][key] = {};
+      }
+      vars = vars[mapName][key];
     }
-    if(this._variables[name] instanceof LazyMap) {
-      throw new Error(`${name} is a map`);
+    if(!path.length) {
+      throw new Error(`expected longer path: ${full}`);
     }
-    return this._variables[name];
+    const name = path.shift();
+    if(!(name in vars)) {
+      vars[name] = Object.seal(new Variable(this, full, false, null));
+    }
+    return vars[name];
   }
-
-  getMap(name) {
-    if(!(name in this._variables)) {
-      this._variables[name] = LazyMap(this, [name]);
-    }
-    if(!(this._variables[name] instanceof LazyMap)) {
-      throw new Error(`${name} is not a map`);
-    }
-    return this._variables[name];
-  }
-} // VariableHandler
+} // VariablePool
 
 class Variable {
-  constructor(hnd, path) {
-    this._hnd = hnd;
+  constructor(pool, path, sync, value) {
+    this._pool = pool;
     this._path = path;
-    this._sync = false;
-    this._value = null;
-  }
-
-  _apply(obj) {
-    this._value = obj["value"];
-    this._sync = true;
+    this._sync = sync;
+    this._value = value;
   }
 
   update() {
-    this._sync = false;
-    this._hnd.addGetAction(this._path);
+    this._pool.addGetAction(this._path);
   }
 
   has() {
@@ -451,9 +464,7 @@ class Variable {
     }
     return this._sync;
   }
-} // Variable
 
-class Value extends Variable {
   get value() {
     if(!this.has()) {
       throw new Error("variable not in sync");
@@ -462,53 +473,64 @@ class Value extends Variable {
   }
 
   set value(val) {
-    this._hnd.addSetAction(this._path, val);
-    this._value = val;
-    this._sync = true;
+    this._pool.addSetAction(this._path, val);
   }
-} // Value
+} // Variable
 
-class LazyMap extends Variable {
-  constructor(hnd, path) {
-    super(hnd, path);
-    this._value = {};
-  }
+export let IOProvider = null;
+export let withIO = null;
+try {
+  import('react').then((React) => {
+    const { Provider, Consumer } = React.createContext(undefined);
 
-  _apply(obj) {
-    Object.keys(obj).forEach((k) => {
-      if(k in this._value) {
-        this._hnd._applyValues(this._value[k], obj[k]);
+    class IOProviderRaw extends React.PureComponent {
+      constructor(props) {
+        super(props);
+        this.state = {
+          pool: null,
+        };
       }
-    });
-    this._sync = true;
-  }
 
-  _getForKey(key) {
-    if(!(key in this._value)) {
-      this._value[key] = {};
-    }
-    return this._value[key];
-  }
+      componentWillMount() {
+        this.propsToState({}, this.props);
+      }
 
-  getValue(key, name) {
-    const variables = this._getForKey(key);
-    if(!(name in variables)) {
-      variables[name] = Value(this._hnd, this._path + [key, name])
-    }
-    if(variables[name] instanceof LazyMap) {
-      throw new Error(`${name} is a map`);
-    }
-    return variables[name];
-  }
+      componentWillReceiveProps(nextProps) {
+        this.propsToState(this.props, nextProps);
+      }
 
-  getMap(key, name) {
-    const variables = this._getForKey(key);
-    if(!(name in variables)) {
-      variables[name] = LazyMap(this._hnd, this._path + [key, name]);
-    }
-    if(!(variables[name] instanceof LazyMap)) {
-      throw new Error(`${name} is not a map`);
-    }
-    return variables[name];
-  }
-} // LazyMap
+      propsToState(props, nextProps) {
+        const { objectPath="/objects/" } = nextProps;
+        if(props.objectPath === objectPath) return;
+        this.setState({
+          pool: new VariablePool(new Worker(), objectPath),
+        });
+      }
+
+      render() {
+        const { children } = this.props;
+        const { pool } = this.state;
+        if(!pool) return null;
+        return React.createElement(Provider, {
+          value: pool,
+        }, children);
+      }
+    } // IOProviderRaw
+    IOProvider = IOProviderRaw;
+
+    const withIORaw = (keys, component) => {
+      return React.createElement(Consumer, {}, (pool) => {
+        return function IOComponent(props) {
+          const newProps = Object.assign({}, props);
+          keys(props).forEach((k) => {
+            newProps[k] = pool.getValue([k]);
+          });
+          return React.createElement(component, newProps, props.children);
+        };
+      });
+    };
+    withIO = withIORaw;
+  });
+} catch(e) {
+  console.warn("react not found", e);
+}

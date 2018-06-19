@@ -2393,14 +2393,20 @@ class QuickServer(http_server.HTTPServer):
                         obj["value"] = action["value"]
                     elif atype != "get":
                         raise ValueError("invalid action: '{0}'".format(atype))
-                    res[curq] = obj["value"]
+                    res[curq] = {
+                        "value": obj["value"],
+                    }
                 elif otype == "lazy_value":
                     fun = obj["fun"]
                     if atype == "set":
-                        res[curq] = fun(
-                            parent, set_value=True, value=action["value"])
+                        res[curq] = {
+                            "value": fun(
+                                parent, set_value=True, value=action["value"]),
+                        }
                     elif atype == "get":
-                        res[curq] = fun(parent)
+                        res[curq] = {
+                            "value": fun(parent),
+                        }
                     else:
                         raise ValueError("invalid action: '{0}'".format(atype))
                 elif otype == "lazy_map":
@@ -2412,7 +2418,9 @@ class QuickServer(http_server.HTTPServer):
                         next_level = fun(parent, name)
                         cur_res[name] = do_dispatch(
                             query, obj["child"], next_level)
-                    res[curq] = cur_res
+                    res[curq] = {
+                        "map": cur_res,
+                    }
                 else:
                     raise ValueError(
                         "invalid object type: '{0}'".format(otype))
