@@ -297,6 +297,22 @@ def set_error_exit_code(code):
     _error_exit_code = code
 
 
+def get_exec_arr():
+    executable = sys.executable
+    if not executable:
+        executable = os.environ.get('PYTHON', None)
+    if not executable:
+        raise ValueError("could not retrieve executable")
+    executable = executable.split()
+    script = [sys.argv[0]]
+    if script[0].endswith("/__main__.py"):
+        script = [
+            "-m", os.path.basename(script[0][:-len("/__main__.py")])
+        ]
+    args = sys.argv[1:]
+    return executable + script + args
+
+
 # handling the 'restart' command
 _do_restart = False
 
@@ -337,8 +353,7 @@ def _start_restart_loop(exit_code, in_atexit):
         else:
             import subprocess
 
-            executable = os.environ.get('PYTHON', sys.executable).split()
-            exec_arr = executable + sys.argv
+            exec_arr = get_exec_arr()
             if in_atexit:
                 msg("restarting: {0}", ' '.join(exec_arr))
 
@@ -1886,7 +1901,6 @@ class QuickServer(http_server.HTTPServer):
                 "impl": "symlink",
             }
         if os.path.lexists(path_to):
-            print("remove")
             os.remove(path_to)
         os.symlink(path_from, path_to)
         return True
