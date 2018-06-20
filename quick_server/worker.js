@@ -477,6 +477,7 @@ class Variable {
   }
 } // Variable
 
+// *** FIXME Experimental React API for direct object access. ***
 export let IOProvider = null;
 export let withIO = null;
 try {
