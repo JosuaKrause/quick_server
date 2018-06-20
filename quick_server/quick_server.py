@@ -117,7 +117,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.4.12"
+__version__ = "0.5.0"
 
 
 def _getheader_fallback(obj, key):
@@ -297,6 +297,22 @@ def set_error_exit_code(code):
     _error_exit_code = code
 
 
+def get_exec_arr():
+    executable = sys.executable
+    if not executable:
+        executable = os.environ.get('PYTHON', None)
+    if not executable:
+        raise ValueError("could not retrieve executable")
+    executable = executable.split()
+    script = [sys.argv[0]]
+    if script[0].endswith("/__main__.py"):
+        script = [
+            "-m", os.path.basename(script[0][:-len("/__main__.py")])
+        ]
+    args = sys.argv[1:]
+    return executable + script + args
+
+
 # handling the 'restart' command
 _do_restart = False
 
@@ -337,8 +353,7 @@ def _start_restart_loop(exit_code, in_atexit):
         else:
             import subprocess
 
-            executable = os.environ.get('PYTHON', sys.executable).split()
-            exec_arr = executable + sys.argv
+            exec_arr = get_exec_arr()
             if in_atexit:
                 msg("restarting: {0}", ' '.join(exec_arr))
 
@@ -1271,6 +1286,9 @@ class QuickServer(http_server.HTTPServer):
             performance. Worker results can be cached when providing a
             `cache_id` function.
 
+        object_path : string
+            The path to connect to the object interface.
+
         done : bool
             If set to True the server will terminate.
         """
@@ -1293,6 +1311,7 @@ class QuickServer(http_server.HTTPServer):
         self.verbose_workers = False
         self.no_command_loop = False
         self.cache = None
+        self.object_path = "/objects/"
         self.done = False
         self._parallel = parallel
         self._thread_factory = thread_factory
@@ -1318,6 +1337,7 @@ class QuickServer(http_server.HTTPServer):
         self._token_timings = []
         self._token_expire = 3600
         self._mirror = None
+        self._object_dispatch = None
 
     # request processing #
 
@@ -1881,7 +1901,6 @@ class QuickServer(http_server.HTTPServer):
                 "impl": "symlink",
             }
         if os.path.lexists(path_to):
-            print("remove")
             os.remove(path_to)
         os.symlink(path_from, path_to)
         return True
@@ -2353,6 +2372,107 @@ class QuickServer(http_server.HTTPServer):
                     ]
                     del self._token_map[token]
                 return {}
+
+    # objects #
+
+    def _init_object_dispatch(self):
+        if self._object_dispatch is not None:
+            return
+        self._object_dispatch = {}
+
+        def do_dispatch(query_obj, od, parent):
+            res = {}
+            for (curq, action) in query_obj.items():
+                if curq not in od:
+                    raise ValueError("unknown object name: '{0}'".format(curq))
+                atype = action["type"]
+                obj = od[curq]
+                otype = obj["type"]
+                if otype == "value":
+                    if atype == "set":
+                        obj["value"] = action["value"]
+                    elif atype != "get":
+                        raise ValueError("invalid action: '{0}'".format(atype))
+                    res[curq] = {
+                        "value": obj["value"],
+                    }
+                elif otype == "lazy_value":
+                    fun = obj["fun"]
+                    if atype == "set":
+                        res[curq] = {
+                            "value": fun(
+                                parent, set_value=True, value=action["value"]),
+                        }
+                    elif atype == "get":
+                        res[curq] = {
+                            "value": fun(parent),
+                        }
+                    else:
+                        raise ValueError("invalid action: '{0}'".format(atype))
+                elif otype == "lazy_map":
+                    fun = obj["fun"]
+                    if atype != "get":
+                        raise ValueError("invalid action: '{0}'".format(atype))
+                    cur_res = {}
+                    for (name, query) in action["queries"]:
+                        next_level = fun(parent, name)
+                        cur_res[name] = do_dispatch(
+                            query, obj["child"], next_level)
+                    res[curq] = {
+                        "map": cur_res,
+                    }
+                else:
+                    raise ValueError(
+                        "invalid object type: '{0}'".format(otype))
+            return res
+
+        def dispatch(args):
+            query_obj = args["query"]
+            od = self._object_dispatch
+            return do_dispatch(query_obj, od, {})
+
+        self.json_worker(self.object_path)(dispatch)
+
+    def _add_object_dispatch(self, path, otype, fun=None, value=None):
+        self._init_object_dispatch()
+        od = self._object_dispatch
+        cur_p = []
+        while len(path):
+            p = path.pop(0)
+            cur_p.append(p)
+            if p not in od:
+                if path:
+                    raise ValueError(
+                        "path prefix must exist: {0}".format(cur_p))
+                new_od = {
+                    "type": otype,
+                }
+                if otype == "value":
+                    new_od["value"] = value
+                elif otype == "lazy_value":
+                    if fun is None:
+                        raise ValueError("must set function")
+                    new_od["fun"] = fun
+                elif otype == "lazy_map":
+                    if fun is None:
+                        raise ValueError("must set function")
+                    new_od["fun"] = fun
+                    new_od["child"] = {}
+                else:
+                    raise ValueError(
+                        "invalid object type: '{0}'".format(otype))
+                od[p] = new_od
+            else:
+                od = od[p]["child"]
+
+    def add_value_object(self, path, default_value=None):
+        self._add_object_dispatch(path, "value", value=default_value)
+
+    def add_lazy_value_object(self, path, fun):
+        self._add_object_dispatch(path, "lazy_value", fun=fun)
+
+    def add_lazy_map_object(self, path, fun):
+        self._add_object_dispatch(path, "lazy_map", fun=fun)
 
     # miscellaneous #
 
