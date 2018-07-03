@@ -22,7 +22,7 @@ export const VERSION = "0.5.0";
 export class Worker {
   constructor() {
     window.addEventListener("beforeunload", () => {
-      Object.keys(tokens).forEach((ref) => {
+      Object.keys(this._tokens).forEach((ref) => {
         // we probably won't read the results but
         // the server still should cancel properly
         this.cancel(ref);
