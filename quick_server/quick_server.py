@@ -117,7 +117,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 
 def _getheader_fallback(obj, key):
@@ -202,7 +202,7 @@ def _caller_trace(frame):
 def caller_trace():  # pragma: no cover
     try:
         raise Exception
-    except:
+    except:  # nopep8
         try:
             frames = [sys.exc_info()[2].tb_frame]
             for _ in range(2):
@@ -210,6 +210,8 @@ def caller_trace():  # pragma: no cover
             return _caller_trace(frames[-1])
         finally:
             del frames
+
+
 if hasattr(sys, '_getframe'):
     def _caller_trace_gf():
         return _caller_trace(sys._getframe(2))
@@ -340,7 +342,7 @@ try:
     # >>> this won't work in python3 <<<
     # pylint: disable=E1101
     atexit._exithandlers.insert(0, (_on_exit, (), {}))
-except:
+except:  # nopep8
     # otherwise register normally
     atexit.register(_on_exit)
 
@@ -372,7 +374,7 @@ def _start_restart_loop(exit_code, in_atexit):
                         exec_arr, env=environ, close_fds=True).wait()
                 except KeyboardInterrupt:
                     child_code = _error_exit_code
-    except:
+    except:  # nopep8
         msg("error during restart:\n{0}", traceback.format_exc())
         child_code = _error_exit_code
     finally:
@@ -514,12 +516,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         end_boundary = boundary + b'--'
 
         def push_back(line):
-            l = BytesIO()
-            l.write(line)
-            l.flush()
-            l.seek(0)
+            ln = BytesIO()
+            ln.write(line)
+            ln.flush()
+            ln.seek(0)
             lens['clen'] += len(line)
-            lens['push'].append(l)
+            lens['push'].append(ln)
 
         def read_line():
             line = b''
@@ -684,7 +686,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         args = {}
         try:
             # POST can accept forms encoded in JSON
-            if method_str == 'POST':
+            if method_str in ['POST', 'DELETE', 'PUT']:
                 ctype = _getheader(self.headers, 'content-type')
                 crest = ""
                 if ';' in ctype:
@@ -928,7 +930,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 traceback.format_exc())
             try:
                 self.send_error(500, "Internal Error")
-            except:
+            except:  # nopep8
                 if self.server.can_ignore_error(self):
                     return
                 msg("ERROR: Cannot send error status code:\n{0}",
@@ -2298,7 +2300,7 @@ class QuickServer(http_server.HTTPServer):
                         "result": None,
                         "continue": True,
                     }
-                except:
+                except:  # nopep8
                     msg("Error processing worker command: {0}", post)
                     raise
 
