@@ -43,7 +43,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='quick_server',
-    version='0.5.1',
+    version='0.5.2',
     description='QuickServer is a quick to use and ' +
                 'easy to set up server implementation.',
     long_description=long_description,
@@ -62,7 +62,7 @@ setup(
     ],
     keywords='server REST file quick easy',
     packages=['quick_server'],
-    install_requires=[],
+    install_requires=['pyreadline; platform_system=="Windows"'],
     extras_require={
         'dev': [],
         'test': [],

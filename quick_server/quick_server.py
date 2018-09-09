@@ -43,7 +43,6 @@ import select
 import signal
 import socket
 import fnmatch
-import readline
 import posixpath
 import threading
 import traceback
@@ -72,6 +71,11 @@ try:
     from urllib.error import HTTPError
 except ImportError:
     from urllib2 import Request, urlopen, HTTPError
+
+try:
+    import readline
+except ImportError:
+    import pyreadline as readline
 
 try:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
@@ -117,7 +121,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 
 
 def _getheader_fallback(obj, key):
