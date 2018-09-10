@@ -121,7 +121,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 
 
 def _getheader_fallback(obj, key):
@@ -161,6 +161,8 @@ def json_dumps(obj):
     json_obj = json.loads(json_str)
 
     def do_map(obj):
+        if obj is None:
+            return None
         if isinstance(obj, basestring):
             return obj
         if isinstance(obj, dict):
