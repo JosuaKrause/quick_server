@@ -121,7 +121,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.5.3"
+__version__ = "0.5.4"
 
 
 def _getheader_fallback(obj, key):
@@ -427,7 +427,10 @@ class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and
        instead send a customized response.
     """
-    pass
+    def __init__(self, code=None, msg=None, *args, **kwargs):
+        Exception.__init__(self, *args, **kwargs)
+        self.code = code
+        self.msg = msg if msg else ""
 
 
 class WorkerDeath(Exception):
@@ -567,11 +570,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
             def write_buff(buff):
                 if f.tell() + len(buff) > self.server.max_file_size:
-                    self.send_error(
+                    raise PreventDefaultResponse(
                         413, "Uploaded file is too large! {0} > {1}".format(
-                            f.tell() + len(buff), self.server.max_file_size)
-                    )
-                    raise PreventDefaultResponse()
+                            f.tell() + len(buff), self.server.max_file_size))
                 f.write(buff)
                 f.flush()
 
@@ -777,8 +778,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 if word in (os.curdir, os.pardir):
                     continue
                 if word.startswith('.'):  # don't ever allow any hidden files
-                    self.send_error(404, "File not found")
-                    raise PreventDefaultResponse()
+                    raise PreventDefaultResponse(404, "File not found")
                 path = os.path.join(path, word)
             # make path absolute and check if it exists
             path = os.path.abspath(path)
@@ -803,8 +803,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 ))
                 self.send_to_proxy(pxya)  # raises PreventDefaultResponse
             msg("no matching folder alias: {0}".format(orig_path))
-            self.send_error(404, "File not found")
-            raise PreventDefaultResponse()
+            raise PreventDefaultResponse(404, "File not found")
         if os.path.isdir(path):
             if not is_folder:
                 needs_redirect = True
@@ -829,8 +828,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     is_white = False
                     break
         if not is_white:
-            self.send_error(404, "File not found")
-            raise PreventDefaultResponse()
+            raise PreventDefaultResponse(404, "File not found")
         # make sure to not accept any trickery to get away from the base path
         if not path.startswith(cur_base):
             raise ValueError("WARNING: attempt to access {0}".format(path))
@@ -991,8 +989,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         try:
             self.cross_origin_headers()
             self.handle_special(True, 'DELETE')
-        except PreventDefaultResponse:
-            pass
+        except PreventDefaultResponse as pdr:
+            if pdr.code:
+                self.send_error(pdr.code, pdr.msg)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
@@ -1010,8 +1009,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         try:
             self.cross_origin_headers()
             self.handle_special(True, 'PUT')
-        except PreventDefaultResponse:
-            pass
+        except PreventDefaultResponse as pdr:
+            if pdr.code:
+                self.send_error(pdr.code, pdr.msg)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
@@ -1029,8 +1029,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         try:
             self.cross_origin_headers()
             self.handle_special(True, 'POST')
-        except PreventDefaultResponse:
-            pass
+        except PreventDefaultResponse as pdr:
+            if pdr.code:
+                self.send_error(pdr.code, pdr.msg)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
@@ -1050,8 +1051,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if self.handle_special(True, 'GET'):
                 return
             SimpleHTTPRequestHandler.do_GET(self)
-        except PreventDefaultResponse:
-            pass
+        except PreventDefaultResponse as pdr:
+            if pdr.code:
+                self.send_error(pdr.code, pdr.msg)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
@@ -1071,8 +1073,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if self.handle_special(False, 'GET'):
                 return
             SimpleHTTPRequestHandler.do_HEAD(self)
-        except PreventDefaultResponse:
-            pass
+        except PreventDefaultResponse as pdr:
+            if pdr.code:
+                self.send_error(pdr.code, pdr.msg)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
