@@ -121,7 +121,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.5.4"
+__version__ = "0.5.5"
 
 
 def _getheader_fallback(obj, key):
@@ -2214,7 +2214,6 @@ class QuickServer(http_server.HTTPServer):
                         if tb is not None:
                             msg("Error in purged worker for {0}: {1}\n{2}",
                                 cur_key, e, tb)
-                            raise ValueError("proceeding from error")
                         return
                     msg("purged result that was never read ({0})", cur_key)
 
@@ -2286,9 +2285,11 @@ class QuickServer(http_server.HTTPServer):
                                     "result": None,
                                     "continue": False,
                                 }
+                            if isinstance(e, PreventDefaultResponse):
+                                raise e
                             msg("Error in worker for {0}: {1}\n{2}",
                                 cur_key, e, tb)
-                            raise ValueError("proceeding from error")
+                            raise PreventDefaultResponse(500, "worker error")
                         if len(result) > self.max_chunk_size:
                             cargo_keys = add_cargo(result)
                             return {

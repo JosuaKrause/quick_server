@@ -17,7 +17,7 @@ export const CONFIG = {
   // animation: ["/", "-", "\\", "|"],
   animationTime: 300,
 };
-export const VERSION = "0.5.4";
+export const VERSION = "0.5.5";
 
 export class Worker {
   constructor() {
@@ -92,7 +92,7 @@ export class Worker {
     }).then((data) => {
       if(data.status !== 200 || !data.ok) {
         console.warn("response not okay", data);
-        throw new Error("response not okay");
+        throw new Error(data.status + " " + data.statusText);
       }
       const ct = data.headers.get("content-type");
       if(ct && ct.includes("application/json")) {
