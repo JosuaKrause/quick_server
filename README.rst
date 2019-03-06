@@ -112,6 +112,8 @@ First, provide the necessary JavaScript file via
 .. code:: python
 
     server.link_worker_js('/js/worker.js')
+    
+(use ``server.link_legacy_worker_js('js/worker.js')`` if you are *not* using a transpiler)
 
 and load it on the client side:
 
