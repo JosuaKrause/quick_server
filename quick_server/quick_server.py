@@ -2006,6 +2006,29 @@ class QuickServer(http_server.HTTPServer):
             The path to mirror to.
         """
         self.mirror_file(path, 'worker.js', from_quick_server=True)
+        
+    def link_legacy_worker_js(self, mask):
+        """Links the legacy worker javascript.
+
+        Parameters
+        ----------
+        mask : string
+            The URL that must be matched to get the worker javascript.
+        """
+        self.add_special_file(mask,
+                              'worker.legacy.js',
+                              from_quick_server=True,
+                              ctype='application/javascript; charset=utf-8')
+
+    def mirror_legacy_worker_js(self, path):
+        """Mirrors the legacy worker javascript.
+
+        Parameters
+        ----------
+        path : string
+            The path to mirror to.
+        """
+        self.mirror_file(path, 'worker.legacy.js', from_quick_server=True)
 
     def json_worker(self, mask, cache_id=None, cache_method="string",
                     cache_section="www"):
