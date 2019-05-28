@@ -32,3 +32,6 @@ nosetests.xml
 
 # PyCharm
 .idea
+
+# MyPy
+.mypy_cache
