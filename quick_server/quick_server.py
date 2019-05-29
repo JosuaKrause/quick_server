@@ -61,7 +61,7 @@ try:
     import urlparse
     import urllib
     # pylint: disable=E1101
-    urlparse_unquote = urllib.unquote
+    urlparse_unquote = urllib.unquote  # type: ignore
 except ImportError:
     from urllib import parse as urlparse
     urlparse_unquote = urlparse.unquote
@@ -70,37 +70,37 @@ try:
     from urllib.request import Request, urlopen
     from urllib.error import HTTPError
 except ImportError:
-    from urllib2 import Request, urlopen, HTTPError
+    from urllib2 import Request, urlopen, HTTPError  # type: ignore
 
 try:
     import readline
 except ImportError:
-    import pyreadline as readline
+    import pyreadline as readline  # type: ignore
 
 try:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
     import BaseHTTPServer as http_server
 except ModuleNotFoundError:
     from http.server import SimpleHTTPRequestHandler
-    import http.server as http_server
+    import http.server as http_server  # type: ignore
 
 try:
     import SocketServer as socketserver
 except ModuleNotFoundError:
-    import socketserver
+    import socketserver  # type: ignore
 
 try:
-    input = raw_input
+    input = raw_input  # type: ignore
 except NameError:
     pass
 
 try:
-    unicode = unicode
+    unicode = unicode  # type: ignore
 except NameError:
     # python 3
-    str = str
+    str = str  # type: ignore
     unicode = str
-    bytes = bytes
+    bytes = bytes  # type: ignore
     basestring = (str, bytes)
 else:
     # python 2
@@ -121,7 +121,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.5.6"
+__version__ = "0.5.7"
 
 
 def _getheader_fallback(obj, key):
@@ -347,7 +347,7 @@ try:
     # the first in list ensures that all other exit handlers run before us
     # >>> this won't work in python3 <<<
     # pylint: disable=E1101
-    atexit._exithandlers.insert(0, (_on_exit, (), {}))
+    atexit._exithandlers.insert(0, (_on_exit, (), {}))  # type: ignore
 except:  # nopep8
     # otherwise register normally
     atexit.register(_on_exit)
@@ -2006,7 +2006,7 @@ class QuickServer(http_server.HTTPServer):
             The path to mirror to.
         """
         self.mirror_file(path, 'worker.js', from_quick_server=True)
-        
+
     def link_legacy_worker_js(self, mask):
         """Links the legacy worker javascript.
 
@@ -2233,10 +2233,10 @@ class QuickServer(http_server.HTTPServer):
                 finally:
                     _result, err = remove_worker(cur_key)
                     if err is not None:
-                        e, tb = err
+                        result, tb = err
                         if tb is not None:
                             msg("Error in purged worker for {0}: {1}\n{2}",
-                                cur_key, e, tb)
+                                cur_key, result, tb)
                         return
                     msg("purged result that was never read ({0})", cur_key)
 
@@ -2353,6 +2353,23 @@ class QuickServer(http_server.HTTPServer):
     def get_default_token_expiration(self):
         return self._token_expire
 
+    def _flush_old_tokens(self, now):
+        # NOTE: needs to have _token_lock
+        # _token_timings is keys sorted by time
+        first_valid = None
+        for (pos, k) in enumerate(self._token_timings):
+            t = self._token_map[k][0]
+            if t is None or t > now:
+                first_valid = pos
+                break
+        if first_valid is None:
+            self._token_map = {}
+            self._token_timings = []
+        else:
+            for k in self._token_timings[:first_valid]:
+                del self._token_map[k]
+            self._token_timings = self._token_timings[first_valid:]
+
     def get_token_obj(self, token, expire=_token_default):
         """Returns or creates the object associaten with the given token.
 
@@ -2375,20 +2392,7 @@ class QuickServer(http_server.HTTPServer):
         now = get_time()
         until = now + expire if expire is not None else None
         with self._token_lock:
-            # _token_timings is keys sorted by time
-            first_valid = None
-            for (pos, k) in enumerate(self._token_timings):
-                t = self._token_map[k][0]
-                if t is None or t > now:
-                    first_valid = pos
-                    break
-            if first_valid is None:
-                self._token_map = {}
-                self._token_timings = []
-            else:
-                for k in self._token_timings[:first_valid]:
-                    del self._token_map[k]
-                self._token_timings = self._token_timings[first_valid:]
+            self._flush_old_tokens(now)
             if until is None or until > now:
                 if token not in self._token_map:
                     self._token_map[token] = (until, {})
@@ -2407,6 +2411,12 @@ class QuickServer(http_server.HTTPServer):
                     ]
                     del self._token_map[token]
                 return {}
+
+    def get_tokens(self):
+        now = get_time()
+        with self._token_lock:
+            self._flush_old_tokens(now)
+            return list(self._token_map.keys())
 
     # objects #
 
