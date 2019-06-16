@@ -1202,6 +1202,79 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             thread_local.size = -1
 
 
+class TokenHandler():
+    def flush_old_tokens(self, now):
+        """Ensures that all expired tokens get removed."""
+        raise NotImplementedError()
+
+    def add_token(self, key, expire):
+        """Returns the content of a token and updates the expiration time
+           of the token. Unknown tokens get initialized.
+           `flush_old_tokens` is called immediately before this function.
+        """
+        raise NotImplementedError()
+
+    def delete_token(self, key):
+        """Deletes a token.
+           `flush_old_tokens` is called immediately before this function.
+        """
+        raise NotImplementedError()
+
+    def get_tokens(self):
+        """Returns a list of current tokens.
+           `flush_old_tokens` is called immediately before this function.
+        """
+        raise NotImplementedError()
+
+
+class DefaultTokenHandler(TokenHandler):
+    def __init__(self):
+        # _token_timings is keys sorted by time
+        self._token_map = {}
+        self._token_timings = []
+
+    def flush_old_tokens(self, now):
+        # NOTE: has _token_lock
+        first_valid = None
+        for (pos, k) in enumerate(self._token_timings):
+            t = self._token_map[k][0]
+            if t is None or t > now:
+                first_valid = pos
+                break
+        if first_valid is None:
+            self._token_map = {}
+            self._token_timings = []
+        else:
+            for k in self._token_timings[:first_valid]:
+                del self._token_map[k]
+            self._token_timings = self._token_timings[first_valid:]
+
+    def add_token(self, key, until):
+        # NOTE: has _token_lock
+        if key not in self._token_map:
+            self._token_map[key] = (until, {})
+            self._token_timings.append(key)
+        else:
+            self._token_map[key] = (key, self._token_map[key][1])
+        self._token_timings.sort(key=lambda k: (
+            1 if self._token_map[k][0] is None else 0,
+            self._token_map[k][0]
+        ))
+        return self._token_map[key][1]
+
+    def delete_token(self, key):
+        # NOTE: has _token_lock
+        if key in self._token_map:
+            self._token_timings = [
+                k for k in self._token_timings if k != key
+            ]
+            del self._token_map[key]
+
+    def get_tokens(self):
+        # NOTE: has _token_lock
+        return list(self._token_timings)
+
+
 class Response():
     def __init__(self, response, code=200, ctype=None):
         """Constructs a response."""
@@ -1220,7 +1293,8 @@ _token_default = "DEFAULT"
 
 
 class QuickServer(http_server.HTTPServer):
-    def __init__(self, server_address, parallel=True, thread_factory=None):
+    def __init__(self, server_address, parallel=True, thread_factory=None,
+                 token_constructor=None):
         """Creates a new QuickServer.
 
         Parameters
@@ -1233,6 +1307,9 @@ class QuickServer(http_server.HTTPServer):
 
         thread_factory : lambda *args
             A callback to create a thread or None to use the standard thread.
+
+        token_constructor : TokenHandler
+            Constructor that creates a TokenHandler. None for default handler.
 
         Attributes
         ----------
@@ -1344,8 +1421,9 @@ class QuickServer(http_server.HTTPServer):
         self._cmd_start = False
         self._clean_up_call = None
         self._token_lock = threading.Lock()
-        self._token_map = {}
-        self._token_timings = []
+        if token_constructor is None:
+            token_constructor = DefaultTokenHandler
+        self._token_handler = token_constructor()
         self._token_expire = 3600
         self._mirror = None
         self._object_dispatch = None
@@ -2353,23 +2431,6 @@ class QuickServer(http_server.HTTPServer):
     def get_default_token_expiration(self):
         return self._token_expire
 
-    def _flush_old_tokens(self, now):
-        # NOTE: needs to have _token_lock
-        # _token_timings is keys sorted by time
-        first_valid = None
-        for (pos, k) in enumerate(self._token_timings):
-            t = self._token_map[k][0]
-            if t is None or t > now:
-                first_valid = pos
-                break
-        if first_valid is None:
-            self._token_map = {}
-            self._token_timings = []
-        else:
-            for k in self._token_timings[:first_valid]:
-                del self._token_map[k]
-            self._token_timings = self._token_timings[first_valid:]
-
     def get_token_obj(self, token, expire=_token_default):
         """Returns or creates the object associaten with the given token.
 
@@ -2392,31 +2453,17 @@ class QuickServer(http_server.HTTPServer):
         now = get_time()
         until = now + expire if expire is not None else None
         with self._token_lock:
-            self._flush_old_tokens(now)
+            self._token_handler.flush_old_tokens(now)
             if until is None or until > now:
-                if token not in self._token_map:
-                    self._token_map[token] = (until, {})
-                    self._token_timings.append(token)
-                else:
-                    self._token_map[token] = (until, self._token_map[token][1])
-                self._token_timings.sort(key=lambda k: (
-                    1 if self._token_map[k][0] is None else 0,
-                    self._token_map[k][0]
-                ))
-                return self._token_map[token][1]
-            else:
-                if token in self._token_map:
-                    self._token_timings = [
-                        k for k in self._token_timings if k != token
-                    ]
-                    del self._token_map[token]
-                return {}
+                return self._token_handler.add_token(token, until)
+            self._token_handler.delete_token(token)
+            return {}
 
     def get_tokens(self):
         now = get_time()
         with self._token_lock:
-            self._flush_old_tokens(now)
-            return list(self._token_map.keys())
+            self._token_handler.flush_old_tokens(now)
+            return self._token_handler.get_tokens()
 
     # objects #
 
