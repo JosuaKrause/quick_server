@@ -469,11 +469,11 @@ def token_test():
         obj = qs.get_token_obj(name, expire)
         if live and "foo" not in obj:
             note("time: {0}", get_time())
-            note("{0}\n{1}", qs._token_timings, qs._token_map)
+            note("{0}", qs._token_handler)
             return fail("'{0}' expected to live: {1}", name, obj)
         elif not live and "foo" in obj:
             note("time: {0}", get_time())
-            note("{0}\n{1}", qs._token_timings, qs._token_map)
+            note("{0}", qs._token_handler)
             return fail("'{0}' should be cleared: {1}", name, obj)
         return True
 

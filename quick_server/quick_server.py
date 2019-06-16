@@ -1274,6 +1274,10 @@ class DefaultTokenHandler(TokenHandler):
         # NOTE: has _token_lock
         return list(self._token_timings)
 
+    def __str__(self):
+        return "{0}: {1}\n{2}".format(
+            self.__class__, self._token_timings, self._token_map)
+
 
 class BaseWorker():
     def __init__(self, mask, fun, msg, cache_id, cache, cache_method,
