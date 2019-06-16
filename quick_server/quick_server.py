@@ -1533,8 +1533,8 @@ class BaseWorker():
                 msg("Error in worker for {0}: {1}\n{2}",
                     cur_key, e, tb)
                 raise PreventDefaultResponse(500, "worker error")
-            if len(result) > self.max_chunk_size:
-                cargo_keys = add_cargo(result)
+            if len(result) > self._get_max_chunk_size():
+                cargo_keys = self.add_cargo(result)
                 return {
                     "token": cur_key,
                     "done": True,

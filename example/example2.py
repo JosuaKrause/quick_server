@@ -20,15 +20,22 @@ server.report_slow_requests = True
 server.link_worker_js('/js/worker.js')
 server.max_file_size = 78
 
+
+mcs = server.max_chunk_size
 start = clock()
+count_uptime = 0
+
+
 @server.json_get('/api/uptime/', 1)
 def uptime(req, args):
     global count_uptime
+
     # request has one mandatory additional path segment
     sleep(int(args["paths"][0]))
     count_uptime += 1
     res = {
-        "uptime": req.log_elapsed_time_string((clock() - start) * 1000.0).strip()
+        "uptime": req.log_elapsed_time_string(
+            (clock() - start) * 1000.0).strip(),
     }
 
     def convert(value):
@@ -38,8 +45,11 @@ def uptime(req, args):
             return value
 
     for (key, value) in args["query"].items():
-        res[key] = [ convert(v) for v in value.split(',') ] if ',' in value else convert(value)
+        res[key] = [
+            convert(v) for v in value.split(',')
+        ] if ',' in value else convert(value)
     return res
+
 
 @server.json_post('/api/upload')
 def upload_file(req, args):
@@ -62,6 +72,7 @@ def upload_file(req, args):
             ix += 1
     return res
 
+
 @server.json_worker('/api/uptime_worker')
 def uptime_worker(args):
     global count_uptime
@@ -72,7 +83,7 @@ def uptime_worker(args):
         "uptime": (clock() - start) * 1000.0
     }
 
-mcs = server.max_chunk_size
+
 @server.json_worker('/api/message')
 def message(args):
     if args["split"]:
@@ -82,16 +93,18 @@ def message(args):
     sleep(2)
     return "1234567890 the quick brown fox jumps over the lazy dog"
 
-def complete_requests(_args, text):
-  return [ "uptime" ] if "uptime".startswith(text) else []
 
-count_uptime = 0
+def complete_requests(_args, text):
+    return ["uptime"] if "uptime".startswith(text) else []
+
+
 @server.cmd(1, complete_requests)
 def requests(args):
     if args[0] != 'uptime':
         msg("unknown request: {0}", args[0])
     else:
         msg("requests made to {0}: {1}", args[0], count_uptime)
+
 
 msg("starting server at {0}:{1}", addr if addr else 'localhost', port)
 server.serve_forever()
