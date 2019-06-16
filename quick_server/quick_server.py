@@ -1309,11 +1309,25 @@ class BaseWorker():
             return not self._tasks[cur_key]["running"]
 
     def start_cargo_cleaner(self):
+
+        def clean():
+            while True:
+                next_ttl = self.get_next_cargo()
+                if next_ttl is None:
+                    if self.remove_cleaner():
+                        break
+                    else:
+                        continue
+                time_until = next_ttl - time.time()
+                if time_until > 0:
+                    time.sleep(time_until)
+                self.clean_for(time.time())
+
         with self._lock:
             if self._cargo_cleaner is not None:
                 return
             cleaner = self._thread_factory(
-                target=self.clean,
+                target=clean,
                 name="{0}-Cargo-Cleaner".format(self._name_prefix))
             cleaner.daemon = True
             self._cargo_cleaner = cleaner
@@ -1346,19 +1360,6 @@ class BaseWorker():
                 return False
             self._cargo_cleaner = None
             return True
-
-    def clean(self):
-        while True:
-            next_ttl = self.get_next_cargo()
-            if next_ttl is None:
-                if self.remove_cleaner():
-                    break
-                else:
-                    continue
-            time_until = next_ttl - time.time()
-            if time_until > 0:
-                time.sleep(time_until)
-            self.clean_for(time.time())
 
     def add_cargo(self, content):
         with self._lock:
@@ -1500,9 +1501,13 @@ class BaseWorker():
             cur_key = self.reserve_worker()
             inner_post = post.get("payload", {})
             th = []
+
+            def start_worker(*args):
+                self.start_worker(*args)
+
             wname = "{0}-Worker-{1}".format(self._name_prefix, cur_key)
             worker = self._thread_factory(
-                target=self.start_worker,
+                target=start_worker,
                 name=wname,
                 args=(inner_post, cur_key, lambda: th[0]))
             th.append(worker)
@@ -1534,8 +1539,7 @@ class BaseWorker():
                     }
                 if isinstance(e, PreventDefaultResponse):
                     raise e
-                msg("Error in worker for {0}: {1}\n{2}",
-                    cur_key, e, tb)
+                self._msg("Error in worker for {0}: {1}\n{2}", cur_key, e, tb)
                 raise PreventDefaultResponse(500, "worker error")
             if len(result) > self._get_max_chunk_size():
                 cargo_keys = self.add_cargo(result)
