@@ -53,7 +53,7 @@ try:
     BytesIO = StringIO
 except ModuleNotFoundError:
     from io import StringIO, BytesIO
-except ImportError:
+except ImportError:  # pragma: no cover
     from StringIO import StringIO
     BytesIO = StringIO
 
@@ -74,7 +74,7 @@ except ImportError:
 
 try:
     import readline
-except ImportError:
+except ImportError:  # pragma: no cover
     import pyreadline as readline  # type: ignore
 
 try:
@@ -1485,7 +1485,7 @@ class BaseWorker():
             self._tasks[cur_key] = {}  # put marker
             return cur_key
 
-    def handle_request(self, req, post):
+    def compute_worker(self, req, post):
         action = post["action"]
         cur_key = None
         if action == "stop":
@@ -2454,7 +2454,7 @@ class QuickServer(http_server.HTTPServer):
             def run_worker(req, args):
                 post = args["post"]
                 try:
-                    return worker.handle_request(req, post)
+                    return worker.compute_worker(req, post)
                 except:  # nopep8
                     worker.on_error(post)
                     raise
