@@ -1207,7 +1207,7 @@ class TokenHandler():
         """Ensures that all expired tokens get removed."""
         raise NotImplementedError()
 
-    def add_token(self, key, expire):
+    def add_token(self, key, until):
         """Returns the content of a token and updates the expiration time
            of the token. Unknown tokens get initialized.
            `flush_old_tokens` is called immediately before this function.
@@ -1255,7 +1255,7 @@ class DefaultTokenHandler(TokenHandler):
             self._token_map[key] = (until, {})
             self._token_timings.append(key)
         else:
-            self._token_map[key] = (key, self._token_map[key][1])
+            self._token_map[key] = (until, self._token_map[key][1])
         self._token_timings.sort(key=lambda k: (
             1 if self._token_map[k][0] is None else 0,
             self._token_map[k][0]
