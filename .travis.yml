@@ -11,6 +11,7 @@ install:
 script:
   - export PYTHON="python"
   - export QUICK_SERVER_DEBUG="1"
+  - export RUN_ATEXIT="1"
   - export COVERAGE_PROCESS_START=".coveragerc"
   - $PYTHON test/run.py
   - find quick_server example test -name '.coverage*' | while read i; do mv "$i" ".coverage.$(basename "$i")"; done

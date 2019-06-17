@@ -389,8 +389,17 @@ def _start_restart_loop(exit_code, in_atexit):
         msg("error during restart:\n{0}", traceback.format_exc())
         child_code = _error_exit_code
     finally:
-        if in_atexit and not os.environ.get('COVERAGE_PROCESS_START', None):
-            os._exit(child_code)
+        if in_atexit:
+            try:
+                if not os.environ.get('RUN_ATEXIT', None):
+                    for (fun, args, kwargs) in atexit._exithandlers:
+                        try:
+                            fun(*args, **kwargs)
+                        # pylint: disable=bare-except
+                        except:  # nopep8
+                            pass
+            finally:
+                os._exit(child_code)
         else:
             sys.exit(child_code)
 
