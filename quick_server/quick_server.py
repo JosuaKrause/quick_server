@@ -47,6 +47,7 @@ import posixpath
 import threading
 import traceback
 import collections
+import contextlib
 
 try:
     from cStringIO import StringIO
@@ -121,7 +122,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 
 def _getheader_fallback(obj, key):
@@ -142,11 +143,11 @@ _getheader = _getheader_p2
 
 def create_server(
         server_address, parallel=True, thread_factory=None,
-        token_constructor=None, worker_constructor=None,
+        token_handler=None, worker_constructor=None,
         soft_worker_death=False):
     """Creates the server."""
     return QuickServer(
-        server_address, parallel, thread_factory, token_constructor,
+        server_address, parallel, thread_factory, token_handler,
         worker_constructor, soft_worker_death)
 
 
@@ -1251,6 +1252,12 @@ class TokenHandler():
         """
         raise NotImplementedError()  # pragma: no cover
 
+    def put_token(self, key, obj):
+        """Writes the given content to the given key.
+           If the key does not exist the behavior is undefined.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
     def delete_token(self, key):
         """Deletes a token.
            `flush_old_tokens` is called immediately before this function.
@@ -1289,15 +1296,18 @@ class DefaultTokenHandler(TokenHandler):
     def add_token(self, key, until):
         # NOTE: has _token_lock
         if key not in self._token_map:
-            self._token_map[key] = (until, {})
+            self._token_map[key] = [until, {}]
             self._token_timings.append(key)
         else:
-            self._token_map[key] = (until, self._token_map[key][1])
+            self._token_map[key][0] = until
         self._token_timings.sort(key=lambda k: (
             1 if self._token_map[k][0] is None else 0,
             self._token_map[k][0]
         ))
         return self._token_map[key][1]
+
+    def put_token(self, key, obj):
+        self._token_map[key][1] = obj
 
     def delete_token(self, key):
         # NOTE: has _token_lock
@@ -1734,7 +1744,7 @@ _token_default = "DEFAULT"
 
 class QuickServer(http_server.HTTPServer):
     def __init__(self, server_address, parallel=True, thread_factory=None,
-                 token_constructor=None, worker_constructor=None,
+                 token_handler=None, worker_constructor=None,
                  soft_worker_death=False):
         """Creates a new QuickServer.
 
@@ -1749,8 +1759,8 @@ class QuickServer(http_server.HTTPServer):
         thread_factory : lambda *args
             A callback to create a thread or None to use the standard thread.
 
-        token_constructor : TokenHandler
-            Constructor that creates a TokenHandler. None for default handler.
+        token_handler : TokenHandler
+            The TokenHandler. None for default handler.
 
         worker_constructor : BaseWorker
             Constructor that creates a BaseWorker. None for default worker.
@@ -1875,9 +1885,9 @@ class QuickServer(http_server.HTTPServer):
         self._cmd_start = False
         self._clean_up_call = None
         self._token_lock = threading.Lock()
-        if token_constructor is None:
-            token_constructor = DefaultTokenHandler
-        self._token_handler = token_constructor()
+        if token_handler is None:
+            token_handler = DefaultTokenHandler()
+        self._token_handler = token_handler
         self._token_expire = 3600
         self._mirror = None
         self._object_dispatch = None
@@ -2627,8 +2637,13 @@ class QuickServer(http_server.HTTPServer):
     def get_default_token_expiration(self):
         return self._token_expire
 
-    def get_token_obj(self, token, expire=_token_default):
+    @contextlib.contextmanager
+    def get_token_obj(self, token, expire=_token_default, readonly=False):
         """Returns or creates the object associaten with the given token.
+           Must be used in a `with` block. After the block ends the content
+           is written back to the token object if the expiration is `None` or
+           in the future. Note that all changes need to be performed on the
+           original object.
 
         Parameters
         ----------
@@ -2643,20 +2658,36 @@ class QuickServer(http_server.HTTPServer):
             of the expired object is not freed until the next call of
             `get_token_obj`. An expiration of 0 or less immediately frees
             the memory of the token.
+
+        readonly : bool
+            If true all operations are performed on a copy and no writebacks
+            happen.
         """
         if expire == _token_default:
             expire = self.get_default_token_expiration()
-        now = get_time()
+        now = time.time()
         until = now + expire if expire is not None else None
-        with self._token_lock:
-            self._token_handler.flush_old_tokens(now)
-            if until is None or until > now:
-                return self._token_handler.add_token(token, until)
-            self._token_handler.delete_token(token)
-            return {}
+        write_back = False
+        try:
+            with self._token_lock:
+                self._token_handler.flush_old_tokens(now)
+                if until is None or until > now:
+                    res = self._token_handler.add_token(token, until)
+                    if readonly:
+                        res = res.copy()
+                    else:
+                        write_back = True
+                else:
+                    self._token_handler.delete_token(token)
+                    res = {}
+            yield res
+        finally:
+            if write_back:
+                with self._token_lock:
+                    self._token_handler.put_token(token, res)
 
     def get_tokens(self):
-        now = get_time()
+        now = time.time()
         with self._token_lock:
             self._token_handler.flush_old_tokens(now)
             return self._token_handler.get_tokens()

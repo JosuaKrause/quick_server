@@ -112,7 +112,7 @@ First, provide the necessary JavaScript file via
 .. code:: python
 
     server.link_worker_js('/js/worker.js')
-    
+
 (use ``server.link_legacy_worker_js('/js/worker.js')`` if you are *not* using a transpiler)
 
 and load it on the client side:
@@ -255,9 +255,9 @@ The server can now access (read / write) data associated with this token:
         # assuming the token-id was sent via post
         # expire can be the expiration time in seconds of a token,
         # None for no expiration, or be omitted for the default expiration (1h)
-        obj = server.get_token_obj(args['post']['token'], expire=None)
-        # do stuff with obj
-        # ...
+        with server.get_token_obj(args['post']['token'], expire=None) as obj:
+            # do stuff with obj
+            # ...
 
 CORS and proxying
 ~~~~~~~~~~~~~~~~~
