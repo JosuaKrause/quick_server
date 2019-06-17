@@ -2665,7 +2665,7 @@ class QuickServer(http_server.HTTPServer):
         """
         if expire == _token_default:
             expire = self.get_default_token_expiration()
-        now = get_time()
+        now = time.time()
         until = now + expire if expire is not None else None
         write_back = False
         try:
@@ -2687,7 +2687,7 @@ class QuickServer(http_server.HTTPServer):
                     self._token_handler.put_token(token, res)
 
     def get_tokens(self):
-        now = get_time()
+        now = time.time()
         with self._token_lock:
             self._token_handler.flush_old_tokens(now)
             return self._token_handler.get_tokens()
