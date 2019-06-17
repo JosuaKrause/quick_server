@@ -391,12 +391,7 @@ def _start_restart_loop(exit_code, in_atexit):
         if in_atexit:
             try:
                 if not os.environ.get('RUN_ATEXIT', None):
-                    for (fun, args, kwargs) in atexit._exithandlers:
-                        try:
-                            fun(*args, **kwargs)
-                        # pylint: disable=bare-except
-                        except:  # nopep8
-                            pass
+                    atexit._run_exitfuncs()
             finally:
                 os._exit(child_code)
         else:
