@@ -466,7 +466,7 @@ def token_test():
     note("time: {0}", get_time())
 
     def chk(name, expire, live):
-        with qs.get_token_obj(name, expire) as obj:
+        with qs.get_token_obj(name, expire, readonly=True) as obj:
             if live and "foo" not in obj:
                 note("time: {0}", get_time())
                 note("{0}", qs._token_handler)

@@ -2638,7 +2638,7 @@ class QuickServer(http_server.HTTPServer):
         return self._token_expire
 
     @contextlib.contextmanager
-    def get_token_obj(self, token, expire=_token_default):
+    def get_token_obj(self, token, expire=_token_default, readonly=False):
         """Returns or creates the object associaten with the given token.
            Must be used in a `with` block. After the block ends the content
            is written back to the token object if the expiration is `None` or
@@ -2658,6 +2658,10 @@ class QuickServer(http_server.HTTPServer):
             of the expired object is not freed until the next call of
             `get_token_obj`. An expiration of 0 or less immediately frees
             the memory of the token.
+
+        readonly : bool
+            If true all operations are performed on a copy and no writebacks
+            happen.
         """
         if expire == _token_default:
             expire = self.get_default_token_expiration()
@@ -2669,7 +2673,10 @@ class QuickServer(http_server.HTTPServer):
                 self._token_handler.flush_old_tokens(now)
                 if until is None or until > now:
                     res = self._token_handler.add_token(token, until)
-                    write_back = True
+                    if readonly:
+                        res = res.copy()
+                    else:
+                        write_back = True
                 else:
                     self._token_handler.delete_token(token)
                     res = {}
