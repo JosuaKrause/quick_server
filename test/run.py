@@ -3,6 +3,13 @@
 from __future__ import print_function
 from __future__ import division
 
+try:
+    import coverage
+    coverage.process_startup()
+# pylint: disable=bare-except
+except:  # nopep8
+    pass
+
 import os
 import sys
 import json
@@ -38,16 +45,6 @@ if len(sys.argv) > 1 and (sys.argv[1] == '-h' or sys.argv[1] == '--help'):
     print("usage: {0} [skip]".format(sys.argv[0]), file=sys.stderr)
     exit(1)
 SKIP = int(sys.argv[1]) if len(sys.argv) > 1 else 0
-PROCESS_COUNT = 0
-
-
-def get_env():
-    global PROCESS_COUNT
-
-    env = os.environ.copy()
-    env["COVERAGE_PROCESS_START"] = ".coverage.{0}".format(PROCESS_COUNT)
-    PROCESS_COUNT += 1
-    return env
 
 
 if hasattr(time, "monotonic"):
@@ -127,7 +124,7 @@ def check_stream(text, requireds, fails, name):
 def cmd_server_run(
         commands, required_out, fail_out, required_err, fail_err, exit_code=0):
     p = Popen(PYTHON + ["example.py"], cwd='../example',
-              stdin=PIPE, stdout=PIPE, stderr=PIPE, env=get_env())
+              stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = p.communicate(b'\n'.join(commands) + b'\nquit\n')
     output = output.decode('utf8')
     error = error.decode('utf8')
@@ -152,8 +149,7 @@ def access_curl(url, fields, required_out, fail_out, required_err, fail_err,
         call.append("-F")
         call.append(f)
     call.append(full_url)
-    p = Popen(call, cwd='../example',
-              stdin=PIPE, stdout=PIPE, stderr=PIPE, env=get_env())
+    p = Popen(call, cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = p.communicate()
     output = output.decode('utf8')
     error = error.decode('utf8')
@@ -175,7 +171,7 @@ def curl_server_run(probes, script="example.py"):
     done = False
     try:
         p = Popen(PYTHON + [script], cwd='../example',
-                  stdin=PIPE, stdout=PIPE, stderr=PIPE, env=get_env())
+                  stdin=PIPE, stdout=PIPE, stderr=PIPE)
         do_sleep(1)  # give the server some time to wake up
         for parr in probes:
             if not access_curl(*parr):
@@ -252,7 +248,7 @@ def url_server_run(probes, script="example.py"):
     done = False
     try:
         p = Popen(PYTHON + [script], cwd='../example',
-                  stdin=PIPE, stdout=PIPE, stderr=PIPE, env=get_env())
+                  stdin=PIPE, stdout=PIPE, stderr=PIPE)
         do_sleep(1)  # give the server some time to wake up
         for parr in probes:
             if not access_url(parr):
@@ -337,7 +333,7 @@ def worker_server_run(probes, script="example.py"):
     done = False
     try:
         p = Popen(PYTHON + [script], cwd='../example',
-                  stdin=PIPE, stdout=PIPE, stderr=PIPE, env=get_env())
+                  stdin=PIPE, stdout=PIPE, stderr=PIPE)
         do_sleep(1)  # give the server some time to wake up
         if not access_url(['js/worker.js', 200]):
             return False  # pragma: no cover
@@ -407,7 +403,7 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err,
     pr = None
     try:
         pr = Popen(PYTHON + [script], cwd='../example',
-                   stdin=PIPE, stdout=PIPE, stderr=PIPE, env=get_env())
+                   stdin=PIPE, stdout=PIPE, stderr=PIPE)
         # make pipes non-blocking
         flags = fcntl(pr.stdin, F_GETFL)
         fcntl(pr.stdin, F_SETFL, flags | os.O_NONBLOCK)
