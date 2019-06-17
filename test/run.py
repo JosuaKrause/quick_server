@@ -466,19 +466,21 @@ def token_test():
     note("time: {0}", get_time())
 
     def chk(name, expire, live):
-        obj = qs.get_token_obj(name, expire)
-        if live and "foo" not in obj:
-            note("time: {0}", get_time())
-            note("{0}", qs._token_handler)
-            return fail("'{0}' expected to live: {1}", name, obj)
-        elif not live and "foo" in obj:
-            note("time: {0}", get_time())
-            note("{0}", qs._token_handler)
-            return fail("'{0}' should be cleared: {1}", name, obj)
-        return True
+        with qs.get_token_obj(name, expire) as obj:
+            if live and "foo" not in obj:
+                note("time: {0}", get_time())
+                note("{0}", qs._token_handler)
+                return fail("'{0}' expected to live: {1}", name, obj)
+            elif not live and "foo" in obj:
+                note("time: {0}", get_time())
+                note("{0}", qs._token_handler)
+                return fail("'{0}' should be cleared: {1}", name, obj)
+            return True
 
-    qs.get_token_obj(tkn, 0.1)["foo"] = True
-    qs.get_token_obj("a", 0)["foo"] = True
+    with qs.get_token_obj(tkn, 0.1) as tmp:
+        tmp["foo"] = True
+    with qs.get_token_obj("a", 0) as tmp:
+        tmp["foo"] = True
     if not chk(tkn, 0.1, True):
         return False
     if not chk("a", 0, False):
@@ -486,7 +488,8 @@ def token_test():
     note("wait: {0}", get_time())
     do_sleep(0.2, ensure=True)
     note("time: {0}", get_time())
-    qs.get_token_obj("b", None)["foo"] = True
+    with qs.get_token_obj("b", None) as tmp:
+        tmp["foo"] = True
     if not chk(tkn, 0.1, False):
         return False
     if not chk("b", 0.1, True):
