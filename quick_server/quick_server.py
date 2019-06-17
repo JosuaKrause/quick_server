@@ -1744,7 +1744,7 @@ _token_default = "DEFAULT"
 
 class QuickServer(http_server.HTTPServer):
     def __init__(self, server_address, parallel=True, thread_factory=None,
-                 token_constructor=None, worker_constructor=None,
+                 token_handler=None, worker_constructor=None,
                  soft_worker_death=False):
         """Creates a new QuickServer.
 
