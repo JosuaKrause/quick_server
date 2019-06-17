@@ -1296,10 +1296,10 @@ class DefaultTokenHandler(TokenHandler):
     def add_token(self, key, until):
         # NOTE: has _token_lock
         if key not in self._token_map:
-            self._token_map[key] = (until, {})
+            self._token_map[key] = [until, {}]
             self._token_timings.append(key)
         else:
-            self._token_map[key] = (until, self._token_map[key][1])
+            self._token_map[key][0] = until
         self._token_timings.sort(key=lambda k: (
             1 if self._token_map[k][0] is None else 0,
             self._token_map[k][0]
