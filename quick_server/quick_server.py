@@ -1369,10 +1369,10 @@ class BaseWorker():
         """
         raise NotImplementedError()
 
-    def add_task(self, cur_key, th, soft_death):
+    def add_task(self, cur_key, get_thread, soft_death):
         """Marks a key as actually running. The thread executing the worker
-           is passed as argument. `soft_death` indicates whether an exception
-           should be thrown when canceling a worker.
+           can be retrieved via `get_thread`. `soft_death` indicates whether
+           an exception should be thrown when canceling a worker.
         """
         raise NotImplementedError()
 
@@ -1390,7 +1390,7 @@ class BaseWorker():
 
     def start_worker(self, args, cur_key, get_thread):
         try:
-            self.add_task(cur_key, get_thread(), self._soft_worker_death)
+            self.add_task(cur_key, get_thread, self._soft_worker_death)
             if self._use_cache:
                 cache_obj = self._cache_id(args)
                 if cache_obj is not None and self._cache is not None:
@@ -1625,13 +1625,13 @@ class DefaultWorker(BaseWorker):
                 cur_key = key
             return cur_key
 
-    def add_task(self, cur_key, th, soft_death):
+    def add_task(self, cur_key, get_thread, soft_death):
         with self._lock:
             task = {
                 "running": True,
                 "result": None,
                 "exception": None,
-                "thread": th,
+                "thread": get_thread(),
             }
             self._tasks[cur_key] = task
 
