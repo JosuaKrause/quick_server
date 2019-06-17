@@ -53,7 +53,7 @@ try:
     BytesIO = StringIO
 except ModuleNotFoundError:
     from io import StringIO, BytesIO
-except ImportError:
+except ImportError:  # pragma: no cover
     from StringIO import StringIO
     BytesIO = StringIO
 
@@ -74,7 +74,7 @@ except ImportError:
 
 try:
     import readline
-except ImportError:
+except ImportError:  # pragma: no cover
     import pyreadline as readline  # type: ignore
 
 try:
@@ -121,7 +121,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.5.7"
+__version__ = "0.6.0"
 
 
 def _getheader_fallback(obj, key):
@@ -140,9 +140,14 @@ def _getheader_p2(obj, key):
 _getheader = _getheader_p2
 
 
-def create_server(server_address, parallel=True, thread_factory=None):
+def create_server(
+        server_address, parallel=True, thread_factory=None,
+        token_constructor=None, worker_constructor=None,
+        soft_worker_death=False):
     """Creates the server."""
-    return QuickServer(server_address, parallel, thread_factory)
+    return QuickServer(
+        server_address, parallel, thread_factory, token_constructor,
+        worker_constructor, soft_worker_death)
 
 
 def json_dumps(obj):
@@ -328,8 +333,7 @@ _do_restart = False
 def _on_exit():  # pragma: no cover
     global _do_restart
     if _do_restart:
-        # just to make sure not come into an infinite loop if something breaks
-        # we reset the restart flag before we attempt to actually restart
+        # avoid potential infinite loop when running atexit handlers
         _do_restart = False
         exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
         if _restart_file is not None and exit_code is None:
@@ -385,7 +389,11 @@ def _start_restart_loop(exit_code, in_atexit):
         child_code = _error_exit_code
     finally:
         if in_atexit:
-            os._exit(child_code)
+            try:
+                if not os.environ.get('RUN_ATEXIT', None):
+                    atexit._run_exitfuncs()
+            finally:
+                os._exit(child_code)
         else:
             sys.exit(child_code)
 
@@ -423,6 +431,9 @@ def has_been_restarted():
     return os.environ.get('QUICK_SERVER_SUBSEQ', "0") == "1"
 
 
+PDR_MARK = "__pdr"
+
+
 class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and
        instead send a customized response.
@@ -435,6 +446,32 @@ class PreventDefaultResponse(Exception):
 
 class WorkerDeath(Exception):
     pass
+
+
+def kill_thread(th, cur_key, msg, is_verbose_workers):
+    if not th.is_alive():
+        return
+    # kill the thread
+    tid = None
+    for tk, tobj in threading._active.items():
+        if tobj is th:
+            tid = tk
+            break
+    if tid is not None:
+        papi = ctypes.pythonapi
+        pts_sae = papi.PyThreadState_SetAsyncExc
+        res = pts_sae(ctypes.c_long(tid), ctypes.py_object(WorkerDeath))
+        if res == 0:
+            # invalid thread id -- the thread might
+            # be done already
+            msg("invalid thread id for killing worker {0}", cur_key)
+        elif res != 1:
+            # roll back
+            pts_sae(ctypes.c_long(tid), None)
+            msg("killed too many ({0}) workers? {1}", res, cur_key)
+        else:
+            if is_verbose_workers():
+                msg("killed worker {0}", cur_key)
 
 
 class QuickServerRequestHandler(SimpleHTTPRequestHandler):
@@ -1202,6 +1239,482 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             thread_local.size = -1
 
 
+class TokenHandler():
+    def flush_old_tokens(self, now):
+        """Ensures that all expired tokens get removed."""
+        raise NotImplementedError()  # pragma: no cover
+
+    def add_token(self, key, until):
+        """Returns the content of a token and updates the expiration time
+           of the token. Unknown tokens get initialized.
+           `flush_old_tokens` is called immediately before this function.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+    def delete_token(self, key):
+        """Deletes a token.
+           `flush_old_tokens` is called immediately before this function.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+    def get_tokens(self):
+        """Returns a list of current tokens.
+           `flush_old_tokens` is called immediately before this function.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+
+class DefaultTokenHandler(TokenHandler):
+    def __init__(self):
+        # _token_timings is keys sorted by time
+        self._token_map = {}
+        self._token_timings = []
+
+    def flush_old_tokens(self, now):
+        # NOTE: has _token_lock
+        first_valid = None
+        for (pos, k) in enumerate(self._token_timings):
+            t = self._token_map[k][0]
+            if t is None or t > now:
+                first_valid = pos
+                break
+        if first_valid is None:
+            self._token_map = {}
+            self._token_timings = []
+        else:
+            for k in self._token_timings[:first_valid]:
+                del self._token_map[k]
+            self._token_timings = self._token_timings[first_valid:]
+
+    def add_token(self, key, until):
+        # NOTE: has _token_lock
+        if key not in self._token_map:
+            self._token_map[key] = (until, {})
+            self._token_timings.append(key)
+        else:
+            self._token_map[key] = (until, self._token_map[key][1])
+        self._token_timings.sort(key=lambda k: (
+            1 if self._token_map[k][0] is None else 0,
+            self._token_map[k][0]
+        ))
+        return self._token_map[key][1]
+
+    def delete_token(self, key):
+        # NOTE: has _token_lock
+        if key in self._token_map:
+            self._token_timings = [
+                k for k in self._token_timings if k != key
+            ]
+            del self._token_map[key]
+
+    def get_tokens(self):
+        # NOTE: has _token_lock
+        return list(self._token_timings)
+
+    def __str__(self):
+        return "{0}: {1}\n{2}".format(
+            self.__class__, self._token_timings, self._token_map)
+
+
+def is_worker_alive():
+    """Whether the current worker is still active and has not been cancelled.
+       This function needs to be called from the worker thread itself. It
+       will always return True otherwise.
+    """
+
+    def jupp():
+        return True
+
+    return getattr(thread_local, "worker_check", jupp)()
+
+
+class BaseWorker():
+    def __init__(self, mask, fun, msg, cache_id, cache, cache_method,
+                 cache_section, thread_factory, name_prefix,
+                 soft_worker_death, get_max_chunk_size, is_verbose_workers):
+        self._mask = mask
+        self._fun = fun
+        self._msg = msg
+        self._use_cache = cache_id is not None
+        self._cache_id = cache_id
+        self._cache = cache
+        self._cache_method = cache_method
+        self._cache_section = cache_section
+        self._thread_factory = thread_factory
+        self._name_prefix = name_prefix
+        self._soft_worker_death = soft_worker_death
+        self._get_max_chunk_size = get_max_chunk_size
+        self._is_verbose_workers = is_verbose_workers
+
+    def is_done(self, cur_key):
+        """Returns whether the task with the given key has finished."""
+        raise NotImplementedError()  # pragma: no cover
+
+    def add_cargo(self, content):
+        """Splits content into chunks and returns a list of keys to retrieve
+           them. This function also ensures that chunks get cleaned up after
+           10min of no reads. The size of the chunks is
+           `_get_max_chunk_size()`.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+    def remove_cargo(self, cur_key):
+        """Removes the cargo with the given key and returns its chunk content.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+    def remove_worker(self, cur_key):
+        """Removes the task with the given key and returns its result.
+           The result is a tuple `(result, exception)` where result is the
+           response if not None else exception is a tuple `(msg, trace)` where
+           msg is the message of the exception and trace is the formatted
+           stacktrace. In case of a PreventDefaultResponse exception the
+           message uses the `PDR_MARK` prefix and the status code after.
+           `trace` in this case is the message of the response.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+    def get_key(self):
+        """Creates a key that is currently not in use."""
+        raise NotImplementedError()  # pragma: no cover
+
+    def reserve_worker(self):
+        """Allocates a key via `get_key` and occupies the space until
+           `add_task` is called. The used key is returned.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+    def add_task(self, cur_key, get_thread, soft_death):
+        """Marks a key as actually running. The thread executing the worker
+           can be retrieved via `get_thread`. `soft_death` indicates whether
+           an exception should be thrown when canceling a worker.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+    def set_task_result(self, cur_key, result):
+        """Sets the result for the given task."""
+        raise NotImplementedError()  # pragma: no cover
+
+    def set_task_pdr(self, cur_key, p):
+        """Sets the prevent default response values for the given task."""
+        raise NotImplementedError()  # pragma: no cover
+
+    def set_task_err(self, cur_key, e):
+        """Sets the error for the given task."""
+        raise NotImplementedError()  # pragma: no cover
+
+    def remove_from_cancelled(self, cur_key):
+        """Removes the cancelation indicator of the key if the task was
+           previously cancelled.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
+    def start_worker(self, args, cur_key, get_thread):
+        try:
+            self.add_task(cur_key, get_thread, self._soft_worker_death)
+            if self._use_cache:
+                cache_obj = self._cache_id(args)
+                if cache_obj is not None and self._cache is not None:
+                    with self._cache.get_hnd(
+                            cache_obj,
+                            section=self._cache_section,
+                            method=self._cache_method) as hnd:
+                        if hnd.has():
+                            result = hnd.read()
+                        else:
+                            result = hnd.write(json_dumps(self._fun(args)))
+                else:
+                    result = json_dumps(self._fun(args))
+            else:
+                result = json_dumps(self._fun(args))
+            self.set_task_result(cur_key, result)
+        except (KeyboardInterrupt, SystemExit):
+            self.remove_worker(cur_key)  # remove key
+            raise
+        except PreventDefaultResponse as p:
+            self.set_task_pdr(cur_key, p)
+        except Exception as e:
+            self.set_task_err(cur_key, e)
+        finally:
+            self.remove_from_cancelled(cur_key)
+        # make sure the result does not get stored forever
+        try:
+            # remove 2 minutes after not reading the result
+            time.sleep(120)
+        finally:
+            _result, err = self.remove_worker(cur_key)
+            if err is not None:
+                result, tb = err
+                if tb is not None:
+                    self._msg("Error in purged worker for {0}: {1}\n{2}",
+                              cur_key, result, tb)
+                return
+            self._msg("purged result that was never read ({0})", cur_key)
+
+    def compute_worker(self, req, post):
+        action = post["action"]
+        cur_key = None
+        if action == "stop":
+            cur_key = post["token"]
+            self.remove_worker(cur_key)  # throw away the result
+            return {
+                "token": cur_key,
+                "done": True,
+                "result": None,
+                "continue": False,
+            }
+        if action == "start":
+            cur_key = self.reserve_worker()
+            inner_post = post.get("payload", {})
+            th = []
+
+            def start_worker(*args):
+                self.start_worker(*args)
+
+            wname = "{0}-Worker-{1}".format(self._name_prefix, cur_key)
+            worker = self._thread_factory(
+                target=start_worker,
+                name=wname,
+                args=(inner_post, cur_key, lambda: th[0]))
+            th.append(worker)
+            worker.start()
+            # give fast tasks a way to immediately return results
+            time.sleep(0.1)
+        if action == "cargo":
+            cur_key = post["token"]
+            result = self.remove_cargo(cur_key)
+            return {
+                "token": cur_key,
+                "result": result,
+            }
+        if action == "get":
+            cur_key = post["token"]
+        if cur_key is None:
+            raise ValueError("invalid action: {0}".format(action))
+        if self.is_done(cur_key):
+            result, exception = self.remove_worker(cur_key)
+            if exception is not None:
+                err, tb = exception
+                if tb is None:
+                    # token does not exist anymore
+                    return {
+                        "token": cur_key,
+                        "done": False,
+                        "result": None,
+                        "continue": False,
+                    }
+                if err.startswith(PDR_MARK):
+                    # e encodes code, tb encodes message
+                    raise PreventDefaultResponse(int(err[len(PDR_MARK):]), tb)
+                self._msg(
+                    "Error in worker for {0}: {1}\n{2}", cur_key, err, tb)
+                raise PreventDefaultResponse(500, "worker error")
+            if len(result) > self._get_max_chunk_size():
+                cargo_keys = self.add_cargo(result)
+                return {
+                    "token": cur_key,
+                    "done": True,
+                    "result": cargo_keys,
+                    "continue": True,
+                }
+            return {
+                "token": cur_key,
+                "done": True,
+                "result": result,
+                "continue": False,
+            }
+        return {
+            "token": cur_key,
+            "done": False,
+            "result": None,
+            "continue": True,
+        }
+
+    def on_error(self, post):
+        self._msg("Error processing worker command: {0}", post)
+
+
+class DefaultWorker(BaseWorker):
+    def __init__(self, *args, **kwargs):
+        BaseWorker.__init__(self, *args, **kwargs)
+        self._lock = threading.RLock()
+        self._tasks = {}
+        self._cargo = {}
+        self._cargo_cleaner = None
+        self._cancelled = set()
+
+    def remove_from_cancelled(self, cur_key):
+        with self._lock:
+            if cur_key in self._cancelled:
+                self._cancelled.remove(cur_key)
+
+    def is_cancelled(self, cur_key):
+        with self._lock:
+            return cur_key in self._cancelled
+
+    def start_cargo_cleaner(self):
+
+        def clean():
+            while True:
+                next_ttl = self.get_next_cargo()
+                if next_ttl is None:
+                    if self.remove_cleaner():
+                        break
+                    else:
+                        continue
+                time_until = next_ttl - time.time()
+                if time_until > 0:
+                    time.sleep(time_until)
+                self.clean_for(time.time())
+
+        with self._lock:
+            if self._cargo_cleaner is not None:
+                return
+            cleaner = self._thread_factory(
+                target=clean,
+                name="{0}-Cargo-Cleaner".format(self._name_prefix))
+            cleaner.daemon = True
+            self._cargo_cleaner = cleaner
+            cleaner.start()
+
+    def get_next_cargo(self):
+        with self._lock:
+            next_ttl = None
+            for value in self._cargo.values():
+                ttl, _ = value
+                if next_ttl is None or ttl < next_ttl:
+                    next_ttl = ttl
+            return next_ttl
+
+    def clean_for(self, timestamp):
+        with self._lock:
+            keys = []
+            for (key, value) in self._cargo.items():
+                ttl, _ = value
+                if ttl > timestamp:
+                    continue
+                keys.append(key)
+            for k in keys:
+                self._cargo.pop(k)
+                self._msg("purged cargo that was never read ({0})", k)
+
+    def remove_cleaner(self):
+        with self._lock:
+            if self.get_next_cargo() is not None:
+                return False
+            self._cargo_cleaner = None
+            return True
+
+    def add_cargo(self, content):
+        with self._lock:
+            mcs = self._get_max_chunk_size()
+            if mcs < 1:
+                raise ValueError("invalid chunk size: {0}".format(mcs))
+            ttl = time.time() + 10 * 60  # 10 minutes
+            chunks = []
+            while len(content) > 0:
+                chunk = content[:mcs]
+                content = content[mcs:]
+                cur_key = self.get_key()
+                self._cargo[cur_key] = (ttl, chunk)
+                chunks.append(cur_key)
+            self.start_cargo_cleaner()
+            return chunks
+
+    def remove_cargo(self, cur_key):
+        with self._lock:
+            _, result = self._cargo.pop(cur_key)
+            return result
+
+    def remove_worker(self, cur_key):
+        with self._lock:
+            task = self._tasks.pop(cur_key, None)
+            if task is None:
+                err_msg = "Error: Task {0} not found!".format(cur_key)
+                return None, (err_msg, None)
+            if task["running"]:
+                th = task["thread"]
+                err_msg = "Error: Task {0} is still running!".format(cur_key)
+                if th is not None:
+                    kill_thread(
+                        th, cur_key, self._msg, self._is_verbose_workers)
+                else:
+                    self._cancelled.add(cur_key)
+                return None, (err_msg, None)
+            return task["result"], task["exception"]
+
+    def is_done(self, cur_key):
+        with self._lock:
+            if cur_key not in self._tasks or self.is_cancelled(cur_key):
+                return True
+            if "running" not in self._tasks[cur_key]:
+                return False
+            return not self._tasks[cur_key]["running"]
+
+    def get_key(self):
+        with self._lock:
+            crc32 = zlib.crc32(repr(get_time()).encode('utf8'))
+            cur_key = int(crc32 & 0xFFFFFFFF)
+
+            def exists_somewhere(key):
+                return key in self._tasks \
+                    or key in self._cargo \
+                    or key in self._cancelled
+
+            while exists_somewhere(cur_key):
+                key = int(cur_key + 1)
+                if key == cur_key:
+                    key = 0
+                cur_key = key
+            return cur_key
+
+    def add_task(self, cur_key, get_thread, soft_death):
+        with self._lock:
+            task = {
+                "running": True,
+                "result": None,
+                "exception": None,
+                "thread": get_thread() if not soft_death else None,
+            }
+            if soft_death:
+
+                def worker_check():
+                    return not self.is_cancelled(cur_key)
+
+                thread_local.worker_check = worker_check
+            self._tasks[cur_key] = task
+
+    def set_task_result(self, cur_key, result):
+        with self._lock:
+            if cur_key not in self._tasks or self.is_cancelled(cur_key):
+                return
+            task = self._tasks[cur_key]
+            task["running"] = False
+            task["result"] = result
+
+    def set_task_pdr(self, cur_key, p):
+        with self._lock:
+            if cur_key not in self._tasks or self.is_cancelled(cur_key):
+                return
+            task = self._tasks[cur_key]
+            task["running"] = False
+            task["exception"] = ("{0}{1}".format(PDR_MARK, p.code), p.msg)
+
+    def set_task_err(self, cur_key, e):
+        with self._lock:
+            if cur_key not in self._tasks or self.is_cancelled(cur_key):
+                return
+            task = self._tasks[cur_key]
+            task["running"] = False
+            task["exception"] = ("{0}".format(e), traceback.format_exc())
+
+    def reserve_worker(self):
+        with self._lock:
+            cur_key = self.get_key()
+            self._tasks[cur_key] = {}  # put marker
+            return cur_key
+
+
 class Response():
     def __init__(self, response, code=200, ctype=None):
         """Constructs a response."""
@@ -1220,7 +1733,9 @@ _token_default = "DEFAULT"
 
 
 class QuickServer(http_server.HTTPServer):
-    def __init__(self, server_address, parallel=True, thread_factory=None):
+    def __init__(self, server_address, parallel=True, thread_factory=None,
+                 token_constructor=None, worker_constructor=None,
+                 soft_worker_death=False):
         """Creates a new QuickServer.
 
         Parameters
@@ -1233,6 +1748,16 @@ class QuickServer(http_server.HTTPServer):
 
         thread_factory : lambda *args
             A callback to create a thread or None to use the standard thread.
+
+        token_constructor : TokenHandler
+            Constructor that creates a TokenHandler. None for default handler.
+
+        worker_constructor : BaseWorker
+            Constructor that creates a BaseWorker. None for default worker.
+
+        soft_worker_death : bool
+            Whether killing a worker should be handled through polling (true)
+            or via exception (false; default)
 
         Attributes
         ----------
@@ -1325,12 +1850,18 @@ class QuickServer(http_server.HTTPServer):
         self.object_path = "/objects/"
         self.done = False
         self._parallel = parallel
-        self._thread_factory = thread_factory
-        if self._thread_factory is None:
+        if thread_factory is None:
             def _thread_factory_impl(*args, **kwargs):
                 return threading.Thread(*args, **kwargs)
 
             self._thread_factory = _thread_factory_impl
+        else:
+            self._thread_factory = thread_factory
+        if worker_constructor is None:
+            self._worker_constructor = DefaultWorker
+        else:
+            self._worker_constructor = worker_constructor
+        self._soft_worker_death = soft_worker_death
         self._folder_masks = []
         self._folder_proxys = []
         self._f_mask = {}
@@ -1344,8 +1875,9 @@ class QuickServer(http_server.HTTPServer):
         self._cmd_start = False
         self._clean_up_call = None
         self._token_lock = threading.Lock()
-        self._token_map = {}
-        self._token_timings = []
+        if token_constructor is None:
+            token_constructor = DefaultTokenHandler
+        self._token_handler = token_constructor()
         self._token_expire = 3600
         self._mirror = None
         self._object_dispatch = None
@@ -2064,277 +2596,19 @@ class QuickServer(http_server.HTTPServer):
             argument which is the dictionary containing the payload from the
             client side. If the result is None a 404 error is sent.
         """
-        use_cache = cache_id is not None
-
         def wrapper(fun):
-            lock = threading.RLock()
-            tasks = {}
-            cargo = {}
-            cargo_cleaner = [None]
-
-            def is_done(cur_key):
-                with lock:
-                    if cur_key not in tasks:
-                        return True
-                    if "running" not in tasks[cur_key]:
-                        return False
-                    return not tasks[cur_key]["running"]
-
-            def start_cargo_cleaner():
-
-                def get_next_cargo():
-                    with lock:
-                        next_ttl = None
-                        for value in cargo.values():
-                            ttl, _ = value
-                            if next_ttl is None or ttl < next_ttl:
-                                next_ttl = ttl
-                        return next_ttl
-
-                def clean_for(timestamp):
-                    with lock:
-                        keys = []
-                        for (key, value) in cargo.items():
-                            ttl, _ = value
-                            if ttl > timestamp:
-                                continue
-                            keys.append(key)
-                        for k in keys:
-                            cargo.pop(k)
-                            msg("purged cargo that was never read ({0})", k)
-
-                def remove_cleaner():
-                    with lock:
-                        if get_next_cargo() is not None:
-                            return False
-                        cargo_cleaner[0] = None
-                        return True
-
-                def clean():
-                    while True:
-                        next_ttl = get_next_cargo()
-                        if next_ttl is None:
-                            if remove_cleaner():
-                                break
-                            else:
-                                continue
-                        time_until = next_ttl - time.time()
-                        if time_until > 0:
-                            time.sleep(time_until)
-                        clean_for(time.time())
-
-                with lock:
-                    if cargo_cleaner[0] is not None:
-                        return
-                    cleaner = self._thread_factory(
-                        target=clean,
-                        name="{0}-Cargo-Cleaner".format(self.__class__))
-                    cleaner.daemon = True
-                    cargo_cleaner[0] = cleaner
-                    cleaner.start()
-
-            def add_cargo(content):
-                with lock:
-                    mcs = self.max_chunk_size
-                    if mcs < 1:
-                        raise ValueError("invalid chunk size: {0}".format(mcs))
-                    ttl = time.time() + 10 * 60  # 10 minutes
-                    chunks = []
-                    while len(content) > 0:
-                        chunk = content[:mcs]
-                        content = content[mcs:]
-                        cur_key = get_key()
-                        cargo[cur_key] = (ttl, chunk)
-                        chunks.append(cur_key)
-                    start_cargo_cleaner()
-                    return chunks
-
-            def remove_cargo(cur_key):
-                with lock:
-                    _, result = cargo.pop(cur_key)
-                    return result
-
-            def remove_worker(cur_key):
-                with lock:
-                    task = tasks.pop(cur_key, None)
-                    if task is None:
-                        err_msg = "Task {0} not found!".format(cur_key)
-                        return None, (ValueError(err_msg), None)
-                    if task["running"]:
-                        th = task["thread"]
-                        if th.is_alive():
-                            # kill the thread
-                            tid = None
-                            for tk, tobj in threading._active.items():
-                                if tobj is th:
-                                    tid = tk
-                                    break
-                            if tid is not None:
-                                papi = ctypes.pythonapi
-                                pts_sae = papi.PyThreadState_SetAsyncExc
-                                res = pts_sae(ctypes.c_long(tid),
-                                              ctypes.py_object(WorkerDeath))
-                                if res == 0:
-                                    # invalid thread id -- the thread might
-                                    # be done already
-                                    msg("invalid thread id for " +
-                                        "killing worker {0}", cur_key)
-                                elif res != 1:
-                                    # roll back
-                                    pts_sae(ctypes.c_long(tid), None)
-                                    msg("killed too many ({0}) workers? {1}",
-                                        res, cur_key)
-                                else:
-                                    if self.verbose_workers:
-                                        msg("killed worker {0}", cur_key)
-                        err_msg = "Task {0} is still running!".format(cur_key)
-                        return None, (ValueError(err_msg), None)
-                    return task["result"], task["exception"]
-
-            def start_worker(args, cur_key, get_thread):
-                try:
-                    with lock:
-                        task = {
-                            "running": True,
-                            "result": None,
-                            "exception": None,
-                            "thread": get_thread(),
-                        }
-                        tasks[cur_key] = task
-                    if use_cache:
-                        cache_obj = cache_id(args)
-                        if cache_obj is not None and self.cache is not None:
-                            with self.cache.get_hnd(
-                                    cache_obj,
-                                    section=cache_section,
-                                    method=cache_method) as hnd:
-                                if hnd.has():
-                                    result = hnd.read()
-                                else:
-                                    result = hnd.write(json_dumps(fun(args)))
-                        else:
-                            result = json_dumps(fun(args))
-                    else:
-                        result = json_dumps(fun(args))
-                    with lock:
-                        task["running"] = False
-                        task["result"] = result
-                except (KeyboardInterrupt, SystemExit):
-                    raise
-                except Exception as e:
-                    with lock:
-                        task["running"] = False
-                        task["exception"] = (e, traceback.format_exc())
-                    return
-                # make sure the result does not get stored forever
-                try:
-                    # remove 2 minutes after not reading the result
-                    time.sleep(120)
-                finally:
-                    _result, err = remove_worker(cur_key)
-                    if err is not None:
-                        result, tb = err
-                        if tb is not None:
-                            msg("Error in purged worker for {0}: {1}\n{2}",
-                                cur_key, result, tb)
-                        return
-                    msg("purged result that was never read ({0})", cur_key)
-
-            def get_key():
-                with lock:
-                    crc32 = zlib.crc32(repr(get_time()).encode('utf8'))
-                    cur_key = int(crc32 & 0xFFFFFFFF)
-                    while cur_key in tasks or cur_key in cargo:
-                        key = int(cur_key + 1)
-                        if key == cur_key:
-                            key = 0
-                        cur_key = key
-                    return cur_key
-
-            def reserve_worker():
-                with lock:
-                    cur_key = get_key()
-                    tasks[cur_key] = {}  # put marker
-                    return cur_key
+            worker = self._worker_constructor(
+                mask, fun, msg, cache_id, self.cache, cache_method,
+                cache_section, self._thread_factory, self.__class__,
+                self._soft_worker_death, lambda: self.max_chunk_size,
+                lambda: self.verbose_workers)
 
             def run_worker(req, args):
                 post = args["post"]
                 try:
-                    action = post["action"]
-                    cur_key = None
-                    if action == "stop":
-                        cur_key = post["token"]
-                        remove_worker(cur_key)  # throw away the result
-                        return {
-                            "token": cur_key,
-                            "done": True,
-                            "result": None,
-                            "continue": False,
-                        }
-                    if action == "start":
-                        cur_key = reserve_worker()
-                        inner_post = post.get("payload", {})
-                        th = []
-                        wname = "{0}-Worker-{1}".format(self.__class__,
-                                                        cur_key)
-                        worker = self._thread_factory(
-                            target=start_worker,
-                            name=wname,
-                            args=(inner_post, cur_key, lambda: th[0]))
-                        th.append(worker)
-                        worker.start()
-                        # give fast tasks a way to immediately return results
-                        time.sleep(0.1)
-                    if action == "cargo":
-                        cur_key = post["token"]
-                        result = remove_cargo(cur_key)
-                        return {
-                            "token": cur_key,
-                            "result": result,
-                        }
-                    if action == "get":
-                        cur_key = post["token"]
-                    if cur_key is None:
-                        raise ValueError("invalid action: {0}".format(action))
-                    if is_done(cur_key):
-                        result, exception = remove_worker(cur_key)
-                        if exception is not None:
-                            e, tb = exception
-                            if tb is None:
-                                # token does not exist anymore
-                                return {
-                                    "token": cur_key,
-                                    "done": False,
-                                    "result": None,
-                                    "continue": False,
-                                }
-                            if isinstance(e, PreventDefaultResponse):
-                                raise e
-                            msg("Error in worker for {0}: {1}\n{2}",
-                                cur_key, e, tb)
-                            raise PreventDefaultResponse(500, "worker error")
-                        if len(result) > self.max_chunk_size:
-                            cargo_keys = add_cargo(result)
-                            return {
-                                "token": cur_key,
-                                "done": True,
-                                "result": cargo_keys,
-                                "continue": True,
-                            }
-                        return {
-                            "token": cur_key,
-                            "done": True,
-                            "result": result,
-                            "continue": False,
-                        }
-                    return {
-                        "token": cur_key,
-                        "done": False,
-                        "result": None,
-                        "continue": True,
-                    }
+                    return worker.compute_worker(req, post)
                 except:  # nopep8
-                    msg("Error processing worker command: {0}", post)
+                    worker.on_error(post)
                     raise
 
             self.add_json_post_mask(mask, run_worker)
@@ -2352,23 +2626,6 @@ class QuickServer(http_server.HTTPServer):
 
     def get_default_token_expiration(self):
         return self._token_expire
-
-    def _flush_old_tokens(self, now):
-        # NOTE: needs to have _token_lock
-        # _token_timings is keys sorted by time
-        first_valid = None
-        for (pos, k) in enumerate(self._token_timings):
-            t = self._token_map[k][0]
-            if t is None or t > now:
-                first_valid = pos
-                break
-        if first_valid is None:
-            self._token_map = {}
-            self._token_timings = []
-        else:
-            for k in self._token_timings[:first_valid]:
-                del self._token_map[k]
-            self._token_timings = self._token_timings[first_valid:]
 
     def get_token_obj(self, token, expire=_token_default):
         """Returns or creates the object associaten with the given token.
@@ -2392,31 +2649,17 @@ class QuickServer(http_server.HTTPServer):
         now = get_time()
         until = now + expire if expire is not None else None
         with self._token_lock:
-            self._flush_old_tokens(now)
+            self._token_handler.flush_old_tokens(now)
             if until is None or until > now:
-                if token not in self._token_map:
-                    self._token_map[token] = (until, {})
-                    self._token_timings.append(token)
-                else:
-                    self._token_map[token] = (until, self._token_map[token][1])
-                self._token_timings.sort(key=lambda k: (
-                    1 if self._token_map[k][0] is None else 0,
-                    self._token_map[k][0]
-                ))
-                return self._token_map[token][1]
-            else:
-                if token in self._token_map:
-                    self._token_timings = [
-                        k for k in self._token_timings if k != token
-                    ]
-                    del self._token_map[token]
-                return {}
+                return self._token_handler.add_token(token, until)
+            self._token_handler.delete_token(token)
+            return {}
 
     def get_tokens(self):
         now = get_time()
         with self._token_lock:
-            self._flush_old_tokens(now)
-            return list(self._token_map.keys())
+            self._token_handler.flush_old_tokens(now)
+            return self._token_handler.get_tokens()
 
     # objects #
 

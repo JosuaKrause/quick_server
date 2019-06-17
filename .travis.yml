@@ -9,8 +9,11 @@ install:
   - pip install coverage
   - pip install -e .
 script:
-  - export PYTHON="coverage run --parallel-mode"
+  - export PYTHON="python"
   - export QUICK_SERVER_DEBUG="1"
+  - export RUN_ATEXIT="1"
+  - export COVERAGE_PROCESS_START="$(pwd)/.coveragerc"
+  - mv test/cov.py sitecustomize.py
   - $PYTHON test/run.py
   - find quick_server example test -name '.coverage*' | while read i; do mv "$i" ".coverage.$(basename "$i")"; done
   - coverage combine
