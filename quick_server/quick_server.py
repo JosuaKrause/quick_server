@@ -389,7 +389,7 @@ def _start_restart_loop(exit_code, in_atexit):
         msg("error during restart:\n{0}", traceback.format_exc())
         child_code = _error_exit_code
     finally:
-        if in_atexit:
+        if in_atexit and not os.environ.get('COVERAGE_PROCESS_START', None):
             os._exit(child_code)
         else:
             sys.exit(child_code)
