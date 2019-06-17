@@ -333,8 +333,7 @@ _do_restart = False
 def _on_exit():  # pragma: no cover
     global _do_restart
     if _do_restart:
-        # just to make sure not come into an infinite loop if something breaks
-        # we reset the restart flag before we attempt to actually restart
+        # avoid potential infinite loop when running atexit handlers
         _do_restart = False
         exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
         if _restart_file is not None and exit_code is None:
