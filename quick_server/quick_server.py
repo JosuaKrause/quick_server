@@ -423,6 +423,9 @@ def has_been_restarted():
     return os.environ.get('QUICK_SERVER_SUBSEQ', "0") == "1"
 
 
+PDR_MARK = "__pdr"
+
+
 class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and
        instead send a customized response.
@@ -435,6 +438,32 @@ class PreventDefaultResponse(Exception):
 
 class WorkerDeath(Exception):
     pass
+
+
+def kill_thread(th, cur_key, msg, is_verbose_workers):
+    if not th.is_alive():
+        return
+    # kill the thread
+    tid = None
+    for tk, tobj in threading._active.items():
+        if tobj is th:
+            tid = tk
+            break
+    if tid is not None:
+        papi = ctypes.pythonapi
+        pts_sae = papi.PyThreadState_SetAsyncExc
+        res = pts_sae(ctypes.c_long(tid), ctypes.py_object(WorkerDeath))
+        if res == 0:
+            # invalid thread id -- the thread might
+            # be done already
+            msg("invalid thread id for killing worker {0}", cur_key)
+        elif res != 1:
+            # roll back
+            pts_sae(ctypes.c_long(tid), None)
+            msg("killed too many ({0}) workers? {1}", res, cur_key)
+        else:
+            if is_verbose_workers():
+                msg("killed worker {0}", cur_key)
 
 
 class QuickServerRequestHandler(SimpleHTTPRequestHandler):
@@ -1282,7 +1311,7 @@ class DefaultTokenHandler(TokenHandler):
 class BaseWorker():
     def __init__(self, mask, fun, msg, cache_id, cache, cache_method,
                  cache_section, thread_factory, name_prefix,
-                 get_max_chunk_size, is_verbose_workers):
+                 soft_worker_death, get_max_chunk_size, is_verbose_workers):
         self._mask = mask
         self._fun = fun
         self._msg = msg
@@ -1293,20 +1322,198 @@ class BaseWorker():
         self._cache_section = cache_section
         self._thread_factory = thread_factory
         self._name_prefix = name_prefix
+        self._soft_worker_death = soft_worker_death
         self._get_max_chunk_size = get_max_chunk_size
         self._is_verbose_workers = is_verbose_workers
+
+    def is_done(self, cur_key):
+        """Returns whether the task with the given key has finished."""
+        raise NotImplementedError()
+
+    def add_cargo(self, content):
+        """Splits content into chunks and returns a list of keys to retrieve
+           them. This function also ensures that chunks get cleaned up after
+           10min of no reads. The size of the chunks is
+           `_get_max_chunk_size()`.
+        """
+        raise NotImplementedError()
+
+    def remove_cargo(self, cur_key):
+        """Removes the cargo with the given key and returns its chunk content.
+        """
+        raise NotImplementedError()
+
+    def remove_worker(self, cur_key):
+        """Removes the task with the given key and returns its result.
+           The result is a tuple `(result, exception)` where result is the
+           response if not None else exception is a tuple `(msg, trace)` where
+           msg is the message of the exception and trace is the formatted
+           stacktrace. In case of a PreventDefaultResponse exception the
+           message uses the `PDR_MARK` prefix and the status code after.
+           `trace` in this case is the message of the response.
+        """
+        raise NotImplementedError()
+
+    def get_key(self):
+        """Creates a key that is currently not in use."""
+        raise NotImplementedError()
+
+    def reserve_worker(self):
+        """Allocates a key via `get_key` and occupies the space until
+           `add_task` is called. The used key is returned.
+        """
+        raise NotImplementedError()
+
+    def add_task(self, cur_key, th, soft_death):
+        """Marks a key as actually running. The thread executing the worker
+           is passed as argument. `soft_death` indicates whether an exception
+           should be thrown when canceling a worker.
+        """
+        raise NotImplementedError()
+
+    def set_task_result(self, cur_key, result):
+        """Sets the result for the given task."""
+        raise NotImplementedError()
+
+    def set_task_pdr(self, cur_key, p):
+        """Sets the prevent default response values for the given task."""
+        raise NotImplementedError()
+
+    def set_task_err(self, cur_key, e):
+        """Sets the error for the given task."""
+        raise NotImplementedError()
+
+    def start_worker(self, args, cur_key, get_thread):
+        try:
+            self.add_task(cur_key, get_thread(), self._soft_worker_death)
+            if self._use_cache:
+                cache_obj = self._cache_id(args)
+                if cache_obj is not None and self._cache is not None:
+                    with self._cache.get_hnd(
+                            cache_obj,
+                            section=self._cache_section,
+                            method=self._cache_method) as hnd:
+                        if hnd.has():
+                            result = hnd.read()
+                        else:
+                            result = hnd.write(json_dumps(self._fun(args)))
+                else:
+                    result = json_dumps(self._fun(args))
+            else:
+                result = json_dumps(self._fun(args))
+            self.set_task_result(cur_key, result)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except PreventDefaultResponse as p:
+            self.set_task_pdr(cur_key, p)
+            return
+        except Exception as e:
+            self.set_task_err(cur_key, e)
+            return
+        # make sure the result does not get stored forever
+        try:
+            # remove 2 minutes after not reading the result
+            time.sleep(120)
+        finally:
+            _result, err = self.remove_worker(cur_key)
+            if err is not None:
+                result, tb = err
+                if tb is not None:
+                    self._msg("Error in purged worker for {0}: {1}\n{2}",
+                              cur_key, result, tb)
+                return
+            self._msg("purged result that was never read ({0})", cur_key)
+
+    def compute_worker(self, req, post):
+        action = post["action"]
+        cur_key = None
+        if action == "stop":
+            cur_key = post["token"]
+            self.remove_worker(cur_key)  # throw away the result
+            return {
+                "token": cur_key,
+                "done": True,
+                "result": None,
+                "continue": False,
+            }
+        if action == "start":
+            cur_key = self.reserve_worker()
+            inner_post = post.get("payload", {})
+            th = []
+
+            def start_worker(*args):
+                self.start_worker(*args)
+
+            wname = "{0}-Worker-{1}".format(self._name_prefix, cur_key)
+            worker = self._thread_factory(
+                target=start_worker,
+                name=wname,
+                args=(inner_post, cur_key, lambda: th[0]))
+            th.append(worker)
+            worker.start()
+            # give fast tasks a way to immediately return results
+            time.sleep(0.1)
+        if action == "cargo":
+            cur_key = post["token"]
+            result = self.remove_cargo(cur_key)
+            return {
+                "token": cur_key,
+                "result": result,
+            }
+        if action == "get":
+            cur_key = post["token"]
+        if cur_key is None:
+            raise ValueError("invalid action: {0}".format(action))
+        if self.is_done(cur_key):
+            result, exception = self.remove_worker(cur_key)
+            if exception is not None:
+                err, tb = exception
+                if tb is None:
+                    # token does not exist anymore
+                    return {
+                        "token": cur_key,
+                        "done": False,
+                        "result": None,
+                        "continue": False,
+                    }
+                if err.startswith(PDR_MARK):
+                    # e encodes code, tb encodes message
+                    raise PreventDefaultResponse(int(err[len(PDR_MARK):]), tb)
+                self._msg(
+                    "Error in worker for {0}: {1}\n{2}", cur_key, err, tb)
+                raise PreventDefaultResponse(500, "worker error")
+            if len(result) > self._get_max_chunk_size():
+                cargo_keys = self.add_cargo(result)
+                return {
+                    "token": cur_key,
+                    "done": True,
+                    "result": cargo_keys,
+                    "continue": True,
+                }
+            return {
+                "token": cur_key,
+                "done": True,
+                "result": result,
+                "continue": False,
+            }
+        return {
+            "token": cur_key,
+            "done": False,
+            "result": None,
+            "continue": True,
+        }
+
+    def on_error(self, post):
+        self._msg("Error processing worker command: {0}", post)
+
+
+class DefaultWorker(BaseWorker):
+    def __init__(self, *args, **kwargs):
+        DefaultWorker.__init__(*args, **kwargs)
         self._lock = threading.RLock()
         self._tasks = {}
         self._cargo = {}
         self._cargo_cleaner = None
-
-    def is_done(self, cur_key):
-        with self._lock:
-            if cur_key not in self._tasks:
-                return True
-            if "running" not in self._tasks[cur_key]:
-                return False
-            return not self._tasks[cur_key]["running"]
 
     def start_cargo_cleaner(self):
 
@@ -1386,87 +1593,22 @@ class BaseWorker():
         with self._lock:
             task = self._tasks.pop(cur_key, None)
             if task is None:
-                err_msg = "Task {0} not found!".format(cur_key)
-                return None, (ValueError(err_msg), None)
+                err_msg = "Error: Task {0} not found!".format(cur_key)
+                return None, (err_msg, None)
             if task["running"]:
                 th = task["thread"]
-                if th.is_alive():
-                    # kill the thread
-                    tid = None
-                    for tk, tobj in threading._active.items():
-                        if tobj is th:
-                            tid = tk
-                            break
-                    if tid is not None:
-                        papi = ctypes.pythonapi
-                        pts_sae = papi.PyThreadState_SetAsyncExc
-                        res = pts_sae(ctypes.c_long(tid),
-                                      ctypes.py_object(WorkerDeath))
-                        if res == 0:
-                            # invalid thread id -- the thread might
-                            # be done already
-                            self._msg("invalid thread id for " +
-                                      "killing worker {0}", cur_key)
-                        elif res != 1:
-                            # roll back
-                            pts_sae(ctypes.c_long(tid), None)
-                            self._msg("killed too many ({0}) workers? {1}",
-                                      res, cur_key)
-                        else:
-                            if self._is_verbose_workers():
-                                self._msg("killed worker {0}", cur_key)
-                err_msg = "Task {0} is still running!".format(cur_key)
-                return None, (ValueError(err_msg), None)
+                kill_thread(th, cur_key, self._msg, self._is_verbose_workers)
+                err_msg = "Error: Task {0} is still running!".format(cur_key)
+                return None, (err_msg, None)
             return task["result"], task["exception"]
 
-    def start_worker(self, args, cur_key, get_thread):
-        try:
-            with self._lock:
-                task = {
-                    "running": True,
-                    "result": None,
-                    "exception": None,
-                    "thread": get_thread(),
-                }
-                self._tasks[cur_key] = task
-            if self._use_cache:
-                cache_obj = self._cache_id(args)
-                if cache_obj is not None and self._cache is not None:
-                    with self._cache.get_hnd(
-                            cache_obj,
-                            section=self._cache_section,
-                            method=self._cache_method) as hnd:
-                        if hnd.has():
-                            result = hnd.read()
-                        else:
-                            result = hnd.write(json_dumps(self._fun(args)))
-                else:
-                    result = json_dumps(self._fun(args))
-            else:
-                result = json_dumps(self._fun(args))
-            with self._lock:
-                task["running"] = False
-                task["result"] = result
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except Exception as e:
-            with self._lock:
-                task["running"] = False
-                task["exception"] = (e, traceback.format_exc())
-            return
-        # make sure the result does not get stored forever
-        try:
-            # remove 2 minutes after not reading the result
-            time.sleep(120)
-        finally:
-            _result, err = self.remove_worker(cur_key)
-            if err is not None:
-                result, tb = err
-                if tb is not None:
-                    self._msg("Error in purged worker for {0}: {1}\n{2}",
-                              cur_key, result, tb)
-                return
-            self._msg("purged result that was never read ({0})", cur_key)
+    def is_done(self, cur_key):
+        with self._lock:
+            if cur_key not in self._tasks:
+                return True
+            if "running" not in self._tasks[cur_key]:
+                return False
+            return not self._tasks[cur_key]["running"]
 
     def get_key(self):
         with self._lock:
@@ -1479,95 +1621,39 @@ class BaseWorker():
                 cur_key = key
             return cur_key
 
+    def add_task(self, cur_key, th, soft_death):
+        with self._lock:
+            task = {
+                "running": True,
+                "result": None,
+                "exception": None,
+                "thread": th,
+            }
+            self._tasks[cur_key] = task
+
+    def set_task_result(self, cur_key, result):
+        with self._lock:
+            task = self._tasks[cur_key]
+            task["running"] = False
+            task["result"] = result
+
+    def set_task_pdr(self, cur_key, p):
+        with self._lock:
+            task = self._tasks[cur_key]
+            task["running"] = False
+            task["exception"] = ("{0}{1}".format(PDR_MARK, p.code), p.msg)
+
+    def set_task_err(self, cur_key, e):
+        with self._lock:
+            task = self._tasks[cur_key]
+            task["running"] = False
+            task["exception"] = ("{0}".format(e), traceback.format_exc())
+
     def reserve_worker(self):
         with self._lock:
             cur_key = self.get_key()
             self._tasks[cur_key] = {}  # put marker
             return cur_key
-
-    def compute_worker(self, req, post):
-        action = post["action"]
-        cur_key = None
-        if action == "stop":
-            cur_key = post["token"]
-            self.remove_worker(cur_key)  # throw away the result
-            return {
-                "token": cur_key,
-                "done": True,
-                "result": None,
-                "continue": False,
-            }
-        if action == "start":
-            cur_key = self.reserve_worker()
-            inner_post = post.get("payload", {})
-            th = []
-
-            def start_worker(*args):
-                self.start_worker(*args)
-
-            wname = "{0}-Worker-{1}".format(self._name_prefix, cur_key)
-            worker = self._thread_factory(
-                target=start_worker,
-                name=wname,
-                args=(inner_post, cur_key, lambda: th[0]))
-            th.append(worker)
-            worker.start()
-            # give fast tasks a way to immediately return results
-            time.sleep(0.1)
-        if action == "cargo":
-            cur_key = post["token"]
-            result = self.remove_cargo(cur_key)
-            return {
-                "token": cur_key,
-                "result": result,
-            }
-        if action == "get":
-            cur_key = post["token"]
-        if cur_key is None:
-            raise ValueError("invalid action: {0}".format(action))
-        if self.is_done(cur_key):
-            result, exception = self.remove_worker(cur_key)
-            if exception is not None:
-                e, tb = exception
-                if tb is None:
-                    # token does not exist anymore
-                    return {
-                        "token": cur_key,
-                        "done": False,
-                        "result": None,
-                        "continue": False,
-                    }
-                if isinstance(e, PreventDefaultResponse):
-                    raise e
-                self._msg("Error in worker for {0}: {1}\n{2}", cur_key, e, tb)
-                raise PreventDefaultResponse(500, "worker error")
-            if len(result) > self._get_max_chunk_size():
-                cargo_keys = self.add_cargo(result)
-                return {
-                    "token": cur_key,
-                    "done": True,
-                    "result": cargo_keys,
-                    "continue": True,
-                }
-            return {
-                "token": cur_key,
-                "done": True,
-                "result": result,
-                "continue": False,
-            }
-        return {
-            "token": cur_key,
-            "done": False,
-            "result": None,
-            "continue": True,
-        }
-
-    def on_error(self, post):
-        self._msg("Error processing worker command: {0}", post)
-
-
-class DefaultWorker(BaseWorker):
-    pass
 
 
 class Response():
@@ -1589,7 +1675,8 @@ _token_default = "DEFAULT"
 
 class QuickServer(http_server.HTTPServer):
     def __init__(self, server_address, parallel=True, thread_factory=None,
-                 token_constructor=None, worker_constructor=None):
+                 token_constructor=None, worker_constructor=None,
+                 soft_worker_death=False):
         """Creates a new QuickServer.
 
         Parameters
@@ -1608,6 +1695,10 @@ class QuickServer(http_server.HTTPServer):
 
         worker_constructor : BaseWorker
             Constructor that creates a BaseWorker. None for default worker.
+
+        soft_worker_death : bool
+            Whether killing a worker should be handled through polling (true)
+            or via exception (false; default)
 
         Attributes
         ----------
@@ -1711,6 +1802,7 @@ class QuickServer(http_server.HTTPServer):
             self._worker_constructor = DefaultWorker
         else:
             self._worker_constructor = worker_constructor
+        self._soft_worker_death = soft_worker_death
         self._folder_masks = []
         self._folder_proxys = []
         self._f_mask = {}
@@ -2449,7 +2541,8 @@ class QuickServer(http_server.HTTPServer):
             worker = self._worker_constructor(
                 mask, fun, msg, cache_id, self.cache, cache_method,
                 cache_section, self._thread_factory, self.__class__,
-                lambda: self.max_chunk_size, lambda: self.verbose_workers)
+                self._soft_worker_death, lambda: self.max_chunk_size,
+                lambda: self.verbose_workers)
 
             def run_worker(req, args):
                 post = args["post"]
