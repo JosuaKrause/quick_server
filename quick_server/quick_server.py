@@ -140,9 +140,14 @@ def _getheader_p2(obj, key):
 _getheader = _getheader_p2
 
 
-def create_server(server_address, parallel=True, thread_factory=None):
+def create_server(
+        server_address, parallel=True, thread_factory=None,
+        token_constructor=None, worker_constructor=None,
+        soft_worker_death=False):
     """Creates the server."""
-    return QuickServer(server_address, parallel, thread_factory)
+    return QuickServer(
+        server_address, parallel, thread_factory, token_constructor,
+        worker_constructor, soft_worker_death)
 
 
 def json_dumps(obj):
@@ -1403,13 +1408,12 @@ class BaseWorker():
                 result = json_dumps(self._fun(args))
             self.set_task_result(cur_key, result)
         except (KeyboardInterrupt, SystemExit):
+            self.remove_worker(cur_key)  # remove key
             raise
         except PreventDefaultResponse as p:
             self.set_task_pdr(cur_key, p)
-            return
         except Exception as e:
             self.set_task_err(cur_key, e)
-            return
         # make sure the result does not get stored forever
         try:
             # remove 2 minutes after not reading the result
@@ -1509,7 +1513,7 @@ class BaseWorker():
 
 class DefaultWorker(BaseWorker):
     def __init__(self, *args, **kwargs):
-        DefaultWorker.__init__(*args, **kwargs)
+        BaseWorker.__init__(self, *args, **kwargs)
         self._lock = threading.RLock()
         self._tasks = {}
         self._cargo = {}
