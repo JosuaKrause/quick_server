@@ -3,13 +3,6 @@
 from __future__ import print_function
 from __future__ import division
 
-try:
-    import coverage
-    coverage.process_startup()
-# pylint: disable=bare-except
-except:  # nopep8
-    pass
-
 import os
 import sys
 import json
