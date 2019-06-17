@@ -1313,6 +1313,18 @@ class DefaultTokenHandler(TokenHandler):
             self.__class__, self._token_timings, self._token_map)
 
 
+def is_worker_alive():
+    """Whether the current worker is still active and has not been cancelled.
+       This function needs to be called from the worker thread itself. It
+       will always return True otherwise.
+    """
+
+    def jupp():
+        return True
+
+    return getattr(thread_local, "worker_check", jupp)()
+
+
 class BaseWorker():
     def __init__(self, mask, fun, msg, cache_id, cache, cache_method,
                  cache_section, thread_factory, name_prefix,
@@ -1388,6 +1400,12 @@ class BaseWorker():
         """Sets the error for the given task."""
         raise NotImplementedError()
 
+    def remove_from_cancelled(self, cur_key):
+        """Removes the cancelation indicator of the key if the task was
+           previously cancelled.
+        """
+        raise NotImplementedError()
+
     def start_worker(self, args, cur_key, get_thread):
         try:
             self.add_task(cur_key, get_thread, self._soft_worker_death)
@@ -1414,6 +1432,8 @@ class BaseWorker():
             self.set_task_pdr(cur_key, p)
         except Exception as e:
             self.set_task_err(cur_key, e)
+        finally:
+            self.remove_from_cancelled(cur_key)
         # make sure the result does not get stored forever
         try:
             # remove 2 minutes after not reading the result
@@ -1518,6 +1538,16 @@ class DefaultWorker(BaseWorker):
         self._tasks = {}
         self._cargo = {}
         self._cargo_cleaner = None
+        self._cancelled = set()
+
+    def remove_from_cancelled(self, cur_key):
+        with self._lock:
+            if cur_key in self._cancelled:
+                self._cancelled.remove(cur_key)
+
+    def is_cancelled(self, cur_key):
+        with self._lock:
+            return cur_key in self._cancelled
 
     def start_cargo_cleaner(self):
 
@@ -1601,14 +1631,18 @@ class DefaultWorker(BaseWorker):
                 return None, (err_msg, None)
             if task["running"]:
                 th = task["thread"]
-                kill_thread(th, cur_key, self._msg, self._is_verbose_workers)
                 err_msg = "Error: Task {0} is still running!".format(cur_key)
+                if th is not None:
+                    kill_thread(
+                        th, cur_key, self._msg, self._is_verbose_workers)
+                else:
+                    self._cancelled.add(cur_key)
                 return None, (err_msg, None)
             return task["result"], task["exception"]
 
     def is_done(self, cur_key):
         with self._lock:
-            if cur_key not in self._tasks:
+            if cur_key not in self._tasks or self.is_cancelled(cur_key):
                 return True
             if "running" not in self._tasks[cur_key]:
                 return False
@@ -1618,7 +1652,13 @@ class DefaultWorker(BaseWorker):
         with self._lock:
             crc32 = zlib.crc32(repr(get_time()).encode('utf8'))
             cur_key = int(crc32 & 0xFFFFFFFF)
-            while cur_key in self._tasks or cur_key in self._cargo:
+
+            def exists_somewhere(key):
+                return key in self._tasks \
+                    or key in self._cargo \
+                    or key in self._cancelled
+
+            while exists_somewhere(cur_key):
                 key = int(cur_key + 1)
                 if key == cur_key:
                     key = 0
@@ -1631,24 +1671,36 @@ class DefaultWorker(BaseWorker):
                 "running": True,
                 "result": None,
                 "exception": None,
-                "thread": get_thread(),
+                "thread": get_thread() if not soft_death else None,
             }
+            if soft_death:
+
+                def worker_check():
+                    return not self.is_cancelled(cur_key)
+
+                thread_local.worker_check = worker_check
             self._tasks[cur_key] = task
 
     def set_task_result(self, cur_key, result):
         with self._lock:
+            if cur_key not in self._tasks or self.is_cancelled(cur_key):
+                return
             task = self._tasks[cur_key]
             task["running"] = False
             task["result"] = result
 
     def set_task_pdr(self, cur_key, p):
         with self._lock:
+            if cur_key not in self._tasks or self.is_cancelled(cur_key):
+                return
             task = self._tasks[cur_key]
             task["running"] = False
             task["exception"] = ("{0}{1}".format(PDR_MARK, p.code), p.msg)
 
     def set_task_err(self, cur_key, e):
         with self._lock:
+            if cur_key not in self._tasks or self.is_cancelled(cur_key):
+                return
             task = self._tasks[cur_key]
             task["running"] = False
             task["exception"] = ("{0}".format(e), traceback.format_exc())
