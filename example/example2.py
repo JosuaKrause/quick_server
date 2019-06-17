@@ -4,6 +4,13 @@ from time import clock, sleep
 import sys
 import os
 
+try:
+    import coverage
+    coverage.process_startup()
+# pylint: disable=bare-except
+except:  # nopep8
+    pass
+
 from quick_server import create_server, msg, setup_restart
 
 setup_restart()
