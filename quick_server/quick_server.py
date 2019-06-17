@@ -1242,26 +1242,26 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 class TokenHandler():
     def flush_old_tokens(self, now):
         """Ensures that all expired tokens get removed."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def add_token(self, key, until):
         """Returns the content of a token and updates the expiration time
            of the token. Unknown tokens get initialized.
            `flush_old_tokens` is called immediately before this function.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def delete_token(self, key):
         """Deletes a token.
            `flush_old_tokens` is called immediately before this function.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def get_tokens(self):
         """Returns a list of current tokens.
            `flush_old_tokens` is called immediately before this function.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
 
 class DefaultTokenHandler(TokenHandler):
@@ -1348,7 +1348,7 @@ class BaseWorker():
 
     def is_done(self, cur_key):
         """Returns whether the task with the given key has finished."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def add_cargo(self, content):
         """Splits content into chunks and returns a list of keys to retrieve
@@ -1356,12 +1356,12 @@ class BaseWorker():
            10min of no reads. The size of the chunks is
            `_get_max_chunk_size()`.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def remove_cargo(self, cur_key):
         """Removes the cargo with the given key and returns its chunk content.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def remove_worker(self, cur_key):
         """Removes the task with the given key and returns its result.
@@ -1372,42 +1372,42 @@ class BaseWorker():
            message uses the `PDR_MARK` prefix and the status code after.
            `trace` in this case is the message of the response.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def get_key(self):
         """Creates a key that is currently not in use."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def reserve_worker(self):
         """Allocates a key via `get_key` and occupies the space until
            `add_task` is called. The used key is returned.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def add_task(self, cur_key, get_thread, soft_death):
         """Marks a key as actually running. The thread executing the worker
            can be retrieved via `get_thread`. `soft_death` indicates whether
            an exception should be thrown when canceling a worker.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def set_task_result(self, cur_key, result):
         """Sets the result for the given task."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def set_task_pdr(self, cur_key, p):
         """Sets the prevent default response values for the given task."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def set_task_err(self, cur_key, e):
         """Sets the error for the given task."""
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def remove_from_cancelled(self, cur_key):
         """Removes the cancelation indicator of the key if the task was
            previously cancelled.
         """
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def start_worker(self, args, cur_key, get_thread):
         try:
