@@ -499,6 +499,7 @@ def token_test():
     return True
 
 
+note("python: {0}".format(" ".join(PYTHON)))
 if SKIP < 1:
     note("basic command check")
     if not cmd_server_run([
