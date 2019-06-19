@@ -122,7 +122,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.2"
+__version__ = "0.6.3"
 
 
 def _getheader_fallback(obj, key):
@@ -1241,12 +1241,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
 
 class TokenHandler():
-    def flush_old_tokens(self, now):
+    def flush_old_tokens(self):
         """Ensures that all expired tokens get removed."""
         raise NotImplementedError()  # pragma: no cover
 
-    def add_token(self, key, until):
-        """Returns the content of a token and updates the expiration time
+    def add_token(self, key, expire):
+        """Returns the content of a token and updates the expiration in seconds
            of the token. Unknown tokens get initialized.
            `flush_old_tokens` is called immediately before this function.
         """
@@ -1277,8 +1277,9 @@ class DefaultTokenHandler(TokenHandler):
         self._token_map = {}
         self._token_timings = []
 
-    def flush_old_tokens(self, now):
+    def flush_old_tokens(self):
         # NOTE: has _token_lock
+        now = get_time()
         first_valid = None
         for (pos, k) in enumerate(self._token_timings):
             t = self._token_map[k][0]
@@ -1293,8 +1294,10 @@ class DefaultTokenHandler(TokenHandler):
                 del self._token_map[k]
             self._token_timings = self._token_timings[first_valid:]
 
-    def add_token(self, key, until):
+    def add_token(self, key, expire):
         # NOTE: has _token_lock
+        now = get_time()
+        until = now + expire if expire is not None else None
         if key not in self._token_map:
             self._token_map[key] = [until, {}]
             self._token_timings.append(key)
@@ -2665,14 +2668,12 @@ class QuickServer(http_server.HTTPServer):
         """
         if expire == _token_default:
             expire = self.get_default_token_expiration()
-        now = time.time()
-        until = now + expire if expire is not None else None
         write_back = False
         try:
             with self._token_lock:
-                self._token_handler.flush_old_tokens(now)
-                if until is None or until > now:
-                    res = self._token_handler.add_token(token, until)
+                self._token_handler.flush_old_tokens()
+                if expire is None or expire > 0:
+                    res = self._token_handler.add_token(token, expire)
                     if readonly:
                         res = res.copy()
                     else:
@@ -2687,9 +2688,8 @@ class QuickServer(http_server.HTTPServer):
                     self._token_handler.put_token(token, res)
 
     def get_tokens(self):
-        now = time.time()
         with self._token_lock:
-            self._token_handler.flush_old_tokens(now)
+            self._token_handler.flush_old_tokens()
             return self._token_handler.get_tokens()
 
     # objects #
