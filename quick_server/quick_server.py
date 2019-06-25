@@ -40,6 +40,7 @@ import errno
 import atexit
 import ctypes
 import select
+import shutil
 import signal
 import socket
 import fnmatch
@@ -122,7 +123,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.3"
+__version__ = "0.6.4"
 
 
 def _getheader_fallback(obj, key):
@@ -1241,6 +1242,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
 
 class TokenHandler():
+    def lock(self):
+        """The lock for token handler operations."""
+        raise NotImplementedError()
+
     def flush_old_tokens(self):
         """Ensures that all expired tokens get removed."""
         raise NotImplementedError()  # pragma: no cover
@@ -1276,6 +1281,10 @@ class DefaultTokenHandler(TokenHandler):
         # _token_timings is keys sorted by time
         self._token_map = {}
         self._token_timings = []
+        self._token_lock = threading.Lock()
+
+    def lock(self):
+        return self._token_lock
 
     def flush_old_tokens(self):
         # NOTE: has _token_lock
@@ -1742,6 +1751,56 @@ class Response():
         return ctype
 
 
+def construct_multipart_response(obj):
+    boundary = "qsboundary{0}".format(uuid.uuid4().hex)
+
+    def binary(text):
+        try:
+            text = text.decode('utf8')
+        except AttributeError:
+            pass
+        return text.encode('utf8')
+
+    bbound = binary(boundary)
+    resp = BytesIO()
+    for (key, value) in obj.items():
+        key = binary(key)
+        resp.write(b"--")
+        resp.write(bbound)
+        resp.write(b"\r\n")
+        resp.write(b"Content-Disposition: form-data; name=\"")
+        resp.write(key)
+        resp.write(b"\"; filename=\"")
+        resp.write(key)
+        resp.write(b"\"\r\n")
+        if hasattr(value, "read"):
+            if hasattr(value, "seek"):
+                value.seek(0)
+            resp.write(b"Content-Type: application/octet-stream\r\n")
+            resp.write(b"\r\n")
+            shutil.copyfileobj(value, resp, length=16*1024)
+        elif isinstance(value, (str, unicode)):
+            resp.write(b"Content-Type: text/plain\r\n")
+            resp.write(b"\r\n")
+            resp.write(binary(value))
+        else:
+            resp.write(b"Content-Type: application/json\r\n")
+            resp.write(b"\r\n")
+            resp.write(binary(json_dumps(value)))
+        resp.write(b"\"\r\n")
+    resp.write(b"--")
+    resp.write(bbound)
+    resp.write(b"--\r\n")
+    resp.seek(0)
+    return resp, "multipart/form-data; boundary=\"{0}\"".format(boundary)
+
+
+class MultipartResponse(Response):
+    def __init__(self, obj):
+        response, ctype = construct_multipart_response(obj)
+        Response.__init__(self, response=response, code=200, ctype=ctype)
+
+
 _token_default = "DEFAULT"
 
 
@@ -1887,7 +1946,6 @@ class QuickServer(http_server.HTTPServer):
         self._cmd_lock = threading.Lock()
         self._cmd_start = False
         self._clean_up_call = None
-        self._token_lock = threading.Lock()
         if token_handler is None:
             token_handler = DefaultTokenHandler()
         self._token_handler = token_handler
@@ -2216,19 +2274,30 @@ class QuickServer(http_server.HTTPServer):
             if text is None:
                 drh.send_error(404, "File not found")
                 return None
-            f = BytesIO()
-            if isinstance(text, (str, unicode)):
-                try:
-                    text = text.decode('utf8')
-                except AttributeError:
-                    pass
-                text = text.encode('utf8')
-            f.write(text)
-            f.flush()
-            size = f.tell()
-            f.seek(0)
+            if hasattr(text, "read"):
+                if hasattr(text, "seek"):
+                    f = text
+                    size = f.seek(0, os.SEEK_END)
+                    f.seek(0)
+                else:
+                    f = BytesIO()
+                    shutil.copyfileobj(text, f, length=16*1024)
+                    size = f.tell()
+                    f.seek(0)
+            else:
+                f = BytesIO()
+                if isinstance(text, (str, unicode)):
+                    try:
+                        text = text.decode('utf8')
+                    except AttributeError:
+                        pass
+                    text = text.encode('utf8')
+                f.write(text)
+                f.flush()
+                size = f.tell()
+                f.seek(0)
             # handle ETag caching
-            if drh.request_version >= "HTTP/1.1":
+            if drh.request_version >= "HTTP/1.1" and hasattr(f, "seek"):
                 e_tag = "{0:x}".format(zlib.crc32(f.read()) & 0xFFFFFFFF)
                 f.seek(0)
                 match = _getheader(drh.headers, 'if-none-match')
@@ -2475,10 +2544,7 @@ class QuickServer(http_server.HTTPServer):
 
             def act(ix, f_from, f_to):
                 with self._mirror["lock"]:
-                    # TODO probably should use shutil
-                    with open(f_from, "rb") as f_in:
-                        with open(f_to, "wb") as f_out:
-                            f_out.write(f_in.read())
+                    shutil.copyfile(f_from, f_to)
                     self._mirror["files"][ix] = \
                         (f_from, f_to, get_time(f_from))
 
@@ -2670,7 +2736,7 @@ class QuickServer(http_server.HTTPServer):
             expire = self.get_default_token_expiration()
         write_back = False
         try:
-            with self._token_lock:
+            with self._token_handler.lock():
                 self._token_handler.flush_old_tokens()
                 if expire is None or expire > 0:
                     res = self._token_handler.add_token(token, expire)
@@ -2684,11 +2750,11 @@ class QuickServer(http_server.HTTPServer):
             yield res
         finally:
             if write_back:
-                with self._token_lock:
+                with self._token_handler.lock():
                     self._token_handler.put_token(token, res)
 
     def get_tokens(self):
-        with self._token_lock:
+        with self._token_handler.lock():
             self._token_handler.flush_old_tokens()
             return self._token_handler.get_tokens()
 
