@@ -123,7 +123,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.5"
+__version__ = "0.6.6"
 
 
 def _getheader_fallback(obj, key):
@@ -1257,6 +1257,14 @@ class TokenHandler():
         """The lock for token handler operations."""
         raise NotImplementedError()
 
+    def ttl(self, key):
+        """Returns the time in seconds until the given key expires.
+           If the key never expires it should return None. If the key doesn't
+           exist it should return 0. The function must not update the
+           expiration time.
+        """
+        raise NotImplementedError()  # pragma: no cover
+
     def flush_old_tokens(self):
         """Ensures that all expired tokens get removed."""
         raise NotImplementedError()  # pragma: no cover
@@ -1296,6 +1304,16 @@ class DefaultTokenHandler(TokenHandler):
 
     def lock(self):
         return self._token_lock
+
+    def ttl(self, key):
+        # NOTE: has _token_lock
+        try:
+            until = self._token_map[key][0]
+            if until is None:
+                return None
+            return until - get_time()
+        except KeyError:
+            return 0
 
     def flush_old_tokens(self):
         # NOTE: has _token_lock
@@ -2778,6 +2796,16 @@ class QuickServer(http_server.HTTPServer):
         with self._token_handler.lock():
             self._token_handler.flush_old_tokens()
             return self._token_handler.get_tokens()
+
+    def get_token_ttl(self, token):
+        with self._token_handler.lock():
+            try:
+                ttl = self._token_handler.ttl(token)
+            except KeyError:
+                ttl = 0
+            if ttl is None:
+                return ttl
+            return max(ttl, 0)
 
     # objects #
 
