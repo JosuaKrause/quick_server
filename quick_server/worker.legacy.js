@@ -18,7 +18,7 @@ window.CONFIG = {
   // animation: ['/', '-', '\\', '|'],
   animationTime: 300,
 };
-window.VERSION = '0.6.4';
+window.VERSION = '0.6.5';
 
 class Worker {
   constructor() {

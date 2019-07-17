@@ -123,7 +123,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.4"
+__version__ = "0.6.5"
 
 
 def _getheader_fallback(obj, key):
@@ -804,99 +804,110 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if is_folder:
             orig_path += '/'
         path = None
-        for (name, fm) in self.server._folder_masks:
-            if not orig_path.startswith(name):
-                continue
-            cur_base = os.path.abspath(os.path.join(self.server.base_path, fm))
-            path = cur_base
-            words = orig_path[len(name):].split('/')
-            words = filter(None, words)
-            for word in words:
-                _drive, word = os.path.splitdrive(word)
-                _head, word = os.path.split(word)
-                if word in (os.curdir, os.pardir):
-                    continue
-                if word.startswith('.'):  # don't ever allow any hidden files
-                    raise PreventDefaultResponse(404, "File not found")
-                path = os.path.join(path, word)
-            # make path absolute and check if it exists
-            path = os.path.abspath(path)
-            if os.path.exists(path):
-                break
-        # if pass is still None here the file cannot be found
-        if path is None:
-            # try proxies
-            for (name, pxy) in self.server._folder_proxys:
+        try:
+            for (name, fm) in self.server._folder_masks:
                 if not orig_path.startswith(name):
                     continue
-                remain = orig_path[len(name) - 1:]
-                proxy = urlparse.urlparse(pxy)
-                reala = urlparse.urlparse(init_path)
-                pxya = urlparse.urlunparse((
-                    proxy[0],  # scheme
-                    proxy[1],  # netloc
-                    "{0}{1}".format(proxy[2], remain),  # path
-                    reala[3],  # params
-                    reala[4],  # query
-                    reala[5],  # fragment
-                ))
-                self.send_to_proxy(pxya)  # raises PreventDefaultResponse
-            msg("no matching folder alias: {0}".format(orig_path))
-            raise PreventDefaultResponse(404, "File not found")
-        if os.path.isdir(path):
-            if not is_folder:
-                needs_redirect = True
-            else:
-                for orig_index in ["index.html", "index.htm"]:
-                    index = os.path.join(path, orig_index)
-                    if os.path.isfile(index):
-                        path = index
-                        break
-        if os.path.isdir(path):
-            # no black-/white-list for directories
-            is_white = True
-        else:
-            # match agains black- and white-list
-            is_white = len(self.server._pattern_white) == 0
-            for pattern in self.server._pattern_white:
-                if fnmatch.fnmatch(path, pattern):
-                    is_white = True
-                    break
-            for pattern in self.server._pattern_black:
-                if fnmatch.fnmatch(path, pattern):
-                    is_white = False
-                    break
-        if not is_white:
-            raise PreventDefaultResponse(404, "File not found")
-        # make sure to not accept any trickery to get away from the base path
-        if not path.startswith(cur_base):
-            raise ValueError("WARNING: attempt to access {0}".format(path))
-        # favicon handling
-        if self.server.favicon_everywhere and \
-                os.path.basename(path) == 'favicon.ico' and \
-                not os.path.exists(path):
-            for (name, fm) in self.server._folder_masks:
-                fav_base = os.path.abspath(
+                cur_base = os.path.abspath(
                     os.path.join(self.server.base_path, fm))
-                favicon = os.path.join(fav_base, 'favicon.ico')
-                if os.path.exists(favicon):
-                    path = favicon
+                path = cur_base
+                words = orig_path[len(name):].split('/')
+                words = filter(None, words)
+                for word in words:
+                    _drive, word = os.path.splitdrive(word)
+                    _head, word = os.path.split(word)
+                    if word in (os.curdir, os.pardir):
+                        continue
+                    # don't ever allow any hidden files
+                    if word.startswith('.'):
+                        raise PreventDefaultResponse(404, "File not found")
+                    path = os.path.join(path, word)
+                # make path absolute and check if it exists
+                path = os.path.abspath(path)
+                if os.path.exists(path):
                     break
-                if self.server.favicon_fallback is not None and \
-                        os.path.exists(self.server.favicon_fallback):
-                    path = os.path.join(
-                        self.server.base_path, self.server.favicon_fallback)
-                    break
-        # redirect improper index requests
-        if needs_redirect:
-            self.send_response(301, "Use index page with slash")
-            location = urlparse.urlunparse(tuple([
-                seg if ix != 2 else seg + '/'
-                for (ix, seg) in enumerate(urlparse.urlparse(init_path))
-            ]))
-            self.send_header("Location", location)
-            self.end_headers()
-            raise PreventDefaultResponse()
+            # if pass is still None here the file cannot be found
+            if path is None:
+                # try proxies
+                for (name, pxy) in self.server._folder_proxys:
+                    if not orig_path.startswith(name):
+                        continue
+                    remain = orig_path[len(name) - 1:]
+                    proxy = urlparse.urlparse(pxy)
+                    reala = urlparse.urlparse(init_path)
+                    pxya = urlparse.urlunparse((
+                        proxy[0],  # scheme
+                        proxy[1],  # netloc
+                        "{0}{1}".format(proxy[2], remain),  # path
+                        reala[3],  # params
+                        reala[4],  # query
+                        reala[5],  # fragment
+                    ))
+                    self.send_to_proxy(pxya)  # raises PreventDefaultResponse
+                msg("no matching folder alias: {0}".format(orig_path))
+                raise PreventDefaultResponse(404, "File not found")
+            if os.path.isdir(path):
+                if not is_folder:
+                    needs_redirect = True
+                else:
+                    for orig_index in ["index.html", "index.htm"]:
+                        index = os.path.join(path, orig_index)
+                        if os.path.isfile(index):
+                            path = index
+                            break
+            if os.path.isdir(path):
+                # no black-/white-list for directories
+                is_white = True
+            else:
+                # match agains black- and white-list
+                is_white = len(self.server._pattern_white) == 0
+                for pattern in self.server._pattern_white:
+                    if fnmatch.fnmatch(path, pattern):
+                        is_white = True
+                        break
+                for pattern in self.server._pattern_black:
+                    if fnmatch.fnmatch(path, pattern):
+                        is_white = False
+                        break
+            if not is_white:
+                raise PreventDefaultResponse(404, "File not found")
+            # make sure to not accept any trickery to get away
+            # from the base path
+            if not path.startswith(cur_base):
+                raise ValueError("WARNING: attempt to access {0}".format(path))
+            # favicon handling
+            if self.server.favicon_everywhere and \
+                    os.path.basename(path) == 'favicon.ico' and \
+                    not os.path.exists(path):
+                for (name, fm) in self.server._folder_masks:
+                    fav_base = os.path.abspath(
+                        os.path.join(self.server.base_path, fm))
+                    favicon = os.path.join(fav_base, 'favicon.ico')
+                    if os.path.exists(favicon):
+                        path = favicon
+                        break
+                    if self.server.favicon_fallback is not None and \
+                            os.path.exists(self.server.favicon_fallback):
+                        path = os.path.join(
+                            self.server.base_path,
+                            self.server.favicon_fallback)
+                        break
+            # redirect improper index requests
+            if needs_redirect:
+                self.send_response(301, "Use index page with slash")
+                location = urlparse.urlunparse(tuple([
+                    seg if ix != 2 else seg + '/'
+                    for (ix, seg) in enumerate(urlparse.urlparse(init_path))
+                ]))
+                self.send_header("Location", location)
+                self.end_headers()
+                raise PreventDefaultResponse()
+        except PreventDefaultResponse as pdr:
+            ffcb = self.server._file_fallback_cb
+            if ffcb is not None and pdr.code == 404:
+                path = ffcb(orig_path)
+            else:
+                raise
         # handle ETag caching
         if self.request_version >= "HTTP/1.1" and os.path.isfile(path):
             e_tag = None
@@ -1787,7 +1798,7 @@ def construct_multipart_response(obj):
             resp.write(b"Content-Type: application/json\r\n")
             resp.write(b"\r\n")
             resp.write(binary(json_dumps(value)))
-        resp.write(b"\"\r\n")
+        resp.write(b"\r\n")
     resp.write(b"--")
     resp.write(bbound)
     resp.write(b"--\r\n")
@@ -1952,6 +1963,7 @@ class QuickServer(http_server.HTTPServer):
         self._token_expire = 3600
         self._mirror = None
         self._object_dispatch = None
+        self._file_fallback_cb = None
 
     # request processing #
 
@@ -1976,11 +1988,20 @@ class QuickServer(http_server.HTTPServer):
 
     # mask methods #
 
+    def set_file_fallback_hook(self, callback):
+        """Allows to rewrite the returned filename in case a path could not
+           be resolved. This is useful for returning the index file everywhere.
+           If callback is None a 404 response will be generated. The callback
+           is a function that accepts the path as argument and returns a new
+           path. No white / blacklisting is performed on the returned path.
+        """
+        self._file_fallback_cb = callback
+
     def add_file_patterns(self, patterns, blacklist):
         """Adds a list of file patterns to either the black- or white-list.
            Note that this pattern is applied to the absolute path of the file
            that will be delivered. For including or excluding folders use
-           `add_folder_mask` or `add_folder_fallback`.
+           `bind_path` or `bind_path_fallback`.
         """
         bl = self._pattern_black if blacklist else self._pattern_white
         for pattern in patterns:
