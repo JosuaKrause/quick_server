@@ -123,7 +123,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.6"
+__version__ = "0.6.7"
 
 
 def _getheader_fallback(obj, key):
@@ -1253,7 +1253,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
 
 class TokenHandler():
-    def lock(self):
+    def lock(self, key):
         """The lock for token handler operations."""
         raise NotImplementedError()
 
@@ -1302,7 +1302,7 @@ class DefaultTokenHandler(TokenHandler):
         self._token_timings = []
         self._token_lock = threading.Lock()
 
-    def lock(self):
+    def lock(self, key):
         return self._token_lock
 
     def ttl(self, key):
@@ -2775,7 +2775,7 @@ class QuickServer(http_server.HTTPServer):
             expire = self.get_default_token_expiration()
         write_back = False
         try:
-            with self._token_handler.lock():
+            with self._token_handler.lock(token):
                 self._token_handler.flush_old_tokens()
                 if expire is None or expire > 0:
                     res = self._token_handler.add_token(token, expire)
@@ -2789,16 +2789,16 @@ class QuickServer(http_server.HTTPServer):
             yield res
         finally:
             if write_back:
-                with self._token_handler.lock():
+                with self._token_handler.lock(token):
                     self._token_handler.put_token(token, res)
 
     def get_tokens(self):
-        with self._token_handler.lock():
+        with self._token_handler.lock(None):
             self._token_handler.flush_old_tokens()
             return self._token_handler.get_tokens()
 
     def get_token_ttl(self, token):
-        with self._token_handler.lock():
+        with self._token_handler.lock(token):
             try:
                 ttl = self._token_handler.ttl(token)
             except KeyError:
