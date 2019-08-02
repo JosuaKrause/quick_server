@@ -123,7 +123,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.7"
+__version__ = "0.6.8"
 
 
 def _getheader_fallback(obj, key):
@@ -1557,7 +1557,7 @@ class BaseWorker():
                 if err.startswith(PDR_MARK):
                     # e encodes code, tb encodes message
                     raise PreventDefaultResponse(int(err[len(PDR_MARK):]), tb)
-                self._msg("Error in worker for {0} ({1}): {1}\n{2}",
+                self._msg("Error in worker for {0} ({1}): {2}\n{3}",
                           self._mask, cur_key, err, tb)
                 raise PreventDefaultResponse(500, "worker error")
             if len(result) > self._get_max_chunk_size():
