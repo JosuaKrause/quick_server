@@ -47,6 +47,7 @@ def worker_request(url, payload):
                         response["token"], ctoken))
                 return response["result"]
 
+            # TODO: async would be better
             return json.loads("".join(
                 check(ctoken, _single_request(url, {
                     "action": "cargo",
