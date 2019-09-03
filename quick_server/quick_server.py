@@ -108,7 +108,7 @@ else:
     # python 2
     str = str
     unicode = unicode
-    bytes = str
+    bytes = str  # type: ignore
     basestring = basestring
 
 if hasattr(time, "monotonic"):
