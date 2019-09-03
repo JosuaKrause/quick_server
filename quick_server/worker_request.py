@@ -12,7 +12,7 @@ DELAY_MUL = 1.01
 def _single_request(url, data):
     req = requests.post(url, headers={
         "Content-Type": "application/json",
-    }, data=data)
+    }, data=json.dumps(data))
     if req.status_code == 200:
         return json.loads(req.text)
     raise ValueError(
