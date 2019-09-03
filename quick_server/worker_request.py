@@ -48,7 +48,7 @@ def worker_request(url, payload):
                 return response["result"]
 
             # TODO: async would be better
-            return json.loads("".join(
+            final = json.loads("".join(
                 check(ctoken, _single_request(url, {
                     "action": "cargo",
                     "token": ctoken,
@@ -56,7 +56,9 @@ def worker_request(url, payload):
                 for ctoken in cargo_tokens
             ))
         else:
-            return json.loads(res["result"])
+            final = json.loads(res["result"])
+        done = True
+        return final
     finally:
         if not done and token is not None:
             while True:
