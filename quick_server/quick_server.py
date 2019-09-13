@@ -1375,7 +1375,7 @@ class DefaultTokenHandler(TokenHandler):
 
     def __str__(self):
         return "{0}: {1}\n{2}".format(
-            self.__class__, self._token_timings, self._token_map)
+            self.__class__.__name__, self._token_timings, self._token_map)
 
 
 def is_worker_alive():
