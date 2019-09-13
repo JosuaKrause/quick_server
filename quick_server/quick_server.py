@@ -123,7 +123,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.9"
+__version__ = "0.6.10"
 
 
 def _getheader_fallback(obj, key):
@@ -445,9 +445,13 @@ class PreventDefaultResponse(Exception):
         self.code = code
         self.msg = msg if msg else ""
 
+    def __str__(self):
+        return "{0}".format(self.__class__.__name__)
+
 
 class WorkerDeath(Exception):
-    pass
+    def __str__(self):
+        return "{0}".format(self.__class__.__name__)
 
 
 def kill_thread(th, cur_key, msg, is_verbose_workers):
@@ -487,6 +491,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     server_version = "QuickServer/" + __version__
 
     protocol_version = "HTTP/1.1"
+
+    def __str__(self):
+        return "{0}[{1} {2}]".format(
+            self.__class__.__name__, self.command, self.path)
 
     def convert_argmap(self, query):
         """Converts the query string of an URL to a map.
@@ -1253,6 +1261,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
 
 class TokenHandler():
+    def __str__(self):
+        return "{0}".format(self.__class__.__name__)
+
     def lock(self, key):
         """The lock for token handler operations."""
         raise NotImplementedError()
@@ -1396,6 +1407,10 @@ class BaseWorker():
         self._soft_worker_death = soft_worker_death
         self._get_max_chunk_size = get_max_chunk_size
         self._is_verbose_workers = is_verbose_workers
+
+    def __str__(self):
+        return "{0}[{1}]".format(
+            self.__class__.__name__, self._mask)
 
     def is_done(self, cur_key):
         """Returns whether the task with the given key has finished."""
@@ -1773,6 +1788,12 @@ class Response():
         self.code = code
         self._ctype = ctype
 
+    def __str__(self):
+        return "{0}[{1}{2}]".format(
+            self.__class__.__name__,
+            self.code,
+            " {0}".format(self._ctype) if self._ctype is not None else "")
+
     def get_ctype(self, ctype):
         """Returns the content type with the given default value."""
         if self._ctype is not None:
@@ -1982,6 +2003,12 @@ class QuickServer(http_server.HTTPServer):
         self._mirror = None
         self._object_dispatch = None
         self._file_fallback_cb = None
+
+    def __str__(self):
+        return "{0}[{1}{2}]".format(
+            self.__class__.__name__,
+            self.server_address,
+            " parallel" if self._parallel else "")
 
     # request processing #
 
@@ -2597,7 +2624,8 @@ class QuickServer(http_server.HTTPServer):
                                 act(ix, f_from, f_to)
 
             poll_monitor = self._thread_factory(
-                target=monitor, name="{0}-Poll-Monitor".format(self.__class__))
+                target=monitor,
+                name="{0}-Poll-Monitor".format(self.__class__.__name__))
             poll_monitor.daemon = True
             poll_monitor.start()
         if not os.path.exists(path_from):
@@ -2717,7 +2745,7 @@ class QuickServer(http_server.HTTPServer):
         def wrapper(fun):
             worker = self._worker_constructor(
                 mask, fun, msg, cache_id, self.cache, cache_method,
-                cache_section, self._thread_factory, self.__class__,
+                cache_section, self._thread_factory, self.__class__.__name__,
                 self._soft_worker_death, lambda: self.max_chunk_size,
                 lambda: self.verbose_workers)
 
