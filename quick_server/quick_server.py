@@ -123,7 +123,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.10"
+__version__ = "0.6.11"
 
 
 def _getheader_fallback(obj, key):
@@ -322,7 +322,7 @@ def get_exec_arr():
     script = [sys.argv[0]]
     if script[0].endswith("/__main__.py"):
         script = [
-            "-m", os.path.basename(script[0][:-len("/__main__.py")])
+            "-m", os.path.basename(script[0][:-len("/__main__.py")]),
         ]
     args = sys.argv[1:]
     return executable + script + args
@@ -1213,7 +1213,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         (1, 's'),
         (60, 'min'),
         (60*60, 'h'),
-        (60*60*24, 'd')
+        (60*60*24, 'd'),
     ]
 
     def log_elapsed_time_string(self, elapsed):
@@ -1225,7 +1225,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         (1, ' B'),
         (1024, ' kB'),
         (1024*1024, ' MB'),
-        (1024*1024*1024, ' GB')
+        (1024*1024*1024, ' GB'),
     ]
 
     def log_size_string(self, size):
@@ -1354,7 +1354,7 @@ class DefaultTokenHandler(TokenHandler):
             self._token_map[key][0] = until
         self._token_timings.sort(key=lambda k: (
             1 if self._token_map[k][0] is None else 0,
-            self._token_map[k][0]
+            self._token_map[k][0],
         ))
         return self._token_map[key][1]
 
@@ -1378,16 +1378,25 @@ class DefaultTokenHandler(TokenHandler):
             self.__class__.__name__, self._token_timings, self._token_map)
 
 
+def get_worker_check():
+    """Returns a function to determine whether the current worker is still
+       active and has not been cancelled. This function needs to be called
+       from the worker thread itself. It will always return True otherwise.
+    """
+    def jupp():
+        return True
+
+    return getattr(thread_local, "worker_check", jupp)
+
+
 def is_worker_alive():
     """Whether the current worker is still active and has not been cancelled.
        This function needs to be called from the worker thread itself. It
        will always return True otherwise.
     """
 
-    def jupp():
-        return True
-
-    return getattr(thread_local, "worker_check", jupp)()
+    check = get_worker_check()
+    return check()
 
 
 class BaseWorker():
