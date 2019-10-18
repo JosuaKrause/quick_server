@@ -123,7 +123,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.11"
+__version__ = "0.6.12"
 
 
 def _getheader_fallback(obj, key):
@@ -699,14 +699,18 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         requested URL is interpreted as static file.
         """
         ongoing = True
-        if self.server.report_slow_requests:
+        report_slow_requests = self.server.report_slow_requests
+        if report_slow_requests:
             path = self.path
 
             def do_report():
                 if not ongoing:
                     return
-                msg("request takes longer than expected: \"{0} {1}\"",
-                    method_str, path)
+                if callable(report_slow_requests):
+                    report_slow_requests(method_str, path)
+                else:
+                    msg("request takes longer than expected: \"{0} {1}\"",
+                        method_str, path)
 
             alarm = threading.Timer(5.0, do_report)
             alarm.start()
@@ -1936,9 +1940,10 @@ class QuickServer(http_server.HTTPServer):
             If set only messages with a non-trivial status code
             (i.e., not 200 nor 304) are reported. Defaults to False.
 
-        report_slow_requests : bool
+        report_slow_requests : bool or function
             If set request that take longer than 5 seconds are reported.
-            Defaults to False.
+            Defaults to False. If the value is callable the method_str and
+            path are provided as arguments.
 
         verbose_workers : bool
             If set messages about worker requests are printed.
