@@ -124,7 +124,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.13"
+__version__ = "0.6.14"
 
 
 def _getheader_fallback(obj, key):

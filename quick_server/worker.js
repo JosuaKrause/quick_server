@@ -17,7 +17,7 @@ export const CONFIG = {
   // animation: ['/', '-', '\\', '|'],
   animationTime: 300,
 };
-export const VERSION = '0.6.13';
+export const VERSION = '0.6.14';
 
 export class Worker {
   constructor() {
