@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from time import clock, sleep
+try:
+    from time import clock
+except ImportError:
+    from time import monotonic as clock
+from time import sleep
 import sys
 import os
 
