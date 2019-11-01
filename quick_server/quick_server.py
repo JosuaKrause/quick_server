@@ -37,6 +37,7 @@ import time
 import uuid
 import zlib
 import errno
+import shlex
 import atexit
 import ctypes
 import select
@@ -123,7 +124,7 @@ else:
     get_time = _time_clock
 
 
-__version__ = "0.6.12"
+__version__ = "0.6.13"
 
 
 def _getheader_fallback(obj, key):
@@ -318,14 +319,14 @@ def get_exec_arr():
         executable = os.environ.get('PYTHON', None)
     if not executable:
         raise ValueError("could not retrieve executable")
-    executable = executable.split()
+    exex_arr = shlex.split(executable)
     script = [sys.argv[0]]
     if script[0].endswith("/__main__.py"):
         script = [
             "-m", os.path.basename(script[0][:-len("/__main__.py")]),
         ]
     args = sys.argv[1:]
-    return executable + script + args
+    return exex_arr + script + args
 
 
 # handling the 'restart' command
