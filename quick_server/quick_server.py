@@ -34,6 +34,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    Tuple,
     Type,
     TypeVar,
     Union,
@@ -115,7 +116,7 @@ def create_server(
         thread_factory: Optional[Callable[..., threading.Thread]] = None,
         token_handler: Optional[Type[TokenHandler]] = None,
         worker_constructor: Optional[Type[BaseWorker]] = None,
-        soft_worker_death: bool = False) -> QuickServer:
+        soft_worker_death: bool = False) -> 'QuickServer':
     """Creates the server."""
     return QuickServer(
         server_address, parallel, thread_factory, token_handler,
