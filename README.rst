@@ -27,6 +27,12 @@ Import it in python via:
 
     from quick_server import create_server, msg, setup_restart
 
+Note that python 2 support is discontinued. Use version *0.6.x*:
+
+.. code:: sh
+
+    pip install --user quick_server<0.7
+
 Setting up a basic file server
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

@@ -28,6 +28,16 @@ Please refer to the example folder for usage examples.
 """
 from __future__ import print_function
 from __future__ import division
+from typing import (
+    Any,
+    Callable,
+    Iterator,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import os
 import sys
@@ -51,87 +61,43 @@ import traceback
 import collections
 import contextlib
 
-try:
-    from cStringIO import StringIO
-    BytesIO = StringIO
-except ModuleNotFoundError:
-    from io import StringIO, BytesIO
-except ImportError:  # pragma: no cover
-    from StringIO import StringIO
-    BytesIO = StringIO
+from io import StringIO, BytesIO
 
-try:
-    import urlparse
-    import urllib
-    # pylint: disable=E1101
-    urlparse_unquote = urllib.unquote  # type: ignore
-except ImportError:
-    from urllib import parse as urlparse
-    urlparse_unquote = urlparse.unquote
+import urlparse
+import urllib
 
-try:
-    from urllib.request import Request, urlopen
-    from urllib.error import HTTPError
-except ImportError:
-    from urllib2 import Request, urlopen, HTTPError  # type: ignore
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
-try:
-    import readline
-except ImportError:  # pragma: no cover
-    import pyreadline as readline  # type: ignore
+import readline
 
-try:
-    from SimpleHTTPServer import SimpleHTTPRequestHandler
-    import BaseHTTPServer as http_server
-except ModuleNotFoundError:
-    from http.server import SimpleHTTPRequestHandler
-    import http.server as http_server  # type: ignore
+from http.server import SimpleHTTPRequestHandler
+import http.server as http_server
+import SocketServer as socketserver
 
-try:
-    import SocketServer as socketserver
-except ModuleNotFoundError:
-    import socketserver  # type: ignore
+urlparse_unquote = urllib.unquote
 
-try:
-    input = raw_input  # type: ignore
-except NameError:
-    pass
-
-try:
-    unicode = unicode  # type: ignore
-except NameError:
-    # python 3
-    str = str  # type: ignore
-    unicode = str
-    bytes = bytes  # type: ignore
-    basestring = (str, bytes)
-else:
-    # python 2
-    str = str
-    unicode = unicode
-    bytes = str  # type: ignore
-    basestring = basestring
 
 if hasattr(time, "monotonic"):
-    def _time_mono():
+    def _time_mono() -> float:
         return time.monotonic()
 
     get_time = _time_mono
 else:
-    def _time_clock():
+    def _time_clock() -> float:
         return time.clock()
 
     get_time = _time_clock
 
 
-__version__ = "0.6.14"
+__version__ = "0.7.0"
 
 
-def _getheader_fallback(obj, key):
+def _getheader_fallback(obj: Any, key: str) -> Any:
     return obj.get(key)
 
 
-def _getheader_p2(obj, key):
+def _getheader_p2(obj: Any, key: str) -> Any:
     global _getheader
     try:
         return obj.getheader(key)
@@ -144,9 +110,12 @@ _getheader = _getheader_p2
 
 
 def create_server(
-        server_address, parallel=True, thread_factory=None,
-        token_handler=None, worker_constructor=None,
-        soft_worker_death=False):
+        server_address: Tuple[str, int],
+        parallel: bool = True,
+        thread_factory: Optional[Callable[..., threading.Thread]] = None,
+        token_handler: Optional[Type[TokenHandler]] = None,
+        worker_constructor: Optional[Type[BaseWorker]] = None,
+        soft_worker_death: bool = False) -> QuickServer:
     """Creates the server."""
     return QuickServer(
         server_address, parallel, thread_factory, token_handler,
@@ -267,6 +236,22 @@ def msg(message, *args, **kwargs):
         log_file.write(out.read())
         log_file.flush()
     out.close()
+
+
+ERR_HND = None
+
+
+def set_global_error_handler(fun):
+    global ERR_HND
+
+    ERR_HND = fun
+
+
+def global_handle_error(msg, tb):
+    if ERR_HND is None:
+        return True
+    ERR_HND(msg, tb)
+    return False
 
 
 DEBUG = None
