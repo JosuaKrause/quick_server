@@ -9,7 +9,7 @@ except ImportError:
 import sys
 import os
 
-from quick_server import (  # type: ignore
+from quick_server import (
     create_server,
     msg,
     QuickServerRequestHandler,

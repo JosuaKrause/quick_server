@@ -454,7 +454,7 @@ def cmd_url_server_run(actions: List[List[Any]],
 
 
 def token_test() -> bool:
-    from quick_server import QuickServer  # type: ignore
+    from quick_server import QuickServer
 
     qs = QuickServer(("", 0))
     tkn = qs.create_token()

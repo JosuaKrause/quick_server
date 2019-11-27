@@ -11,7 +11,7 @@ from time import sleep
 import sys
 import os
 
-from quick_server import (  # type: ignore
+from quick_server import (
     create_server,
     msg,
     QuickServerRequestHandler,
@@ -60,8 +60,8 @@ def uptime(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
 
     for (key, value) in args["query"].items():
         res[key] = [
-            convert(v) for v in value.split(',')
-        ] if ',' in value else convert(value)
+            convert(v) for v in str(value).split(',')
+        ] if ',' in str(value) else convert(value)
     return res
 
 
@@ -73,12 +73,12 @@ def upload_file(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
         res[ix] = "{0} is {1}".format(k, v)
         ix += 1
     for (name, f) in sorted(args['files'].items(), key=lambda e: e[0]):
-        fcontent = f.read()
-        size = len(fcontent)
+        bfcontent = f.read()
+        size = len(bfcontent)
         try:
-            fcontent = fcontent.decode('utf8')
+            fcontent = bfcontent.decode('utf8')
         except UnicodeDecodeError:
-            fcontent = repr(fcontent)
+            fcontent = repr(bfcontent)
         res[ix] = "{0} is {1} bytes".format(name, size)
         ix += 1
         for line in fcontent.split('\n'):
