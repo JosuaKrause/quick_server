@@ -1,15 +1,17 @@
+from typing import Any, Dict
+
 import json
 import time
 import requests
 
 
-DELAY_INIT = 500
+DELAY_INIT = 500.0
 DELAY_MAX = 60 * 1000
-DELAY_INC = 10
+DELAY_INC = 10.0
 DELAY_MUL = 1.01
 
 
-def _single_request(url, data):
+def _single_request(url: str, data: Dict[str, Any]) -> Dict[str, Any]:
     req = requests.post(url, headers={
         "Content-Type": "application/json",
     }, data=json.dumps(data))
@@ -19,7 +21,7 @@ def _single_request(url, data):
         "error {0} in worker request:\n{1}".format(req.status_code, req.text))
 
 
-def worker_request(url, payload):
+def worker_request(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     done = False
     token = None
     try:
@@ -41,7 +43,7 @@ def worker_request(url, payload):
         if res["continue"]:
             cargo_tokens = res["result"]
 
-            def check(ctoken, response):
+            def check(ctoken: str, response: Dict[str, Any]) -> str:
                 if response["token"] != ctoken:
                     raise ValueError("token mismatch {0} != {1}".format(
                         response["token"], ctoken))

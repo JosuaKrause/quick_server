@@ -1,35 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import division
+# pylint: disable=no-name-in-module
+from typing import Any, List, Union, Optional, Dict
 
 import os
 import sys
 import json
 import time
 import select
-try:
-    from urllib.request import Request, urlopen
-    from urllib.error import HTTPError
-except ImportError:
-    from urllib2 import Request, urlopen, HTTPError  # type: ignore
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 from fcntl import fcntl, F_GETFL, F_SETFL
 from subprocess import Popen, PIPE
-
-try:
-    unicode = unicode  # type: ignore
-except NameError:
-    # python 3
-    str = str  # type: ignore
-    unicode = str
-    bytes = bytes  # type: ignore
-    basestring = (str, bytes)
-else:
-    # python 2
-    str = str
-    unicode = unicode
-    bytes = str
-    basestring = basestring
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -40,61 +22,52 @@ if len(sys.argv) > 1 and (sys.argv[1] == '-h' or sys.argv[1] == '--help'):
 SKIP = int(sys.argv[1]) if len(sys.argv) > 1 else 0
 
 
-if hasattr(time, "monotonic"):
-    def _time_mono():
-        return time.monotonic()
-
-    get_time = _time_mono
-    hot_loop = False
-else:
-    def _time_clock():
-        return time.clock()
-
-    get_time = _time_clock
-    hot_loop = True
+def get_time() -> float:
+    return time.monotonic()
 
 
-def do_sleep(seconds, ensure=False):
+def do_sleep(seconds: float, ensure: bool = False) -> None:
     if not ensure:
         time.sleep(seconds)
         return
     now = get_time()
     while get_time() - now < seconds:
         time.sleep(seconds)
-        if hot_loop:
-            for _ in range(10000000):
-                pass
 
 
-def convert_b(bdata):
+def convert_b(bdata: bytes) -> str:
     return repr(bdata).lstrip('b').strip("'\"").replace('\\', '\\\\')
 
 
-def print_msg(prefix, msg, *args):
+def print_msg(prefix: str, msg: Union[str, bytes], *args: Any) -> None:
     if isinstance(msg, bytes):
+        bmsg: bytes = msg
         try:
-            msg = msg.decode('utf8')
+            smsg: str = bmsg.decode('utf8')
         except UnicodeDecodeError:
-            msg = '\n'.join([repr(m) for m in msg.split(b'\n')])
-    for line in msg.format(*args).split('\n'):
+            smsg = '\n'.join([repr(m) for m in bmsg.split(b'\n')])
+    else:
+        smsg = msg
+    for line in smsg.format(*args).split('\n'):
         print("[{0}] {1}".format(prefix, line), file=sys.stderr)
 
 
-def status(msg, *args):
+def status(msg: str, *args: Any) -> None:
     print_msg("TEST", msg, *args)
 
 
-def note(msg, *args):
+def note(msg: str, *args: Any) -> None:
     print_msg("NOTE", msg, *args)
 
 
-def fail(msg, *args):  # pragma: no cover
+def fail(msg: str, *args: Any) -> bool:  # pragma: no cover
     status(msg, *args)
     status("test failed!")
     return False
 
 
-def check_stream(text, requireds, fails, name):
+def check_stream(
+        text: str, requireds: List[str], fails: List[str], name: str) -> bool:
     requireds = requireds[:]
     for line in text.split('\n'):
         for fo in fails:
@@ -115,12 +88,17 @@ def check_stream(text, requireds, fails, name):
 
 
 def cmd_server_run(
-        commands, required_out, fail_out, required_err, fail_err, exit_code=0):
+        commands: List[bytes],
+        required_out: List[str],
+        fail_out: List[str],
+        required_err: List[str],
+        fail_err: List[str],
+        exit_code: int = 0) -> bool:
     p = Popen(PYTHON + ["example.py"], cwd='../example',
               stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    output, error = p.communicate(b'\n'.join(commands) + b'\nquit\n')
-    output = output.decode('utf8')
-    error = error.decode('utf8')
+    boutput, berror = p.communicate(b'\n'.join(commands) + b'\nquit\n')
+    output = boutput.decode('utf8')
+    error = berror.decode('utf8')
     if p.returncode != exit_code:
         report_output(  # pragma: no cover
             output.split('\n'), error.split('\n'))  # pragma: no cover
@@ -134,8 +112,13 @@ def cmd_server_run(
     return True
 
 
-def access_curl(url, fields, required_out, fail_out, required_err, fail_err,
-                exit_code=0):
+def access_curl(url: str,
+                fields: List[str],
+                required_out: List[str],
+                fail_out: List[str],
+                required_err: List[str],
+                fail_err: List[str],
+                exit_code: int = 0) -> bool:
     full_url = 'http://localhost:8000/{0}'.format(url)
     call = ["curl", "--output", "-"]
     for f in fields:
@@ -143,9 +126,9 @@ def access_curl(url, fields, required_out, fail_out, required_err, fail_err,
         call.append(f)
     call.append(full_url)
     p = Popen(call, cwd='../example', stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    output, error = p.communicate()
-    output = output.decode('utf8')
-    error = error.decode('utf8')
+    boutput, berror = p.communicate()
+    output = boutput.decode('utf8')
+    error = berror.decode('utf8')
     if p.returncode != exit_code:
         report_output(  # pragma: no cover
             output.split('\n'), error.split('\n'))  # pragma: no cover
@@ -159,7 +142,8 @@ def access_curl(url, fields, required_out, fail_out, required_err, fail_err,
     return True
 
 
-def curl_server_run(probes, script="example.py"):
+def curl_server_run(
+        probes: List[Any], script: str = "example.py") -> bool:
     p = None
     done = False
     try:
@@ -172,9 +156,9 @@ def curl_server_run(probes, script="example.py"):
         done = True
     finally:
         if p is not None:
-            output, err = p.communicate(b"quit\n")
-            output = output.decode('utf8')
-            err = err.decode('utf8')
+            boutput, berr = p.communicate(b"quit\n")
+            output = boutput.decode('utf8')
+            err = berr.decode('utf8')
             if not done:
                 report_output(  # pragma: no cover
                     output.split('\n'), err.split('\n'))  # pragma: no cover
@@ -193,12 +177,14 @@ def curl_server_run(probes, script="example.py"):
 user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'
 
 
-def access_url(parr, post=None, json_response=None):
+def access_url(parr: List[Any],
+               post: Optional[Dict[str, Any]] = None,
+               json_response: Optional[Dict[str, Any]] = None) -> bool:
     url = 'http://localhost:8000/{0}'.format(parr[0])
     status_code = parr[1]
     rest = parr[2] if len(parr) > 2 else None
     headers = {
-        'User-Agent': user_agent
+        'User-Agent': user_agent,
     }
     if rest is not None and 'eTag' in rest:
         headers["if-none-match"] = rest['eTag']
@@ -206,11 +192,8 @@ def access_url(parr, post=None, json_response=None):
     if post is not None:
         post_str = json.dumps(post, indent=2, sort_keys=True, allow_nan=False)
         req.add_header("Content-Type", "application/json")
-        req.add_header("Content-Length", len(post_str))
-        try:
-            req.add_data(post_str)
-        except AttributeError:
-            req.data = post_str.encode('utf8')
+        req.add_header("Content-Length", str(len(post_str)))
+        req.data = post_str.encode('utf8')
     try:
         response = urlopen(req)
     except HTTPError as e:
@@ -236,7 +219,7 @@ def access_url(parr, post=None, json_response=None):
     return True
 
 
-def url_server_run(probes, script="example.py"):
+def url_server_run(probes: List[Any], script: str = "example.py") -> bool:
     p = None
     done = False
     try:
@@ -249,9 +232,9 @@ def url_server_run(probes, script="example.py"):
         done = True
     finally:
         if p is not None:
-            output, err = p.communicate(b"quit\n")
-            output = output.decode('utf8')
-            err = err.decode('utf8')
+            boutput, berr = p.communicate(b"quit\n")
+            output = boutput.decode('utf8')
+            err = berr.decode('utf8')
             if not done:
                 report_output(  # pragma: no cover
                     output.split('\n'), err.split('\n'))  # pragma: no cover
@@ -267,12 +250,16 @@ def url_server_run(probes, script="example.py"):
     return True
 
 
-def access_worker(url, args, expected_keys, max_tries, force_token):
+def access_worker(url: str,
+                  args: Dict[str, Any],
+                  expected_keys: List[str],
+                  max_tries: int,
+                  force_token: bool) -> str:
 
-    def rebuild(keys):
+    def rebuild(keys: List[str]) -> str:
         res = ""
         for k in keys:
-            ans = {}
+            ans: Dict[str, Any] = {}
             if not access_url([url, 200], post={
                         "action": "cargo",
                         "token": k,
@@ -286,13 +273,13 @@ def access_worker(url, args, expected_keys, max_tries, force_token):
             res += ans["result"]
         return res
 
-    cmd = {
+    cmd: Dict[str, Any] = {
         "action": "start",
         "payload": args,
     }
     tries = 0
     while True:
-        answer = {}
+        answer: Dict[str, Any] = {}
         if tries > max_tries and max_tries > 0:
             cmd = {
                 "action": "stop",
@@ -321,7 +308,7 @@ def access_worker(url, args, expected_keys, max_tries, force_token):
         do_sleep(0.1)  # don't spam the server
 
 
-def worker_server_run(probes, script="example.py"):
+def worker_server_run(probes: List[Any], script: str = "example.py") -> bool:
     p = None
     done = False
     try:
@@ -336,9 +323,9 @@ def worker_server_run(probes, script="example.py"):
         done = True
     finally:
         if p is not None:
-            output, err = p.communicate(b"quit\n")
-            output = output.decode('utf8')
-            err = err.decode('utf8')
+            boutput, berr = p.communicate(b"quit\n")
+            output = boutput.decode('utf8')
+            err = berr.decode('utf8')
             if not done:
                 report_output(  # pragma: no cover
                     output.split('\n'), err.split('\n'))  # pragma: no cover
@@ -354,7 +341,8 @@ def worker_server_run(probes, script="example.py"):
     return True
 
 
-def report_output(output, error):  # pragma: no cover
+def report_output(  # pragma: no cover
+        output: List[str], error: List[str]) -> None:
     status("STD_OUT>>>")
     for s in output:
         status("{0}", s.rstrip())
@@ -365,13 +353,19 @@ def report_output(output, error):  # pragma: no cover
     status("<<<STD_ERR")
 
 
-def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err,
-                       exit_code=0, script="example.py"):
-    output = []
-    error = []
+def cmd_url_server_run(actions: List[List[Any]],
+                       required_out: List[str],
+                       fail_out: List[str],
+                       required_err: List[str],
+                       fail_err: List[str],
+                       exit_code: int = 0,
+                       script: str = "example.py") -> bool:
+    output: List[str] = []
+    error: List[str] = []
 
-    def read_all(write):
-        write = write.encode('utf8')
+    def read_all(swrite: str) -> None:
+        assert p is not None
+        write = swrite.encode('utf8')
         written = 0
         while True:
             sels = select.select([p.stdout, p.stderr], [p.stdin], [])
@@ -459,13 +453,14 @@ def cmd_url_server_run(actions, required_out, fail_out, required_err, fail_err,
     return True
 
 
-def token_test():
+def token_test() -> bool:
     from quick_server import QuickServer
+
     qs = QuickServer(("", 0))
     tkn = qs.create_token()
     note("time: {0}", get_time())
 
-    def chk(name, expire, live):
+    def chk(name: str, expire: float, live: bool) -> bool:
         with qs.get_token_obj(name, expire, readonly=True) as obj:
             if live and "foo" not in obj:
                 note("time: {0}", get_time())
@@ -506,9 +501,9 @@ note("python: {0}".format(" ".join(PYTHON)))
 if SKIP < 1:
     note("basic command check")
     if not cmd_server_run([
-                b"requests uptime"
+                b"requests uptime",
             ], [], [], [
-                "requests made to uptime: 0"
+                "requests made to uptime: 0",
             ], []):
         exit(1)  # pragma: no cover
 if SKIP < 2:
@@ -562,7 +557,7 @@ if SKIP < 4:
                 "starting server at localhost:8000",
                 "requests made to uptime: 0",
                 "\"GET /api/uptime/ HTTP/1.1\"",
-                "requests made to uptime: 1"
+                "requests made to uptime: 1",
             ], []):
         exit(4)  # pragma: no cover
 if SKIP < 5:
@@ -603,16 +598,16 @@ if SKIP < 7:
     if not worker_server_run([
                 [
                     'api/uptime_worker', {"time": 1},
-                    ["uptime"], -1, None, "normal"
+                    ["uptime"], -1, None, "normal",
                 ], [
                     'api/uptime_worker', {"time": 0},
-                    ["uptime"], 1, None, "normal"
+                    ["uptime"], 1, None, "normal",
                 ], [
                     'api/uptime_worker', {"time": 1},
-                    ["uptime"], 1, None, "cancel"
+                    ["uptime"], 1, None, "cancel",
                 ], [
                     'api/uptime_worker', {"time": 1},
-                    None, -1, 0, "cancel"
+                    None, -1, 0, "cancel",
                 ],
             ], script="example2.py"):
         exit(7)  # pragma: no cover
@@ -650,7 +645,7 @@ if SKIP < 8:
                     "api/upload",
                     [
                         "name=foo", "abc=@test.upload",
-                        "bin=@binary.upload", "def=ghi"
+                        "bin=@binary.upload", "def=ghi",
                     ], [
                         "def is ghi",
                         "name is foo",
@@ -676,15 +671,15 @@ if SKIP < 9:
                 [
                     'api/message', {"split": False},
                     ["1234567890 the quick brown fox jumps over the lazy dog"],
-                    -1, None, "normal"
+                    -1, None, "normal",
                 ], [
                     'api/message', {"split": True},
                     ["1234567890 the quick brown fox jumps over the lazy dog"],
-                    -1, None, "normal"
+                    -1, None, "normal",
                 ], [
                     'api/message', {"split": False},
                     ["1234567890 the quick brown fox jumps over the lazy dog"],
-                    -1, None, "normal"
+                    -1, None, "normal",
                 ],
             ], script="example2.py"):
         exit(9)  # pragma: no cover

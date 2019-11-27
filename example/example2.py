@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# pylint: disable=no-name-in-module
+from typing import List, Any
+
 try:
     from time import clock
 except ImportError:
@@ -8,7 +11,14 @@ from time import sleep
 import sys
 import os
 
-from quick_server import create_server, msg, setup_restart
+from quick_server import (
+    create_server,
+    msg,
+    QuickServerRequestHandler,
+    ReqArgs,
+    setup_restart,
+    WorkerArgs,
+)
 
 setup_restart()
 
@@ -31,7 +41,7 @@ count_uptime = 0
 
 
 @server.json_get('/api/uptime/', 1)
-def uptime(req, args):
+def uptime(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
     global count_uptime
 
     # request has one mandatory additional path segment
@@ -42,7 +52,7 @@ def uptime(req, args):
             (clock() - start) * 1000.0).strip(),
     }
 
-    def convert(value):
+    def convert(value: Any) -> Any:
         try:
             return float(value)
         except ValueError:
@@ -50,25 +60,25 @@ def uptime(req, args):
 
     for (key, value) in args["query"].items():
         res[key] = [
-            convert(v) for v in value.split(',')
-        ] if ',' in value else convert(value)
+            convert(v) for v in str(value).split(',')
+        ] if ',' in str(value) else convert(value)
     return res
 
 
 @server.json_post('/api/upload')
-def upload_file(req, args):
+def upload_file(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
     ix = 0
     res = {}
     for (k, v) in sorted(args['post'].items(), key=lambda e: e[0]):
         res[ix] = "{0} is {1}".format(k, v)
         ix += 1
     for (name, f) in sorted(args['files'].items(), key=lambda e: e[0]):
-        fcontent = f.read()
-        size = len(fcontent)
+        bfcontent = f.read()
+        size = len(bfcontent)
         try:
-            fcontent = fcontent.decode('utf8')
+            fcontent = bfcontent.decode('utf8')
         except UnicodeDecodeError:
-            fcontent = repr(fcontent)
+            fcontent = repr(bfcontent)
         res[ix] = "{0} is {1} bytes".format(name, size)
         ix += 1
         for line in fcontent.split('\n'):
@@ -78,7 +88,7 @@ def upload_file(req, args):
 
 
 @server.json_worker('/api/uptime_worker')
-def uptime_worker(args):
+def uptime_worker(args: WorkerArgs) -> Any:
     global count_uptime
     msg("sleep {0}", int(args["time"]))
     sleep(int(args["time"]))
@@ -89,7 +99,7 @@ def uptime_worker(args):
 
 
 @server.json_worker('/api/message')
-def message(args):
+def message(args: WorkerArgs) -> Any:
     if args["split"]:
         server.max_chunk_size = 10
     else:
@@ -98,12 +108,12 @@ def message(args):
     return "1234567890 the quick brown fox jumps over the lazy dog"
 
 
-def complete_requests(_args, text):
+def complete_requests(_args: List[str], text: str) -> List[str]:
     return ["uptime"] if "uptime".startswith(text) else []
 
 
 @server.cmd(1, complete_requests)
-def requests(args):
+def requests(args: List[str]) -> None:
     if args[0] != 'uptime':
         msg("unknown request: {0}", args[0])
     else:
