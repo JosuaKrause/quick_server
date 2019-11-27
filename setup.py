@@ -26,7 +26,7 @@ thread-safe.
 
 Please refer to the example folder for usage examples.
 """
-from distutils.core import setup
+from setuptools import setup
 
 from codecs import open
 from os import path
