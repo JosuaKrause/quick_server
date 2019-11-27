@@ -156,7 +156,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.1"
+__version__ = "0.7.2"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -2112,7 +2112,8 @@ class QuickServer(http_server.HTTPServer):
         self.max_chunk_size = 10 * 1024 * 1024
         self.cross_origin = False
         self.suppress_noise = False
-        self.report_slow_requests = False
+        self.report_slow_requests: \
+            Union[bool, Callable[[str, str], None]] = False
         self.verbose_workers = False
         self.no_command_loop = False
         self.cache: Optional[Any] = None

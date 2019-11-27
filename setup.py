@@ -26,8 +26,7 @@ thread-safe.
 
 Please refer to the example folder for usage examples.
 """
-
-from setuptools import setup  # type: ignore
+from distutils.core import setup
 
 from codecs import open
 from os import path
@@ -43,7 +42,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='quick_server',
-    version='0.7.1',
+    version='0.7.2',
     description='QuickServer is a quick to use and ' +
                 'easy to set up server implementation.',
     long_description=long_description,
