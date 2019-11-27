@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# pylint: disable=no-name-in-module
+from typing import Any, List
 try:
     from time import clock
 except ImportError:
@@ -7,7 +9,12 @@ except ImportError:
 import sys
 import os
 
-from quick_server import create_server, msg
+from quick_server import (  # type: ignore
+    create_server,
+    msg,
+    QuickServerRequestHandler,
+    ReqArgs,
+)
 
 addr = ''
 port = 8000
@@ -21,7 +28,7 @@ count_uptime = 0
 
 
 @server.json_get('/api/uptime/')
-def uptime(req, args):
+def uptime(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
     global count_uptime
 
     count_uptime += 1
@@ -31,12 +38,12 @@ def uptime(req, args):
     }
 
 
-def complete_requests(_args, text):
+def complete_requests(_args: List[str], text: str) -> List[str]:
     return ["uptime"] if "uptime".startswith(text) else []
 
 
 @server.cmd(1, complete_requests)
-def requests(args):
+def requests(args: List[str]) -> None:
     if args[0] != 'uptime':
         msg("unknown request: {0}", args[0])
     else:

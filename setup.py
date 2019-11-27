@@ -27,7 +27,7 @@ thread-safe.
 Please refer to the example folder for usage examples.
 """
 
-from setuptools import setup
+from setuptools import setup  # type: ignore
 
 from codecs import open
 from os import path
