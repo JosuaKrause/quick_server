@@ -1378,7 +1378,7 @@ class TokenHandler:
         """Ensures that all expired tokens get removed."""
         raise NotImplementedError()  # pragma: no cover
 
-    def add_token(self, key: str, expire: Optional[int]) -> TokenObj:
+    def add_token(self, key: str, expire: Optional[float]) -> TokenObj:
         """Returns the content of a token and updates the expiration in seconds
            of the token. Unknown tokens get initialized.
            `flush_old_tokens` is called immediately before this function.
@@ -1441,7 +1441,7 @@ class DefaultTokenHandler(TokenHandler):
                 del self._token_map[k]
             self._token_timings = self._token_timings[first_valid:]
 
-    def add_token(self, key: str, expire: Optional[int]) -> TokenObj:
+    def add_token(self, key: str, expire: Optional[float]) -> TokenObj:
         # NOTE: has _token_lock
         now = get_time()
         until = now + expire if expire is not None else None
@@ -3038,7 +3038,7 @@ class QuickServer(http_server.HTTPServer):
     def get_token_obj(
             self,
             token: str,
-            expire: Union[int, None, Literal["DEFAULT"]] = _token_default,
+            expire: Union[float, None, Literal["DEFAULT"]] = _token_default,
             readonly: bool = False) -> Iterator[TokenObj]:
         """Returns or creates the object associaten with the given token.
            Must be used in a `with` block. After the block ends the content
@@ -3065,9 +3065,9 @@ class QuickServer(http_server.HTTPServer):
             happen.
         """
         if expire == _token_default:
-            aexpire: Optional[int] = self.get_default_token_expiration()
+            aexpire: Optional[float] = self.get_default_token_expiration()
         else:
-            aexpire = cast(Optional[int], expire)
+            aexpire = cast(Optional[float], expire)
         write_back = False
         try:
             with self._token_handler.lock(token):
