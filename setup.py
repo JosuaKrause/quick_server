@@ -67,7 +67,12 @@ setup(
         'test': [],
     },
     package_data={
-        'quick_server': ['favicon.ico', 'worker.js', 'worker.legacy.js'],
+        'quick_server': [
+            'favicon.ico',
+            'py.typed',
+            'worker.js',
+            'worker.legacy.js',
+        ],
     },
     data_files=[],
 )
