@@ -156,7 +156,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.2"
+__version__ = "0.7.3"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -292,7 +292,19 @@ def msg(message: str, *args: Any, **kwargs: Any) -> None:
     else:
         head = '[SERVER] '
     out = StringIO()
-    for curline in message.format(*args, **kwargs).split('\n'):
+    try:
+        full_message = message.format(*args, **kwargs)
+    except ValueError:
+        full_message = str(message)
+        for arg in args:
+            full_message += '\n'
+            full_message += str(arg)
+        for (key, value) in kwargs.items():
+            full_message += '\n'
+            full_message += str(key)
+            full_message += '='
+            full_message += str(value)
+    for curline in full_message.splitlines():
         out.write('{0}{1}\n'.format(head, curline))
     out.flush()
     out.seek(0)
