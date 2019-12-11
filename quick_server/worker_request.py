@@ -11,17 +11,45 @@ DELAY_INC = 10.0
 DELAY_MUL = 1.01
 
 
+class WorkerError(ValueError):
+    def __init__(self, msg: str, status_code: int):
+        super().__init__(msg)
+        self._status_code = status_code
+
+    def get_status_code(self) -> int:
+        """The status code of the failed request."""
+        return self._status_code
+
+
 def _single_request(url: str, data: Dict[str, Any]) -> Dict[str, Any]:
-    req = requests.post(url, headers={
-        "Content-Type": "application/json",
-    }, data=json.dumps(data))
+    req = requests.post(url, json=data)
     if req.status_code == 200:
         return json.loads(req.text)
-    raise ValueError(
-        "error {0} in worker request:\n{1}".format(req.status_code, req.text))
+    raise WorkerError(
+        f"error {req.status_code} in worker request:\n{req.text}",
+        req.status_code)
 
 
 def worker_request(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Issues a worker request to the given url. This call blocks until the
+       request finishes.
+
+    Parameters
+    ----------
+    url : string
+        The URL.
+
+    payload : dict
+        The arguments to the worker request call.
+
+    Returns
+    -------
+        The response of the worker request.
+
+    Exceptions
+    ----------
+        Raises a WorkerError if the request's status code is not 200.
+    """
     done = False
     token = None
     try:
