@@ -92,6 +92,7 @@ ReqArgs = TypedDict('ReqArgs', {
     'post': WorkerArgs,
     'files': Dict[str, BytesIO],
     'fragment': str,
+    'segments': Dict[str, str],
 }, total=False)
 
 ReqF = TypeVar(
@@ -156,7 +157,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.5"
+__version__ = "0.7.6"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -294,7 +295,7 @@ def msg(message: str, *args: Any, **kwargs: Any) -> None:
     out = StringIO()
     try:
         full_message = message.format(*args, **kwargs)
-    except ValueError:
+    except (ValueError, KeyError):
         full_message = str(message)
         for arg in args:
             full_message += '\n'
@@ -817,24 +818,58 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         path = self.path
         # interpreting the URL masks to find which method to call
         method: Optional[Callable[
-            ['QuickServerRequestHandler', ReqArgs], Optional[BytesIO],
+            [QuickServerRequestHandler, ReqArgs], Optional[BytesIO],
         ]] = None
         method_mask = None
         rem_path = ""
+        segments: Dict[str, str] = {}
+
+        def is_match(mask: str,
+                     cur_path: str) -> Tuple[bool, str, Dict[str, str]]:
+            is_m = True
+            segs = {}
+            for seg in mask.split("/"):
+                if not seg:
+                    continue
+                if not cur_path or cur_path[0] != "/":
+                    is_m = False
+                    break
+                cur_path = cur_path[1:]
+                if seg.startswith(":"):
+                    seg = seg[1:]
+                    delim = cur_path.find("/")
+                    if delim >= 0:
+                        seg_value = cur_path[:delim]
+                        cur_path = cur_path[delim:]
+                    else:
+                        seg_value = cur_path
+                        cur_path = ""
+                    segs[seg] = seg_value
+                    continue
+                if not cur_path.startswith(seg):
+                    is_m = False
+                    break
+                cur_path = cur_path[len(seg):]
+                if cur_path and cur_path[0] not in "#?/":
+                    is_m = False
+                    break
+            return is_m, cur_path, segs
+
         for mask, m in self.server._f_mask.get(method_str, []):
-            lm = len(mask)
-            if path.startswith(mask) and (mask[-1] == '/' or
-                                          len(path) <= lm + 1 or
-                                          path[lm] in '#?/'):
+            is_m, path_rest, segs = is_match(mask, path)
+            if is_m:
                 method = m
                 method_mask = mask
-                rem_path = path[lm:]
+                rem_path = path_rest
+                segments = segs
                 break
         if method is None:
             return False
         assert method_mask is not None
         files: Dict[str, BytesIO] = {}
-        args: ReqArgs = {}
+        args: ReqArgs = {
+            "segments": segments,
+        }
         try:
             # POST can accept forms encoded in JSON
             if method_str in ['POST', 'DELETE', 'PUT']:
