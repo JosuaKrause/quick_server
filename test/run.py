@@ -746,10 +746,13 @@ if SKIP < 11:
                 ('api/123/a/b/c/d', 200, {"version": "123"}),
                 ('api/123?a/b/c/d', 404, None),
                 ('api/123/a?b/c/d', 404, None),
+                ('api/123/a?b/c/de', 404, None),
                 ('api/api/a/b/c/d?', 200, {"version": "api"}),
                 ('api/abcd/a/b/c/d#', 200, {"version": "abcd"}),
                 ('api/abcd/', 404, None),
                 ('api/abcd/a/b/c/d/', 200, {"version": "abcd"}),
+                ('api/foo/foo/?ignore=me', 200, {"foo": "foo"}),
+                ('api/foo/foo?include=me', 200, {"foo": "foo?include=me"}),
             ]):
         exit(11)
 
