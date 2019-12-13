@@ -48,7 +48,14 @@ def print_msg(prefix: str, msg: Union[str, bytes], *args: Any) -> None:
             smsg = '\n'.join([repr(m) for m in bmsg.split(b'\n')])
     else:
         smsg = msg
-    for line in smsg.format(*args).split('\n'):
+    try:
+        full_message = smsg.format(*args)
+    except (ValueError, KeyError):
+        full_message = str(smsg)
+        for arg in args:
+            full_message += '\n'
+            full_message += str(arg)
+    for line in full_message.split('\n'):
         print("[{0}] {1}".format(prefix, line), file=sys.stderr)
 
 
@@ -250,7 +257,7 @@ def url_server_run(probes: List[Any], script: str = "example.py") -> bool:
     return True
 
 
-def url_response_run(probes: List[Tuple[str, int, Dict[str, str]]],
+def url_response_run(probes: List[Tuple[str, int, Optional[Dict[str, str]]]],
                      script: str = "example.py") -> bool:
     p = None
     done = False
@@ -259,17 +266,21 @@ def url_response_run(probes: List[Tuple[str, int, Dict[str, str]]],
                   stdin=PIPE, stdout=PIPE, stderr=PIPE)
         do_sleep(1)  # give the server some time to wake up
         for parr in probes:
-            json_res: Dict[str, Any] = {}
+            expect_obj = parr[2]
+            json_res: Optional[Dict[str, Any]] = \
+                {} if expect_obj is not None else None
             if not access_url([parr[0], parr[1]], json_response=json_res):
                 return False  # pragma: no cover
-            expect_obj = parr[2]
-            if sorted(json_res.keys()) != sorted(expect_obj.keys()):
-                return fail(  # pragme: no cover
-                    f"response doesnt match: {json_res} != {expect_obj}")
-            for (key, value) in expect_obj.items():
-                if json_res[key] != value:
+            if expect_obj is not None:
+                assert json_res is not None
+                obj = json_res["response"]
+                if sorted(obj.keys()) != sorted(expect_obj.keys()):
                     return fail(  # pragme: no cover
-                        f"response doesnt match: {json_res} != {expect_obj}")
+                        f"response doesnt match: {obj} != {expect_obj}")
+                for (key, value) in expect_obj.items():
+                    if obj[key] != value:
+                        return fail(  # pragme: no cover
+                            f"response doesnt match: {obj} != {expect_obj}")
         done = True
     finally:
         if p is not None:
@@ -733,13 +744,13 @@ if SKIP < 11:
     if not url_response_run([
                 ('api/:version/a/b/c/d', 200, {"version": ":version"}),
                 ('api/123/a/b/c/d', 200, {"version": "123"}),
-                ('api/123?a/b/c/d', 404, {}),
-                ('api/123/a?b/c/d', 404, {}),
+                ('api/123?a/b/c/d', 404, None),
+                ('api/123/a?b/c/d', 404, None),
                 ('api/api/a/b/c/d?', 200, {"version": "api"}),
                 ('api/abcd/a/b/c/d#', 200, {"version": "abcd"}),
-                ('api/abcd/', 404, {}),
+                ('api/abcd/', 404, None),
                 ('api/abcd/a/b/c/d/', 200, {"version": "abcd"}),
-            ], script="example2.py"):
+            ]):
         exit(11)
 
 note("all tests successful!")

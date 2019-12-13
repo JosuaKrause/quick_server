@@ -2,7 +2,10 @@ from typing import Any, Dict
 
 import json
 import time
-import requests
+try:
+    import requests
+except ImportError:
+    pass
 
 
 DELAY_INIT = 500.0
@@ -50,6 +53,11 @@ def worker_request(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     ----------
         Raises a WorkerError if the request's status code is not 200.
     """
+    try:
+        requests
+    except NameError:
+        raise RuntimeError(
+            "this function requires the package 'requests' to be installed!")
     done = False
     token = None
     try:

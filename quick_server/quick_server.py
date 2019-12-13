@@ -295,7 +295,7 @@ def msg(message: str, *args: Any, **kwargs: Any) -> None:
     out = StringIO()
     try:
         full_message = message.format(*args, **kwargs)
-    except ValueError:
+    except (ValueError, KeyError):
         full_message = str(message)
         for arg in args:
             full_message += '\n'

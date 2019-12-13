@@ -38,6 +38,13 @@ def uptime(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
     }
 
 
+@server.json_get('/api/:version/a/b/c/d')
+def version(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
+    return {
+        "version": args["segments"]["version"],
+    }
+
+
 def complete_requests(_args: List[str], text: str) -> List[str]:
     return ["uptime"] if "uptime".startswith(text) else []
 

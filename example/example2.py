@@ -87,13 +87,6 @@ def upload_file(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
     return res
 
 
-@server.json_post('/api/:version/a/b/c/d')
-def version(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
-    return {
-        "version": args["segments"]["version"],
-    }
-
-
 @server.json_worker('/api/uptime_worker')
 def uptime_worker(args: WorkerArgs) -> Any:
     global count_uptime
