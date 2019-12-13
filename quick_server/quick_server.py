@@ -318,22 +318,31 @@ def msg(message: str, *args: Any, **kwargs: Any) -> None:
     out.close()
 
 
-ERR_HND: Optional[Callable[[str, List[str]], None]] = None
+ERR_SOURCE_COMMAND = "err_command"
+ERR_SOURCE_GENERAL_QS = "err_quick_server"
+ERR_SOURCE_REQUEST = "err_request"
+ERR_SOURCE_RESTART = "err_restart"
+ERR_SOURCE_WORKER = "err_worker"
+
+
+ERR_HND: Optional[Callable[[str, str, List[str]], None]] = None
 
 
 def set_global_error_handler(
-        fun: Optional[Callable[[str, List[str]], None]]) -> None:
+        fun: Optional[Callable[[str, str, List[str]], None]]) -> None:
     global ERR_HND
 
     ERR_HND = fun
 
 
-def global_handle_error(
-        errmsg: str, tb: str, mfun: Callable[[str], None]) -> None:
+def global_handle_error(source: str,
+                        errmsg: str,
+                        tb: str,
+                        mfun: Callable[[str], None]) -> None:
     if ERR_HND is None:
-        mfun(f"{errmsg}\n{tb}")
+        mfun(f"ERROR in {source}: {errmsg}\n{tb}")
         return
-    ERR_HND(errmsg, tb.splitlines())
+    ERR_HND(source, errmsg, tb.splitlines())
 
 
 DEBUG: Optional[bool] = None
@@ -451,6 +460,7 @@ def _start_restart_loop(exit_code: Optional[str], in_atexit: bool) -> None:
                     child_code = _error_exit_code
     except:  # nopep8
         global_handle_error(
+            ERR_SOURCE_RESTART,
             "error during restart:", traceback.format_exc(), msg)
         child_code = _error_exit_code
     finally:
@@ -1116,11 +1126,13 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if self.server.can_ignore_error(self):
             return
         if thread_local.status_code is None:
-            global_handle_error("ERROR: Cannot send error status code! "
+            global_handle_error(ERR_SOURCE_REQUEST,
+                                "ERROR: Cannot send error status code! "
                                 "Header already sent!",
                                 traceback.format_exc(), msg)
         else:
             global_handle_error(
+                ERR_SOURCE_REQUEST,
                 "ERROR: Error while processing request:",
                 traceback.format_exc(), msg)
             try:
@@ -1129,6 +1141,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 if self.server.can_ignore_error(self):
                     return
                 global_handle_error(
+                    ERR_SOURCE_REQUEST,
                     "ERROR: Cannot send error status code:",
                     traceback.format_exc(), msg)
 
@@ -1684,6 +1697,7 @@ class BaseWorker:
                 result, tb = err
                 if tb is not None:
                     global_handle_error(
+                        ERR_SOURCE_WORKER,
                         f"Error in purged worker for {cur_key}: {result}",
                         tb, self._msg)
                 return
@@ -1749,6 +1763,7 @@ class BaseWorker:
                     # e encodes code, tb encodes message
                     raise PreventDefaultResponse(int(err[len(PDR_MARK):]), tb)
                 global_handle_error(
+                    ERR_SOURCE_WORKER,
                     f"Error in worker for {self._mask} ({cur_key}): {err}",
                     tb, self._msg)
                 raise PreventDefaultResponse(500, "worker error")
@@ -3459,6 +3474,7 @@ class QuickServer(http_server.HTTPServer):
                         close = True
                     except Exception:
                         global_handle_error(
+                            ERR_SOURCE_COMMAND,
                             f"exception executing command {line}",
                             traceback.format_exc(), msg)
             finally:
@@ -3556,5 +3572,6 @@ class QuickServer(http_server.HTTPServer):
             return
         thread = threading.current_thread()
         global_handle_error(
+            ERR_SOURCE_GENERAL_QS,
             f"Error in request ({client_address}): "
             f"{repr(request)} in {thread.name}", traceback.format_exc(), msg)

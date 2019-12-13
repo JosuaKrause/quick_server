@@ -68,9 +68,9 @@ def note(msg: str, *args: Any) -> None:
 
 
 def fail(msg: str, *args: Any) -> bool:  # pragma: no cover
-    status(msg, *args)
-    status("test failed!")
-    return False
+    status(msg, *args)  # pragma: no cover
+    status("test failed!")  # pragma: no cover
+    return False  # pragma: no cover
 
 
 def check_stream(
@@ -394,15 +394,15 @@ def worker_server_run(probes: List[Any], script: str = "example.py") -> bool:
 
 
 def report_output(  # pragma: no cover
-        output: List[str], error: List[str]) -> None:
-    status("STD_OUT>>>")
-    for s in output:
-        status("{0}", s.rstrip())
-    status("<<<STD_OUT")
-    status("STD_ERR>>>")
-    for s in error:
-        status("{0}", s.rstrip())
-    status("<<<STD_ERR")
+        output: List[str], error: List[str]) -> None:  # pragma: no cover
+    status("STD_OUT>>>")  # pragma: no cover
+    for s in output:  # pragma: no cover
+        status("{0}", s.rstrip())  # pragma: no cover
+    status("<<<STD_OUT")  # pragma: no cover
+    status("STD_ERR>>>")  # pragma: no cover
+    for s in error:  # pragma: no cover
+        status("{0}", s.rstrip())  # pragma: no cover
+    status("<<<STD_ERR")  # pragma: no cover
 
 
 def cmd_url_server_run(actions: List[List[Any]],
@@ -738,7 +738,7 @@ if SKIP < 9:
 if SKIP < 10:
     note("token")
     if not token_test():
-        exit(10)
+        exit(10)  # pragma: no cover
 if SKIP < 11:
     note("url args")
     if not url_response_run([
@@ -754,7 +754,7 @@ if SKIP < 11:
                 ('api/foo/foo/?ignore=me', 200, {"foo": "foo"}),
                 ('api/foo/foo?include=me', 200, {"foo": "foo?include=me"}),
             ]):
-        exit(11)
+        exit(11)  # pragma: no cover
 
 note("all tests successful!")
 exit(0)
