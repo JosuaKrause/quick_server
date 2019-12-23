@@ -157,7 +157,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.7"
+__version__ = "0.7.8"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -3075,7 +3075,7 @@ class QuickServer(http_server.HTTPServer):
                            args: ReqArgs) -> WorkerResponse:
                 post = args["post"]
                 # NOTE: path segment variables overwrite sent arguments
-                for (key, value) in args["segments"]:
+                for (key, value) in args["segments"].items():
                     post[key] = value
                 try:
                     return worker.compute_worker(req, post)
