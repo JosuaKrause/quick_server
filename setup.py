@@ -37,12 +37,11 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 # NOTE! steps to distribute:
-# $ python setup.py sdist bdist_wheel
-# $ twine upload dist/... <- here be the new version!
+# $ make publish
 
 setup(
     name='quick_server',
-    version='0.7.8',
+    version='0.7.9',
     description='QuickServer is a quick to use and ' +
                 'easy to set up server implementation.',
     long_description=long_description,
