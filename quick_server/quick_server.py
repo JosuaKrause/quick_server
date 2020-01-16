@@ -900,7 +900,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     content = self.rfile.read(clen)
                     post_res: WorkerArgs = {}
                     if ctype == 'application/json':
-                        post_res = json.loads(content)
+                        try:
+                            post_res = json.loads(content)
+                        except json.decoder.JSONDecodeError as json_err:
+                            raise ValueError(
+                                "request is not JSON formatted!",
+                                content) from json_err
                     elif ctype == 'application/x-www-form-urlencoded':
                         post_res = self.convert_argmap(content)
                     args['post'] = post_res
