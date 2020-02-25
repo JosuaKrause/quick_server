@@ -157,7 +157,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.9"
+__version__ = "0.7.10"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -343,6 +343,21 @@ def global_handle_error(source: str,
         mfun(f"ERROR in {source}: {errmsg}\n{tb}")
         return
     ERR_HND(source, errmsg, tb.splitlines())
+
+
+READLINE_IO: Optional[Tuple[TextIO, TextIO]] = None
+
+
+def set_readline_io(stdout: TextIO, stderr: TextIO) -> None:
+    global READLINE_IO
+
+    READLINE_IO = (stdout, stderr)
+
+
+def clear_readline_io() -> None:
+    global READLINE_IO
+
+    READLINE_IO = None
 
 
 DEBUG: Optional[bool] = None
@@ -3375,13 +3390,6 @@ class QuickServer(http_server.HTTPServer):
         def quit(args: List[str]) -> None:  # pylint: disable=unused-variable
             self.done = True
 
-        # loading the history
-        hfile = self.history_file
-        try:
-            readline.read_history_file(hfile)
-        except IOError:
-            pass
-
         # set up command completion
         def complete(text: str, state: int) -> Optional[str]:
             if state == 0:
@@ -3429,14 +3437,6 @@ class QuickServer(http_server.HTTPServer):
                 return suggestions[state]
             return None
 
-        old_completer = readline.get_completer()
-        readline.set_completer(complete)
-        # be mac compatible
-        if readline.__doc__ is not None and 'libedit' in readline.__doc__:
-            readline.parse_and_bind("bind ^I rl_complete")
-        else:
-            readline.parse_and_bind("tab: complete")
-
         # remember to clean up before exit -- the call must be idempotent!
         def clean_up() -> None:
             with cmd_state['clean_up_lock']:
@@ -3448,9 +3448,6 @@ class QuickServer(http_server.HTTPServer):
 
             readline.write_history_file(hfile)
             readline.set_completer(old_completer)
-
-        atexit.register(clean_up)
-        self._clean_up_call = clean_up
 
         def cmd_loop() -> None:
             close = False
@@ -3490,10 +3487,40 @@ class QuickServer(http_server.HTTPServer):
                     self.no_command_loop = True
                 clean_up()
 
-        if not self.no_command_loop:
-            t = self._thread_factory(target=cmd_loop)
-            t.daemon = True
-            t.start()
+        try:
+            if READLINE_IO is not None:
+                old_std: Optional[TextIO] = sys.stdout
+                old_err: Optional[TextIO] = sys.stderr
+                sys.stdout, sys.stderr = READLINE_IO
+            else:
+                old_std, old_err = None, None
+            # loading the history
+            hfile = self.history_file
+            try:
+                readline.read_history_file(hfile)
+            except IOError:
+                pass
+
+            old_completer = readline.get_completer()
+            readline.set_completer(complete)
+            # be mac compatible
+            if readline.__doc__ is not None and 'libedit' in readline.__doc__:
+                readline.parse_and_bind("bind ^I rl_complete")
+            else:
+                readline.parse_and_bind("tab: complete")
+
+            atexit.register(clean_up)
+            self._clean_up_call = clean_up
+
+            if not self.no_command_loop:
+                t = self._thread_factory(target=cmd_loop)
+                t.daemon = True
+                t.start()
+        finally:
+            if old_std:
+                sys.stdout = old_std
+            if old_err:
+                sys.stderr = old_err
 
     def handle_request(self) -> None:
         """Handles an HTTP request.The actual HTTP request is handled using a
