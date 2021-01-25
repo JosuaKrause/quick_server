@@ -157,7 +157,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.11"
+__version__ = "0.7.12"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -900,6 +900,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if method_str in ['POST', 'DELETE', 'PUT']:
                 ctype = _getheader(self.headers, 'content-type')
                 crest = ""
+                if ctype is None:
+                    ctype = ""
                 if ';' in ctype:
                     splix = ctype.index(';')
                     crest = ctype[splix+1:].strip() \
