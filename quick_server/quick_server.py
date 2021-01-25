@@ -157,7 +157,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.11"
+__version__ = "0.7.12"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -900,6 +900,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if method_str in ['POST', 'DELETE', 'PUT']:
                 ctype = _getheader(self.headers, 'content-type')
                 crest = ""
+                if ctype is None:
+                    ctype = ""
                 if ';' in ctype:
                     splix = ctype.index(';')
                     crest = ctype[splix+1:].strip() \
@@ -3451,51 +3453,55 @@ class QuickServer(http_server.HTTPServer):
             readline.write_history_file(hfile)
             readline.set_completer(old_completer)
 
+        if READLINE_IO is not None:
+            stdout, stderr = READLINE_IO
+        else:
+            stdout, stderr = sys.stdout, sys.stderr
+
         def cmd_loop() -> None:
             close = False
             kill = True
-            try:
-                while not self.done and not close and not self.no_command_loop:
-                    line = ""
-                    try:
+            with contextlib.redirect_stdout(stdout), \
+                    contextlib.redirect_stderr(stderr):
+                try:
+                    while not self.done and \
+                            not close and not self.no_command_loop:
+                        line = ""
                         try:
-                            line = input(self.prompt)
-                        except IOError as e:
-                            if e.errno == errno.EBADF:
-                                close = True
-                                kill = False
-                            elif (e.errno == errno.EWOULDBLOCK or
-                                  e.errno == errno.EAGAIN or
-                                  e.errno == errno.EINTR):
-                                continue
-                            else:
-                                raise e
-                        self.handle_cmd(line)
-                    except EOFError:
-                        close = True
-                        kill = False
-                    except KeyboardInterrupt:
-                        close = True
-                    except Exception:
-                        global_handle_error(
-                            ERR_SOURCE_COMMAND,
-                            f"exception executing command {line}",
-                            traceback.format_exc(), msg)
-            finally:
-                if kill:
-                    self.done = True
-                else:
-                    msg("no command loop - use CTRL-C to terminate")
-                    self.no_command_loop = True
-                clean_up()
+                            try:
+                                line = input(self.prompt)
+                            except IOError as e:
+                                if e.errno == errno.EBADF:
+                                    close = True
+                                    kill = False
+                                elif (
+                                        e.errno == errno.EWOULDBLOCK or
+                                        e.errno == errno.EAGAIN or
+                                        e.errno == errno.EINTR):
+                                    continue
+                                else:
+                                    raise e
+                            self.handle_cmd(line)
+                        except EOFError:
+                            close = True
+                            kill = False
+                        except KeyboardInterrupt:
+                            close = True
+                        except Exception:
+                            global_handle_error(
+                                ERR_SOURCE_COMMAND,
+                                f"exception executing command {line}",
+                                traceback.format_exc(), msg)
+                finally:
+                    if kill:
+                        self.done = True
+                    else:
+                        msg("no command loop - use CTRL-C to terminate")
+                        self.no_command_loop = True
+                    clean_up()
 
-        try:
-            if READLINE_IO is not None:
-                old_std: Optional[TextIO] = sys.stdout
-                old_err: Optional[TextIO] = sys.stderr
-                sys.stdout, sys.stderr = READLINE_IO
-            else:
-                old_std, old_err = None, None
+        with contextlib.redirect_stdout(stdout), \
+                contextlib.redirect_stderr(stderr):
             # loading the history
             hfile = self.history_file
             try:
@@ -3518,11 +3524,6 @@ class QuickServer(http_server.HTTPServer):
                 t = self._thread_factory(target=cmd_loop)
                 t.daemon = True
                 t.start()
-        finally:
-            if old_std:
-                sys.stdout = old_std
-            if old_err:
-                sys.stderr = old_err
 
     def handle_request(self) -> None:
         """Handles an HTTP request.The actual HTTP request is handled using a

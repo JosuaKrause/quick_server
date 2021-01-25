@@ -1,5 +1,4 @@
-# pylint: disable=no-name-in-module,no-member
-from quick_server import setup_restart, create_server, msg  # type: ignore
+from quick_server import setup_restart, create_server, msg
 import quick_server
 import argparse
 import sys
@@ -13,8 +12,7 @@ if __name__ == "__main__":
         '-v',
         '--version',
         action='version',
-        version="quick_server version {0}".format(
-            quick_server.__version__))  # type: ignore
+        version=f"quick_server version {quick_server.__version__}")
     parser.add_argument(
         '-a',
         type=str,
