@@ -157,7 +157,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.12"
+__version__ = "0.7.13"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -345,19 +345,12 @@ def global_handle_error(source: str,
     ERR_HND(source, errmsg, tb.splitlines())
 
 
-READLINE_IO: Optional[Tuple[TextIO, TextIO]] = None
-
-
 def set_readline_io(stdout: TextIO, stderr: TextIO) -> None:
-    global READLINE_IO
-
-    READLINE_IO = (stdout, stderr)
+    pass  # NOTE: deprecated and unused
 
 
 def clear_readline_io() -> None:
-    global READLINE_IO
-
-    READLINE_IO = None
+    pass  # NOTE: deprecated and unused
 
 
 DEBUG: Optional[bool] = None
@@ -3453,77 +3446,68 @@ class QuickServer(http_server.HTTPServer):
             readline.write_history_file(hfile)
             readline.set_completer(old_completer)
 
-        if READLINE_IO is not None:
-            stdout, stderr = READLINE_IO
-        else:
-            stdout, stderr = sys.stdout, sys.stderr
-
         def cmd_loop() -> None:
             close = False
             kill = True
-            with contextlib.redirect_stdout(stdout), \
-                    contextlib.redirect_stderr(stderr):
-                try:
-                    while not self.done and \
-                            not close and not self.no_command_loop:
-                        line = ""
-                        try:
-                            try:
-                                line = input(self.prompt)
-                            except IOError as e:
-                                if e.errno == errno.EBADF:
-                                    close = True
-                                    kill = False
-                                elif (
-                                        e.errno == errno.EWOULDBLOCK or
-                                        e.errno == errno.EAGAIN or
-                                        e.errno == errno.EINTR):
-                                    continue
-                                else:
-                                    raise e
-                            self.handle_cmd(line)
-                        except EOFError:
-                            close = True
-                            kill = False
-                        except KeyboardInterrupt:
-                            close = True
-                        except Exception:
-                            global_handle_error(
-                                ERR_SOURCE_COMMAND,
-                                f"exception executing command {line}",
-                                traceback.format_exc(), msg)
-                finally:
-                    if kill:
-                        self.done = True
-                    else:
-                        msg("no command loop - use CTRL-C to terminate")
-                        self.no_command_loop = True
-                    clean_up()
-
-        with contextlib.redirect_stdout(stdout), \
-                contextlib.redirect_stderr(stderr):
-            # loading the history
-            hfile = self.history_file
             try:
-                readline.read_history_file(hfile)
-            except IOError:
-                pass
+                while not self.done and \
+                        not close and not self.no_command_loop:
+                    line = ""
+                    try:
+                        try:
+                            line = input(self.prompt)
+                        except IOError as e:
+                            if e.errno == errno.EBADF:
+                                close = True
+                                kill = False
+                            elif (
+                                    e.errno == errno.EWOULDBLOCK or
+                                    e.errno == errno.EAGAIN or
+                                    e.errno == errno.EINTR):
+                                continue
+                            else:
+                                raise e
+                        self.handle_cmd(line)
+                    except EOFError:
+                        close = True
+                        kill = False
+                    except KeyboardInterrupt:
+                        close = True
+                    except Exception:
+                        global_handle_error(
+                            ERR_SOURCE_COMMAND,
+                            f"exception executing command {line}",
+                            traceback.format_exc(), msg)
+            finally:
+                if kill:
+                    self.done = True
+                else:
+                    msg("no command loop - use CTRL-C to terminate")
+                    self.no_command_loop = True
+                clean_up()
 
-            old_completer = readline.get_completer()
-            readline.set_completer(complete)
-            # be mac compatible
-            if readline.__doc__ is not None and 'libedit' in readline.__doc__:
-                readline.parse_and_bind("bind ^I rl_complete")
-            else:
-                readline.parse_and_bind("tab: complete")
+        # loading the history
+        hfile = self.history_file
+        try:
+            readline.read_history_file(hfile)
+        except IOError:
+            pass
 
-            atexit.register(clean_up)
-            self._clean_up_call = clean_up
+        old_completer = readline.get_completer()
+        readline.set_completer(complete)
+        # be mac compatible
+        if readline.__doc__ is not None and 'libedit' in readline.__doc__:
+            readline.parse_and_bind("python:bind ^I rl_complete")
+        else:
+            readline.parse_and_bind("tab: complete")
 
-            if not self.no_command_loop:
-                t = self._thread_factory(target=cmd_loop)
-                t.daemon = True
-                t.start()
+        atexit.register(clean_up)
+        self._clean_up_call = clean_up
+
+        if not self.no_command_loop:
+            t = self._thread_factory(target=cmd_loop)
+            t.daemon = True
+            t.start()
 
     def handle_request(self) -> None:
         """Handles an HTTP request.The actual HTTP request is handled using a
