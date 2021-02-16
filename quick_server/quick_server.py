@@ -157,7 +157,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.13"
+__version__ = "0.7.14"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -3455,6 +3455,9 @@ class QuickServer(http_server.HTTPServer):
                     line = ""
                     try:
                         try:
+                            if sys.stdin.closed:
+                                self.done = True
+                                continue
                             line = input(self.prompt)
                         except IOError as e:
                             if e.errno == errno.EBADF:
@@ -3473,6 +3476,11 @@ class QuickServer(http_server.HTTPServer):
                         kill = False
                     except KeyboardInterrupt:
                         close = True
+                    except WorkerDeath:
+                        close = True
+                        kill = True
+                        self.done = True
+                        continue
                     except Exception:
                         global_handle_error(
                             ERR_SOURCE_COMMAND,
@@ -3505,9 +3513,25 @@ class QuickServer(http_server.HTTPServer):
         self._clean_up_call = clean_up
 
         if not self.no_command_loop:
-            t = self._thread_factory(target=cmd_loop)
-            t.daemon = True
+            t = self._thread_factory(target=cmd_loop, daemon=True)
             t.start()
+
+            def no_log(*args: Any, **kwargs: Any) -> None:
+                pass
+
+            def not_verbose() -> bool:
+                return False
+
+            def end_loop() -> None:
+                atexit.unregister(end_loop)
+                self.done = True
+                # NOTE: we need to wait until the command loop is done before
+                # proceeding with atexit handlers
+                while t.is_alive():
+                    kill_thread(t, "cmd loop", no_log, not_verbose)
+                    time.sleep(0.1)
+
+            atexit.register(end_loop)
 
     def handle_request(self) -> None:
         """Handles an HTTP request.The actual HTTP request is handled using a
