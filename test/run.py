@@ -444,12 +444,12 @@ def cmd_url_server_run(actions: List[List[Any]],
         pr = Popen(PYTHON + [script], cwd='../example',
                    stdin=PIPE, stdout=PIPE, stderr=PIPE)
         # make pipes non-blocking
-        flags = fcntl(pr.stdin, F_GETFL)
-        fcntl(pr.stdin, F_SETFL, flags | os.O_NONBLOCK)
-        flags = fcntl(pr.stdout, F_GETFL)
-        fcntl(pr.stdout, F_SETFL, flags | os.O_NONBLOCK)
-        flags = fcntl(pr.stderr, F_GETFL)
-        fcntl(pr.stderr, F_SETFL, flags | os.O_NONBLOCK)
+        flags = fcntl(pr.stdin, F_GETFL)  # type: ignore
+        fcntl(pr.stdin, F_SETFL, flags | os.O_NONBLOCK)  # type: ignore
+        flags = fcntl(pr.stdout, F_GETFL)  # type: ignore
+        fcntl(pr.stdout, F_SETFL, flags | os.O_NONBLOCK)  # type: ignore
+        flags = fcntl(pr.stderr, F_GETFL)  # type: ignore
+        fcntl(pr.stderr, F_SETFL, flags | os.O_NONBLOCK)  # type: ignore
         # start-up done
         p = pr
         read_all("")
@@ -506,7 +506,7 @@ def cmd_url_server_run(actions: List[List[Any]],
 
 
 def token_test() -> bool:
-    from quick_server import QuickServer
+    from quick_server import QuickServer  # pylint: disable=import-error
 
     qs = QuickServer(("", 0))
     tkn = qs.create_token()
