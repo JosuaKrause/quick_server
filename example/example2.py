@@ -4,14 +4,14 @@
 from typing import List, Any
 
 try:
-    from time import clock
+    from time import clock  # type: ignore
 except ImportError:
     from time import monotonic as clock
 from time import sleep
 import sys
 import os
 
-from quick_server import (
+from quick_server import (  # pylint: disable=import-error
     create_server,
     msg,
     QuickServerRequestHandler,

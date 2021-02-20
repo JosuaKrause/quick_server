@@ -3,13 +3,13 @@
 # pylint: disable=no-name-in-module
 from typing import Any, List
 try:
-    from time import clock
+    from time import clock  # type: ignore
 except ImportError:
     from time import monotonic as clock
 import sys
 import os
 
-from quick_server import (
+from quick_server import (  # pylint: disable=import-error
     create_server,
     msg,
     QuickServerRequestHandler,
