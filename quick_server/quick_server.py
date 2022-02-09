@@ -79,6 +79,10 @@ from http.server import SimpleHTTPRequestHandler
 import http.server as http_server
 import socketserver
 
+try:
+    import pyarrow  # avoid pyarrow atexit error
+except (ModuleNotFoundError, ImportError) as _:
+    pass
 
 WorkerArgs = Dict[str, Any]
 TokenObj = Dict[str, Any]
@@ -157,7 +161,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.7.14"
+__version__ = "0.7.15"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
