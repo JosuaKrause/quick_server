@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=too-many-lines,invalid-name,global-statement
+# pylint: disable=too-many-public-methods
 """
 Created on 2015-10-10
 
@@ -654,12 +655,15 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def get_post_file(
             self,
+            *,
             hdr: str,
             f_in: BinaryIO,
             clen: int,
             post: Dict[str, str],
             files: Dict[str, BytesIO]) -> None:
         """Reads from a multipart/form-data."""
+        # pylint: disable=too-many-statements
+
         lens: PostFileLens = {
             "clen": clen,
             "push": [],
@@ -674,37 +678,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         raw_boundary = b"\r\n" + boundary
         end_boundary = boundary + b"--"
 
-        def push_back(line: bytes) -> None:
-            ln = BytesIO()
-            ln.write(line)
-            ln.flush()
-            ln.seek(0)
-            lens["clen"] += len(line)
-            lens["push"].append(ln)
-
-        def read_line() -> bytes:
-            line = b""
-            while not line.endswith(b"\n") and lens["push"]:
-                br = lens["push"].pop()
-                line += br.readline()
-                tmp = br.read(1)
-                if tmp != b"":
-                    br.seek(br.tell() - 1)
-                    lens["push"].append(br)
-            if not line.endswith(b"\n"):
-                line += f_in.readline(lens["clen"])
-            lens["clen"] -= len(line)
-            if line == b"" or lens["clen"] < 0:
-                raise ValueError("Unexpected EOF")
-            return line.strip()
-
         def read(length: int) -> bytes:
             res = b""
             while len(res) < length and lens["push"]:
                 br = lens["push"].pop()
                 res += br.read(length - len(res))
-                tmp = br.read(1)
-                if tmp != b"":
+                if br.read(1) != b"":
                     br.seek(br.tell() - 1)
                     lens["push"].append(br)
             if len(res) < length:
@@ -717,6 +696,14 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         def parse_file() -> BytesIO:
             f = BytesIO()
             buff_size = 10 * 1024
+
+            def push_back(line: bytes) -> None:
+                ln = BytesIO()
+                ln.write(line)
+                ln.flush()
+                ln.seek(0)
+                lens["clen"] += len(line)
+                lens["push"].append(ln)
 
             def write_buff(buff: bytes) -> None:
                 if f.tell() + len(buff) > self.server.max_file_size:
@@ -742,46 +729,63 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             f.seek(0)
             return f
 
-        def parse_field() -> str:
-            return parse_file().read().decode("utf-8")
+        def process() -> None:
 
-        while True:
-            line = read_line()
-            if line == end_boundary:
-                if lens['clen'] > 0:
-                    raise ValueError(
-                        "Expected EOF got: {0}".format(
-                            repr(f_in.read(lens['clen']))))
-                return
-            if line != boundary:
-                raise ValueError(
-                    "Expected boundary got: {0}".format(repr(line)))
-            headers = {}
+            def read_line() -> bytes:
+                line = b""
+                while not line.endswith(b"\n") and lens["push"]:
+                    br = lens["push"].pop()
+                    line += br.readline()
+                    tmp = br.read(1)
+                    if tmp != b"":
+                        br.seek(br.tell() - 1)
+                        lens["push"].append(br)
+                if not line.endswith(b"\n"):
+                    line += f_in.readline(lens["clen"])
+                lens["clen"] -= len(line)
+                if line == b"" or lens["clen"] < 0:
+                    raise ValueError("Unexpected EOF")
+                return line.strip()
+
             while True:
                 line = read_line()
-                if not line:
-                    break
-                key, value = line.split(b':', 1)
-                headers[key.lower()] = value.strip()
-            name: Optional[str] = None
-            if b'content-disposition' in headers:
-                cdis = headers[b'content-disposition']
-                if not cdis.startswith(b'form-data'):
+                if line == end_boundary:
+                    if lens["clen"] > 0:
+                        raise ValueError(
+                            "Expected EOF got: "
+                            f"{repr(f_in.read(lens['clen']))}")
+                    return
+                if line != boundary:
                     raise ValueError(
-                        "Unknown content-disposition: {0}".format(repr(cdis)))
-                name_field = b'name="'
-                ix = cdis.find(name_field)
-                if ix >= 0:
-                    bname = cdis[ix + len(name_field):]
-                    name = bname[:bname.index(b'"')].decode("utf-8")
-            ctype = headers.get(b'content-type')
-            if name is None:
-                raise ValueError("field name not set")
-            # b'application/octet-stream': # we treat all files the same
-            if ctype is not None:
-                files[name] = parse_file()
-            else:
-                post[name] = parse_field()
+                        f"Expected boundary got: {repr(line)}")
+                headers = {}
+                while True:
+                    line = read_line()
+                    if not line:
+                        break
+                    key, value = line.split(b":", 1)
+                    headers[key.lower()] = value.strip()
+                name: Optional[str] = None
+                if b"content-disposition" in headers:
+                    cdis = headers[b"content-disposition"]
+                    if not cdis.startswith(b"form-data"):
+                        raise ValueError(
+                            f"Unknown content-disposition: {repr(cdis)}")
+                    name_field = b"name=\""
+                    ix = cdis.find(name_field)
+                    if ix >= 0:
+                        bname = cdis[ix + len(name_field):]
+                        name = bname[:bname.index(b"\"")].decode("utf-8")
+                ctype = headers.get(b"content-type")
+                if name is None:
+                    raise ValueError("field name not set")
+                # b'application/octet-stream': # we treat all files the same
+                if ctype is not None:
+                    files[name] = parse_file()
+                else:
+                    post[name] = parse_file().read().decode("utf-8")
+
+        process()
 
     def handle_special(self, send_body: bool, method_str: str) -> bool:
         """Handles a dynamic request. If this method returns False the request
@@ -829,17 +833,20 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             ongoing = False
 
     def _handle_special(self, send_body: bool, method_str: str) -> bool:
+        # pylint: disable=protected-access,too-many-locals,too-many-statements
+        # pylint: disable=too-many-branches
+
         path = self.path
         # interpreting the URL masks to find which method to call
         method: Optional[Callable[
-            [QuickServerRequestHandler, ReqArgs], Optional[BytesIO],
-        ]] = None
+            [QuickServerRequestHandler, ReqArgs], Optional[BytesIO]]] = None
         method_mask = None
         rem_path = ""
         segments: Dict[str, str] = {}
 
-        def is_match(mask: str,
-                     cur_path: str) -> Tuple[bool, str, Dict[str, str]]:
+        def is_match(
+                mask: str,
+                cur_path: str) -> Tuple[bool, str, Dict[str, str]]:
             is_m = True
             segs = {}
             for seg in mask.split("/"):
@@ -868,6 +875,20 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     is_m = False
                     break
             return is_m, cur_path, segs
+
+        def execute(
+                method: Callable[
+                    [QuickServerRequestHandler, ReqArgs], Optional[BytesIO]],
+                args: ReqArgs) -> None:
+            f: Optional[BytesIO] = None
+            try:
+                f = method(self, args)
+                if f is not None and send_body:
+                    self.copyfile(f, self.wfile)
+                    thread_local.size = f.tell()
+            finally:
+                if f is not None:
+                    f.close()
 
         for mask, m in self.server._f_mask.get(method_str, []):
             is_m, path_rest, segs = is_match(mask, path)
@@ -901,7 +922,11 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     args['post'] = {}
                     args['files'] = {}
                     self.get_post_file(
-                        crest, self.rfile, clen, args['post'], args['files'])
+                        hdr=crest,
+                        f_in=self.rfile,
+                        clen=clen,
+                        post=args['post'],
+                        files=args['files'])
                 else:
                     content = self.rfile.read(clen)
                     post_res: WorkerArgs = {}
@@ -918,19 +943,11 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
             args = self.convert_args(rem_path, args)
             # check for correct path length
-            if self.server._f_argc[method_mask] is not None and \
-                    self.server._f_argc[method_mask] != len(args['paths']):
+            if (self.server._f_argc[method_mask] is not None and
+                    self.server._f_argc[method_mask] != len(args['paths'])):
                 return False
             # call the method with the arguments
-            try:
-                f: Optional[BytesIO] = None
-                f = method(self, args)
-                if f is not None and send_body:
-                    self.copyfile(f, self.wfile)
-                    thread_local.size = f.tell()
-            finally:
-                if f is not None:
-                    f.close()
+            execute(method, args)
         finally:
             for f in files.values():
                 f.close()
