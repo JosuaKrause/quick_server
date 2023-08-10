@@ -43,9 +43,9 @@ jobs:
     - name: Install dependencies
       run: |
         pip install --progress-bar off --upgrade pip
-        && pip install --progress-bar off --upgrade coverage~=6.5.0
-        && pip install --progress-bar off --upgrade mypy==0.991
-        && pip install --progress-bar off --upgrade codecov~=2.1.0
+        pip install --progress-bar off --upgrade coverage~=6.5.0
+        pip install --progress-bar off --upgrade mypy==0.991
+        pip install --progress-bar off --upgrade codecov~=2.1.0
 
     - name: Lint Code (type-check)
       run: |
