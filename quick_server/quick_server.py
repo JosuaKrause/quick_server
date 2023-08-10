@@ -2095,11 +2095,14 @@ _token_default: Literal["DEFAULT"] = "DEFAULT"
 
 
 class QuickServer(http_server.HTTPServer):
-    def __init__(self, server_address: Tuple[str, int], parallel: bool = True,
-                 thread_factory: Optional[Callable[..., threading.Thread]] = None,
-                 token_handler: Optional[TokenHandler] = None,
-                 worker_constructor: Optional[Callable[[], BaseWorker]] = None,
-                 soft_worker_death: bool = False):
+    def __init__(
+            self,
+            server_address: Tuple[str, int],
+            parallel: bool = True,
+            thread_factory: Optional[Callable[..., threading.Thread]] = None,
+            token_handler: Optional[TokenHandler] = None,
+            worker_constructor: Optional[Callable[[], BaseWorker]] = None,
+            soft_worker_death: bool = False):
         """Creates a new QuickServer.
 
         Parameters
@@ -2264,20 +2267,23 @@ class QuickServer(http_server.HTTPServer):
 
     # request processing #
 
-    def _process_request(self,
-                         request: bytes,
-                         client_address: Tuple[str, int]) -> None:
+    def _process_request(
+            self,
+            request: bytes,
+            client_address: Tuple[str, int]) -> None:
         """Actually processes the request."""
         try:
-            self.finish_request(request, client_address)
+            # FIXME
+            self.finish_request(request, client_address)  # type: ignore
         except Exception:
             self.handle_error(request, client_address)
         finally:
             self.shutdown_request(request)  # type: ignore
 
-    def process_request(self,
-                        request: bytes,
-                        client_address: Tuple[str, int]) -> None:
+    def process_request(  # type: ignore
+            self,
+            request: bytes,
+            client_address: Tuple[str, int]) -> None:
         """Processes the request by delegating to `_process_request`."""
         if not self._parallel:
             self._process_request(request, client_address)
@@ -2640,11 +2646,11 @@ class QuickServer(http_server.HTTPServer):
             if hasattr(text, "read"):
                 if hasattr(text, "seek"):
                     f = text
-                    size = f.seek(0, os.SEEK_END)
-                    f.seek(0)
+                    size = f.seek(0, os.SEEK_END)  # type: ignore
+                    f.seek(0)  # type: ignore
                 else:
                     f = BytesIO()
-                    shutil.copyfileobj(text, f, length=16*1024)
+                    shutil.copyfileobj(text, f, length=16*1024)  # type: ignore
                     size = f.tell()
                     f.seek(0)
             else:
@@ -2654,29 +2660,31 @@ class QuickServer(http_server.HTTPServer):
                         text = text.decode("utf-8")  # type: ignore
                     except AttributeError:
                         pass
-                    text = text.encode("utf-8")
-                f.write(text)
+                    text = text.encode("utf-8")  # type: ignore
+                f.write(text)  # type: ignore
                 f.flush()
                 size = f.tell()
                 f.seek(0)
             # handle ETag caching
             if drh.request_version >= "HTTP/1.1" and hasattr(f, "seek"):
-                e_tag = "{0:x}".format(zlib.crc32(f.read()) & 0xFFFFFFFF)
-                f.seek(0)
+                e_tag = \
+                    f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"  # type: ignore
+                f.seek(0)  # type: ignore
                 match = _getheader(drh.headers, 'if-none-match')
                 if match is not None:
                     if drh.check_cache(e_tag, match):
-                        f.close()
+                        f.close()  # type: ignore
                         return None
                 drh.send_header("ETag", e_tag, end_header=True)
-                drh.send_header("Cache-Control",
-                                "max-age={0}".format(self.max_age),
-                                end_header=True)
+                drh.send_header(
+                    "Cache-Control",
+                    f"max-age={self.max_age}",
+                    end_header=True)
             drh.send_response(code)
             drh.send_header("Content-Type", ctype)
             drh.send_header("Content-Length", size)
             drh.end_headers()
-            return f
+            return f  # type: ignore
 
         self._add_file_mask(start, method_str, send_text)
 
@@ -3104,12 +3112,13 @@ class QuickServer(http_server.HTTPServer):
                 self._soft_worker_death, lambda: self.max_chunk_size,
                 lambda: self.verbose_workers)
 
-            def run_worker(req: QuickServerRequestHandler,
-                           args: ReqArgs) -> WorkerResponse:
-                post = args["post"]
+            def run_worker(
+                    req: QuickServerRequestHandler,
+                    args: ReqArgs) -> WorkerResponse:
+                post = args.get("post", {})
                 # NOTE: path segment variables overwrite sent arguments
                 payload = post.get("payload", {})
-                for (key, value) in args["segments"].items():
+                for (key, value) in args.get("segments", {}).items():
                     payload[key] = value
                 post["payload"] = payload
                 try:
@@ -3170,6 +3179,7 @@ class QuickServer(http_server.HTTPServer):
         else:
             aexpire = cast(Optional[float], expire)
         write_back = False
+        res = {}
         try:
             with self._token_handler.lock(token):
                 self._token_handler.flush_old_tokens()
@@ -3220,17 +3230,19 @@ class QuickServer(http_server.HTTPServer):
                     raise ValueError("unknown object name: '{0}'".format(curq))
                 atype = action["type"]
                 obj = od[curq]
-                otype = obj["type"]
+                otype = obj.get("type")
                 if otype == "value":
                     if atype == "set":
                         obj["value"] = action["value"]
                     elif atype != "get":
-                        raise ValueError("invalid action: '{0}'".format(atype))
+                        raise ValueError(f"invalid action: '{atype}'")
                     res[curq] = {
-                        "value": obj["value"],
+                        "value": obj.get("value"),
                     }
                 elif otype == "lazy_value":
-                    fun = obj["fun"]
+                    fun = obj.get("fun")
+                    if fun is None:
+                        raise ValueError(f"invalid action: '{atype}'")
                     if atype == "set":
                         res[curq] = {
                             "value": fun(
@@ -3241,22 +3253,23 @@ class QuickServer(http_server.HTTPServer):
                             "value": fun(parent),
                         }
                     else:
-                        raise ValueError("invalid action: '{0}'".format(atype))
+                        raise ValueError(f"invalid action: '{atype}'")
                 elif otype == "lazy_map":
-                    fun = obj["fun"]
+                    fun = obj.get("fun")
+                    if fun is None:
+                        raise ValueError(f"invalid action: '{atype}'")
                     if atype != "get":
-                        raise ValueError("invalid action: '{0}'".format(atype))
+                        raise ValueError(f"invalid action: '{atype}'")
                     cur_res = {}
                     for (name, query) in action["queries"]:
                         next_level = fun(parent, name)
                         cur_res[name] = do_dispatch(
-                            query, obj["child"], next_level)
+                            query, obj.get("child", {}), next_level)
                     res[curq] = {
                         "map": cur_res,
                     }
                 else:
-                    raise ValueError(
-                        "invalid object type: '{0}'".format(otype))
+                    raise ValueError(f"invalid object type: '{otype}'")
             return res
 
         def dispatch(args: WorkerArgs) -> Any:
@@ -3299,11 +3312,10 @@ class QuickServer(http_server.HTTPServer):
                     new_od["fun"] = fun
                     new_od["child"] = {}
                 else:
-                    raise ValueError(
-                        "invalid object type: '{0}'".format(otype))
+                    raise ValueError(f"invalid object type: '{otype}'")
                 od[p] = new_od
             else:
-                od = od[p]["child"]
+                od = od[p].get("child", {})
 
     def add_value_object(
             self, path: List[str], default_value: Any = None) -> None:
@@ -3596,7 +3608,7 @@ class QuickServer(http_server.HTTPServer):
                 self.handle_request()
         except KeyboardInterrupt:
             # clean error output if log file is STD_ERR
-            if log_file == sys.stderr:
+            if log_file is not None and log_file == sys.stderr:
                 log_file.write("\n")
         finally:
             if self._clean_up_call is not None:
@@ -3624,9 +3636,10 @@ class QuickServer(http_server.HTTPServer):
             reqhnd.close_connection = True
         return need_close
 
-    def handle_error(self,
-                     request: bytes,
-                     client_address: Tuple[str, int]) -> None:
+    def handle_error(  # type: ignore
+            self,
+            request: bytes,
+            client_address: Tuple[str, int]) -> None:
         """Handle an error gracefully.
         """
         if self.can_ignore_error():

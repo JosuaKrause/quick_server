@@ -1,9 +1,9 @@
-from typing import Any, Dict
-
 import json
 import time
+from typing import Any, Dict
+
 try:
-    import requests
+    import requests  # type: ignore
 except ImportError:
     pass
 
@@ -25,7 +25,8 @@ class WorkerError(ValueError):
 
 
 def _single_request(url: str, data: Dict[str, Any]) -> Dict[str, Any]:
-    req = requests.post(url, json=data)
+    assert requests
+    req = requests.post(url, json=data, timeout=10)
     if req.status_code == 200:
         return json.loads(req.text)
     raise WorkerError(
@@ -54,10 +55,11 @@ def worker_request(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         Raises a WorkerError if the request's status code is not 200.
     """
     try:
-        requests
-    except NameError:
+        assert requests
+    except (NameError, AssertionError) as e:
         raise RuntimeError(
-            "this function requires the package 'requests' to be installed!")
+            "this function requires the package 'requests' to be installed!"
+            ) from e
     done = False
     token = None
     try:
@@ -81,8 +83,8 @@ def worker_request(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
 
             def check(ctoken: str, response: Dict[str, Any]) -> str:
                 if response["token"] != ctoken:
-                    raise ValueError("token mismatch {0} != {1}".format(
-                        response["token"], ctoken))
+                    raise ValueError(
+                        f"token mismatch {response['token']} != {ctoken}")
                 return response["result"]
 
             # TODO: async would be better
