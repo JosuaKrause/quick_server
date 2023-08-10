@@ -10,8 +10,6 @@ meant to speed up back end implementation / iteration:
 -  provide easy access to worker threads (and caching)
 -  provide a basic command interpret loop for server commands
 
-|Build Status| |codecov.io|
-
 Usage
 -----
 
@@ -378,8 +376,3 @@ Contributing
 Pull requests are highly appreciated :) Also, feel free to open
 `issues <https://github.com/JosuaKrause/quick_server/issues>`__ for any
 questions or bugs you may encounter.
-
-.. |Build Status| image:: https://travis-ci.org/JosuaKrause/quick_server.svg?branch=master
-   :target: https://travis-ci.org/JosuaKrause/quick_server
-.. |codecov.io| image:: https://codecov.io/github/JosuaKrause/quick_server/coverage.svg?branch=master
-   :target: https://codecov.io/github/JosuaKrause/quick_server?branch=master
