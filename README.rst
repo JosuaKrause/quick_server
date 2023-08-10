@@ -33,6 +33,12 @@ Note that python 2 support is discontinued. Use version *0.6.x*:
 
     pip install --user quick_server<0.7
 
+Note that python 3.9 and lower support is discontinued. Use version *0.7.x*:
+
+.. code:: sh
+
+    pip install --user quick_server<0.8
+
 Setting up a basic file server
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
