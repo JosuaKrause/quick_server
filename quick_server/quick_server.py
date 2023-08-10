@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=too-many-lines,invalid-name,global-statement
 """
 Created on 2015-10-10
 
@@ -26,61 +27,43 @@ thread-safe.
 
 Please refer to the example folder for usage examples.
 """
-from typing import (
-    Any,
-    BinaryIO,
-    Callable,
-    ContextManager,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Set,
-    TextIO,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-    cast,
-)
-from typing_extensions import TypedDict, Literal
-
-import os
-import sys
-import json
-import math
-import time
-import uuid
-import zlib
-import errno
-import shlex
 import atexit
-import ctypes
-import select
-import shutil
-import signal
-import socket
-import fnmatch
-import posixpath
-import threading
-import traceback
 import collections
 import contextlib
-
-from io import StringIO, BytesIO
-
-from urllib import parse as urlparse
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError
-
-import readline
-
-from http.server import SimpleHTTPRequestHandler
+import ctypes
+import errno
+import fnmatch
 import http.server as http_server
-import socketserver
+import json
+import math
+import os
+import posixpath
+import readline
+import select
+import shlex
+import shutil
+import socket
+import subprocess
+import sys
+import threading
+import time
+import traceback
+import uuid
+import zlib
+from http.server import SimpleHTTPRequestHandler
+from io import BytesIO, StringIO
+from typing import (Any, BinaryIO, Callable, ContextManager, Dict, Iterator,
+                    List, Optional, Set, TextIO, Tuple, TypeVar, Union, cast)
+from urllib import parse as urlparse
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+
+from typing_extensions import Literal, TypedDict
 
 try:
-    import pyarrow  # avoid pyarrow atexit error
+    # NOTE: avoid pyarrow atexit error
+    # pylint: disable=unused-import
+    import pyarrow  # type: ignore
 except (ModuleNotFoundError, ImportError) as _:
     pass
 
@@ -88,7 +71,7 @@ WorkerArgs = Dict[str, Any]
 TokenObj = Dict[str, Any]
 CacheIdObj = Dict[str, Any]
 
-CmdF = TypeVar("CmdF", bound=Callable[[List[str]], None])
+CmdF = TypeVar('CmdF', bound=Callable[[List[str]], None])
 
 ReqArgs = TypedDict('ReqArgs', {
     'paths': List[str],
@@ -100,10 +83,10 @@ ReqArgs = TypedDict('ReqArgs', {
 }, total=False)
 
 ReqF = TypeVar(
-    "ReqF", bound=Callable[['QuickServerRequestHandler', ReqArgs], Any])
+    'ReqF', bound=Callable[['QuickServerRequestHandler', ReqArgs], Any])
 
 WorkerF = TypeVar(
-    "WorkerF",
+    'WorkerF',
     bound=Callable[[WorkerArgs], Any])
 
 PostFileLens = TypedDict('PostFileLens', {
@@ -119,30 +102,30 @@ WorkerTask = TypedDict('WorkerTask', {
 })
 
 WorkerResponse = TypedDict('WorkerResponse', {
-    "token": str,
-    "done": bool,
-    "result": Optional[Union[List[str], str]],
-    "continue": bool,
+    'token': str,
+    'done': bool,
+    'result': Optional[Union[List[str], str]],
+    'continue': bool,
 })
 
 MirrorObj = TypedDict('MirrorObj', {
-    "impl": Literal["poll", "symlink", "none"],
-    "files": List[Tuple[str, str, float]],
-    "lock": threading.RLock,
+    'impl': Literal["poll", "symlink", "none"],
+    'files': List[Tuple[str, str, float]],
+    'lock': threading.RLock,
 })
 
 DispatchObj = TypedDict('DispatchObj', {
-    "map": Dict[str, Any],
-    "fun": Callable[..., Any],
-    "value": Any,
-    "type": str,
-    "child": Dict[str, Any],
+    'map': Dict[str, Any],
+    'fun': Callable[..., Any],
+    'value': Any,
+    'type': str,
+    'child': Dict[str, Any],
 }, total=False)
 
 ActionObj = TypedDict('ActionObj', {
-    "queries": List[Any],
-    "type": str,
-    "value": Any,
+    'queries': List[Any],
+    'type': str,
+    'value': Any,
 })
 
 CmdState = TypedDict('CmdState', {
@@ -158,10 +141,11 @@ urlparse_unquote = urlparse.unquote
 
 
 def get_time() -> float:
+    """Returns a monotonically ascending time."""
     return time.monotonic()
 
 
-__version__ = "0.7.15"
+__version__ = "0.8.0"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -170,6 +154,7 @@ def _getheader_fallback(obj: Any, key: str) -> Any:
 
 def _getheader_p2(obj: Any, key: str) -> Any:
     global _getheader
+
     try:
         return obj.getheader(key)
     except AttributeError:
@@ -182,6 +167,7 @@ _getheader = _getheader_p2
 
 def create_server(
         server_address: Tuple[str, int],
+        *,
         parallel: bool = True,
         thread_factory: Optional[Callable[..., threading.Thread]] = None,
         token_handler: Optional['TokenHandler'] = None,
@@ -210,26 +196,28 @@ def json_dumps(obj: Any) -> str:
 
     def do_map(obj: Any) -> Any:
         if obj is None:
-            return None
-        if isinstance(obj, basestring):
-            return obj
-        if isinstance(obj, dict):
+            res: Any = None
+        elif isinstance(obj, basestring):
+            res = obj
+        elif isinstance(obj, dict):
             res_obj = {}
             for (key, value) in obj.items():
                 res_obj[key] = do_map(value)
-            return res_obj
-        if isinstance(obj, collections.Iterable):
+            res = res_obj
+        elif isinstance(obj, getattr(collections, "Iterable")):
             res_list = []
-            for el in obj:
-                res_list.append(do_map(el))
-            return res_list
+            for elem in obj:
+                res_list.append(do_map(elem))
+            res = res_list
         # diverging numbers need to be passed as strings otherwise it
         # will throw a parsing error on the ECMAscript consumer side
-        if math.isnan(obj):
-            return "NaN"
-        if math.isinf(obj):
-            return "Infinity" if obj > 0 else "-Infinity"
-        return obj
+        elif math.isnan(obj):
+            res = "NaN"
+        elif math.isinf(obj):
+            res = "Infinity" if obj > 0 else "-Infinity"
+        else:
+            res = obj
+        return res
 
     return json.dumps(
         do_map(json_obj), indent=2, sort_keys=True, allow_nan=False)
@@ -255,20 +243,27 @@ def _caller_trace(frame: Any) -> Tuple[str, int]:
 
 
 def caller_trace() -> Tuple[str, int]:  # pragma: no cover
+    """Gets the stack trace of the calling function."""
+    # pylint: disable=bare-except
+
     try:
         raise Exception()
     except:  # nopep8
+        frames: Optional[List[Any]] = None
         try:
             frames = [sys.exc_info()[2].tb_frame]  # type: ignore
             for _ in range(2):
                 frames.append(frames[-1].f_back)
             return _caller_trace(frames[-1])
         finally:
-            del frames
+            if frames is not None:
+                del frames
 
 
 if hasattr(sys, '_getframe'):
     def _caller_trace_gf() -> Tuple[str, int]:
+        # pylint: disable=protected-access
+
         return _caller_trace(sys._getframe(2))
 
     caller_trace = _caller_trace_gf
@@ -281,21 +276,21 @@ _msg_stderr = False
 def msg(message: str, *args: Any, **kwargs: Any) -> None:
     """Prints a message from the server to the log file."""
     global log_file
+
     if log_file is None:
         log_file = sys.stderr
     if long_msg:
         file_name, line = caller_trace()
         file_name, file_type = os.path.splitext(file_name)
-        if file_name.endswith('/__init__'):
+        if file_name.endswith("/__init__"):
             file_name = os.path.basename(os.path.dirname(file_name))
-        elif file_name.endswith('/__main__'):
-            file_name = "(-m) {0}".format(
-                os.path.basename(os.path.dirname(file_name)))
+        elif file_name.endswith("/__main__"):
+            file_name = f"(-m) {os.path.basename(os.path.dirname(file_name))}"
         else:
             file_name = os.path.basename(file_name)
-        head = '{0}{1} ({2}): '.format(file_name, file_type, line)
+        head = f"{file_name}{file_type} ({line}): "
     else:
-        head = '[SERVER] '
+        head = "[SERVER] "
     out = StringIO()
     try:
         full_message = message.format(*args, **kwargs)
@@ -310,7 +305,7 @@ def msg(message: str, *args: Any, **kwargs: Any) -> None:
             full_message += '='
             full_message += str(value)
     for curline in full_message.splitlines():
-        out.write('{0}{1}\n'.format(head, curline))
+        out.write(f"{head}{curline}\n")
     out.flush()
     out.seek(0)
     if _msg_stderr:
@@ -334,36 +329,33 @@ ERR_HND: Optional[Callable[[str, str, List[str]], None]] = None
 
 def set_global_error_handler(
         fun: Optional[Callable[[str, str, List[str]], None]]) -> None:
+    """Sets the error handler."""
     global ERR_HND
 
     ERR_HND = fun
 
 
-def global_handle_error(source: str,
-                        errmsg: str,
-                        tb: str,
-                        mfun: Callable[[str], None]) -> None:
+def global_handle_error(
+        source: str,
+        errmsg: str,
+        tb: str,
+        mfun: Callable[[str], None]) -> None:
+    """The default error handler."""
     if ERR_HND is None:
         mfun(f"ERROR in {source}: {errmsg}\n{tb}")
         return
     ERR_HND(source, errmsg, tb.splitlines())
 
 
-def set_readline_io(stdout: TextIO, stderr: TextIO) -> None:
-    pass  # NOTE: deprecated and unused
-
-
-def clear_readline_io() -> None:
-    pass  # NOTE: deprecated and unused
-
-
 DEBUG: Optional[bool] = None
 
 
 def debug(fun: Callable[[], Any]) -> None:
+    """Prints a message if the env QUICK_SERVER_DEBUG is not 0 or empty."""
     global DEBUG
+
     if DEBUG is None:
-        DEBUG = bool(int(os.environ.get('QUICK_SERVER_DEBUG', '0')))
+        DEBUG = bool(int(os.environ.get("QUICK_SERVER_DEBUG", "0")))
     if DEBUG:
         msg("[DEBUG] {0}", fun())
 
@@ -375,39 +367,31 @@ debug(lambda: sys.version)
 thread_local = threading.local()
 
 
-# if a restart file is set a '1' is written to the file if a restart is
-# requested if a restart exit code is set the restart file is ignored
-_restart_file: Optional[str] = None
-
-
-def set_restart_file(rf: Optional[str]) -> None:
-    global _restart_file
-
-    _restart_file = rf
-
-
-_restart_exit_code = 42
+_RESTART_EXIT_CODE = 42
 
 
 def set_restart_exit_code(code: int) -> None:
-    global _restart_exit_code
+    """Sets the exit code used to indicate a restart request."""
+    global _RESTART_EXIT_CODE
 
-    _restart_exit_code = code
+    _RESTART_EXIT_CODE = code
 
 
-_error_exit_code = 1
+_ERROR_EXIT_CODE = 1
 
 
 def set_error_exit_code(code: int) -> None:
-    global _error_exit_code
+    """Sets the exit code to indicate an error in the child process."""
+    global _ERROR_EXIT_CODE
 
-    _error_exit_code = code
+    _ERROR_EXIT_CODE = code
 
 
 def get_exec_arr() -> List[str]:
+    """Gets the full process command."""
     executable = sys.executable
     if not executable:
-        executable = os.environ.get('PYTHON', "")
+        executable = os.environ.get("PYTHON", "")
     if not executable:
         raise ValueError("could not retrieve executable")
     exex_arr = shlex.split(executable)
@@ -421,42 +405,47 @@ def get_exec_arr() -> List[str]:
 
 
 # handling the 'restart' command
-_do_restart = False
+_DO_RESTART = False
 
 
 def _on_exit() -> None:  # pragma: no cover
-    global _do_restart
+    global _DO_RESTART
 
-    if _do_restart:
+    if _DO_RESTART:
         # avoid potential infinite loop when running atexit handlers
-        _do_restart = False
-        exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
-        if _restart_file is not None and exit_code is None:
-            with open(_restart_file, 'w') as rf:
-                rf.write('1')
-                rf.flush()
-        else:
-            # restart the executable
-            _start_restart_loop(exit_code, in_atexit=True)
+        _DO_RESTART = False
+        exit_code = os.environ.get("QUICK_SERVER_RESTART", None)
+        # restart the executable
+        _start_restart_loop(exit_code, in_atexit=True)
 
 
 atexit.register(_on_exit)
 
 
 def _start_restart_loop(exit_code: Optional[str], in_atexit: bool) -> None:
+    # pylint: disable=bare-except,protected-access
+
+    def handle_exit() -> None:
+        if in_atexit:
+            try:
+                if not os.environ.get("RUN_ATEXIT", None):
+                    atexit._run_exitfuncs()
+            finally:
+                os._exit(child_code)
+        else:
+            sys.exit(child_code)
+
     try:
         if exit_code is not None:
             # we have a parent process that restarts us
             child_code = int(exit_code)
         else:
-            import subprocess
-
             exec_arr = get_exec_arr()
             if in_atexit:
                 msg("restarting: {0}", ' '.join(exec_arr))
 
             debug(lambda: exec_arr)
-            exit_code = str(_restart_exit_code)
+            exit_code = str(_RESTART_EXIT_CODE)
             child_code = int(exit_code)
             is_subsequent = False
             while child_code == int(exit_code):
@@ -466,24 +455,18 @@ def _start_restart_loop(exit_code: Optional[str], in_atexit: bool) -> None:
                     environ['QUICK_SERVER_SUBSEQ'] = "1"
                 is_subsequent = True
                 try:
-                    child_code = subprocess.Popen(
-                        exec_arr, env=environ, close_fds=True).wait()
+                    with subprocess.Popen(
+                            exec_arr, env=environ, close_fds=True) as proc:
+                        child_code = proc.wait()
                 except KeyboardInterrupt:
-                    child_code = _error_exit_code
+                    child_code = _ERROR_EXIT_CODE
     except:  # nopep8
         global_handle_error(
             ERR_SOURCE_RESTART,
             "error during restart:", traceback.format_exc(), msg)
-        child_code = _error_exit_code
+        child_code = _ERROR_EXIT_CODE
     finally:
-        if in_atexit:
-            try:
-                if not os.environ.get('RUN_ATEXIT', None):
-                    atexit._run_exitfuncs()
-            finally:
-                os._exit(child_code)
-        else:
-            sys.exit(child_code)
+        handle_exit()
 
 
 def setup_restart() -> None:
@@ -495,7 +478,7 @@ def setup_restart() -> None:
        using restart functionality but avoids potential errors originating from
        rogue threads.
     """
-    exit_code = os.environ.get('QUICK_SERVER_RESTART', None)
+    exit_code = os.environ.get("QUICK_SERVER_RESTART", None)
     if exit_code is None:
         atexit.unregister(_on_exit)
         _start_restart_loop(None, in_atexit=False)
@@ -503,7 +486,7 @@ def setup_restart() -> None:
 
 def is_original() -> bool:
     """Whether we are in the original process."""
-    return 'QUICK_SERVER_RESTART' not in os.environ
+    return "QUICK_SERVER_RESTART" not in os.environ
 
 
 def has_been_restarted() -> bool:
@@ -512,35 +495,42 @@ def has_been_restarted() -> bool:
        "QUICK_SERVER_SUBSEQ" to the value "1" for the second and any subsequent
        call in order to make this function work.
     """
-    return os.environ.get('QUICK_SERVER_SUBSEQ', "0") == "1"
+    return os.environ.get("QUICK_SERVER_SUBSEQ", "0") == "1"
 
 
-PDR_MARK = "__pdr"
+_PDR_MARK = "__pdr"
 
 
 class PreventDefaultResponse(Exception):
     """Can be thrown to prevent any further processing of the request and
        instead send a customized response.
     """
-    def __init__(self, code: Optional[int] = None, msg: Optional[str] = None):
+    def __init__(
+            self,
+            code: Optional[int] = None,
+            message: Optional[str] = None) -> None:
         super().__init__()
         self.code = code
-        self.msg = msg if msg else ""
+        self.msg = message if message else ""
 
     def __str__(self) -> str:
-        return "{0}".format(self.__class__.__name__)
+        return f"{self.__class__.__name__}"
 
 
 class WorkerDeath(Exception):
+    """Exception to terminate a worker."""
     def __str__(self) -> str:
-        return "{0}".format(self.__class__.__name__)
+        return f"{self.__class__.__name__}"
 
 
 def kill_thread(
         th: threading.Thread,
         cur_key: str,
-        msg: Callable[..., None],
+        msgout: Callable[..., None],
         is_verbose_workers: Callable[[], bool]) -> None:
+    """Kills a running thread."""
+    # pylint: disable=protected-access
+
     if not th.is_alive():
         return
     # kill the thread
@@ -556,14 +546,14 @@ def kill_thread(
         if res == 0:
             # invalid thread id -- the thread might
             # be done already
-            msg("invalid thread id for killing worker {0}", cur_key)
+            msgout("invalid thread id for killing worker {0}", cur_key)
         elif res != 1:
             # roll back
             pts_sae(ctypes.c_long(tid), None)
-            msg("killed too many ({0}) workers? {1}", res, cur_key)
+            msgout("killed too many ({0}) workers? {1}", res, cur_key)
         else:
             if is_verbose_workers():
-                msg("killed worker {0}", cur_key)
+                msgout("killed worker {0}", cur_key)
 
 
 class QuickServerRequestHandler(SimpleHTTPRequestHandler):
@@ -574,9 +564,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
        sent. If a dynamic request fails with an exception a 500 status code
        is sent.
     """
-    server: 'QuickServer'
+    server: "QuickServer"
 
-    def copyfile(self, source: BytesIO, outputfile: BinaryIO) -> None:
+    def copyfile(  # type: ignore
+            self, source: BytesIO, outputfile: BinaryIO) -> None:
         """Copy all data between two file objects.
         The SOURCE argument is a file object open for reading
         (or anything with a read() method) and the DESTINATION
@@ -594,12 +585,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def __str__(self) -> str:
-        return "{0}[{1} {2}]".format(
-            self.__class__.__name__, self.command, self.path)
+        return f"{self.__class__.__name__}[{self.command} {self.path}]"
 
-    def convert_argmap(self,
-                       query: Union[str, bytes],
-                       ) -> Dict[str, Union[str, bool, int, float]]:
+    def convert_argmap(
+            self,
+            query: Union[str, bytes],
+            ) -> Dict[str, Union[str, bool, int, float]]:
         """Converts the query string of an URL to a map.
 
         Parameters
@@ -610,14 +601,14 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         Returns
         -------
         A map object containing all fields as keys with their value. Fields
-        without '=' in the URL are interpreted as flags and the value is set
+        without "=" in the URL are interpreted as flags and the value is set
         to True.
         """
         res: Dict[str, Union[str, bool, int, float]] = {}
         if isinstance(query, bytes):
-            query = query.decode('utf8')
-        for section in query.split('&'):
-            eqs = section.split('=', 1)
+            query = query.decode("utf-8")
+        for section in query.split("&"):
+            eqs = section.split("=", 1)
             name = urlparse_unquote(eqs[0])
             if len(eqs) > 1:
                 res[name] = urlparse_unquote(eqs[1])
@@ -645,18 +636,20 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         segments, 'query', a map containing the query fields and flags, and
         'fragment' containing the fragment part as string.
         """
-        fragment_split = rem_path.split('#', 1)
-        query_split = fragment_split[0].split('?', 1)
+        fragment_split = rem_path.split("#", 1)
+        query_split = fragment_split[0].split("?", 1)
         segs = filter(
-            lambda p: len(p) and p != '.',
-            os.path.normpath(query_split[0]).split('/'))
+            lambda p: len(p) and p != ".",
+            os.path.normpath(query_split[0]).split("/"))
         paths = [urlparse_unquote(p) for p in segs]
         query = self.convert_argmap(query_split[1]) \
             if len(query_split) > 1 else {}
-        args['paths'] = paths
-        args['query'] = query
-        args['fragment'] = urlparse_unquote(fragment_split[1]) \
-            if len(fragment_split) > 1 else ''
+        args["paths"] = paths
+        args["query"] = query
+        args["fragment"] = (
+            urlparse_unquote(fragment_split[1])
+            if len(fragment_split) > 1 else
+            "")
         return args
 
     def get_post_file(
@@ -668,56 +661,56 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             files: Dict[str, BytesIO]) -> None:
         """Reads from a multipart/form-data."""
         lens: PostFileLens = {
-            'clen': clen,
-            'push': [],
+            "clen": clen,
+            "push": [],
         }
         prefix = "boundary="
         if not hdr.startswith(prefix):
             return
-        boundary = hdr[len(prefix):].strip().encode('utf8')
+        boundary = hdr[len(prefix):].strip().encode("utf-8")
         if not boundary:
             return
-        boundary = b'--' + boundary
-        raw_boundary = b'\r\n' + boundary
-        end_boundary = boundary + b'--'
+        boundary = b"--" + boundary
+        raw_boundary = b"\r\n" + boundary
+        end_boundary = boundary + b"--"
 
         def push_back(line: bytes) -> None:
             ln = BytesIO()
             ln.write(line)
             ln.flush()
             ln.seek(0)
-            lens['clen'] += len(line)
-            lens['push'].append(ln)
+            lens["clen"] += len(line)
+            lens["push"].append(ln)
 
         def read_line() -> bytes:
-            line = b''
-            while not line.endswith(b'\n') and lens['push']:
-                br = lens['push'].pop()
+            line = b""
+            while not line.endswith(b"\n") and lens["push"]:
+                br = lens["push"].pop()
                 line += br.readline()
                 tmp = br.read(1)
-                if tmp != b'':
+                if tmp != b"":
                     br.seek(br.tell() - 1)
-                    lens['push'].append(br)
-            if not line.endswith(b'\n'):
-                line += f_in.readline(lens['clen'])
-            lens['clen'] -= len(line)
-            if line == b'' or lens['clen'] < 0:
+                    lens["push"].append(br)
+            if not line.endswith(b"\n"):
+                line += f_in.readline(lens["clen"])
+            lens["clen"] -= len(line)
+            if line == b"" or lens["clen"] < 0:
                 raise ValueError("Unexpected EOF")
             return line.strip()
 
         def read(length: int) -> bytes:
-            res = b''
-            while len(res) < length and lens['push']:
-                br = lens['push'].pop()
+            res = b""
+            while len(res) < length and lens["push"]:
+                br = lens["push"].pop()
                 res += br.read(length - len(res))
                 tmp = br.read(1)
-                if tmp != b'':
+                if tmp != b"":
                     br.seek(br.tell() - 1)
-                    lens['push'].append(br)
+                    lens["push"].append(br)
             if len(res) < length:
                 res += f_in.read(length - len(res))
-            lens['clen'] -= len(res)
-            if res == b'' or lens['clen'] < 0:
+            lens["clen"] -= len(res)
+            if res == b"" or lens["clen"] < 0:
                 raise ValueError("Unexpected EOF")
             return res
 
@@ -728,14 +721,15 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             def write_buff(buff: bytes) -> None:
                 if f.tell() + len(buff) > self.server.max_file_size:
                     raise PreventDefaultResponse(
-                        413, "Uploaded file is too large! {0} > {1}".format(
-                            f.tell() + len(buff), self.server.max_file_size))
+                        413,
+                        f"Uploaded file is too large! {f.tell() + len(buff)} "
+                        f"> {self.server.max_file_size}")
                 f.write(buff)
                 f.flush()
 
             buff = b""
             while True:
-                buff += read(min(lens['clen'], buff_size))
+                buff += read(min(lens["clen"], buff_size))
                 bix = buff.find(raw_boundary)
                 if bix >= 0:
                     write_buff(buff[:bix])
@@ -749,7 +743,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             return f
 
         def parse_field() -> str:
-            return parse_file().read().decode('utf8')
+            return parse_file().read().decode("utf-8")
 
         while True:
             line = read_line()
@@ -779,10 +773,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 ix = cdis.find(name_field)
                 if ix >= 0:
                     bname = cdis[ix + len(name_field):]
-                    name = bname[:bname.index(b'"')].decode('utf8')
-            ctype = None
-            if b'content-type' in headers:
-                ctype = headers[b'content-type']
+                    name = bname[:bname.index(b'"')].decode("utf-8")
+            ctype = headers.get(b'content-type')
             if name is None:
                 raise ValueError("field name not set")
             # b'application/octet-stream': # we treat all files the same
@@ -945,7 +937,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         return True
 
     # optionally block the listing of directories
-    def list_directory(self, path: str) -> Optional[StringIO]:
+    def list_directory(
+            self, path: Union[str, os.PathLike[str]]) -> Optional[BytesIO]:
         if not self.server.directory_listing:
             self.send_error(404, "No permission to list directory")
             return None
@@ -974,6 +967,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             orig_path += '/'
         mpath: Optional[str] = None
         try:
+            cur_base = None
             for (name, fm) in self.server._folder_masks:
                 if not orig_path.startswith(name):
                     continue
@@ -1042,7 +1036,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 raise PreventDefaultResponse(404, "File not found")
             # make sure to not accept any trickery to get away
             # from the base path
-            if not path.startswith(cur_base):
+            if cur_base is None or not path.startswith(cur_base):
                 raise ValueError("WARNING: attempt to access {0}".format(path))
             # favicon handling
             if self.server.favicon_everywhere and \
@@ -1064,10 +1058,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             # redirect improper index requests
             if needs_redirect:
                 self.send_response(301, "Use index page with slash")
-                location = urlparse.urlunparse(tuple([
+                location = urlparse.urlunparse(tuple(
                     seg if ix != 2 else seg + '/'
                     for (ix, seg) in enumerate(urlparse.urlparse(init_path))
-                ]))
+                ))
                 self.send_header("Location", location)
                 self.end_headers()
                 raise PreventDefaultResponse()
@@ -1118,26 +1112,30 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                       data=payload,
                       headers=dict(self.headers.items()),
                       method=thread_local.method)
+
+        def process(response: Any) -> None:
+            self.send_response(response.code)
+            for (hk, hv) in response.headers.items():
+                self.send_header(hk, hv)
+            self.end_headers()
+            if _getheader(response.headers, 'transfer-encoding') == 'chunked':
+                # FIXME implement proper
+                while True:
+                    cur = response.read(1024)
+                    if cur:
+                        self.wfile.write(cur)
+                        self.wfile.flush()
+                    else:
+                        break  # FIXME no better solution now..
+            else:
+                self.wfile.write(response.read())
+                self.wfile.flush()
+
         try:
-            response = urlopen(req)
+            with urlopen(req) as response:
+                process(response)
         except HTTPError as e:
-            response = e
-        self.send_response(response.code)
-        for (hk, hv) in response.headers.items():
-            self.send_header(hk, hv)
-        self.end_headers()
-        if _getheader(response.headers, 'transfer-encoding') == 'chunked':
-            # FIXME implement proper
-            while True:
-                cur = response.read(1024)
-                if cur:
-                    self.wfile.write(cur)
-                    self.wfile.flush()
-                else:
-                    break  # FIXME no better solution now..
-        else:
-            self.wfile.write(response.read())
-            self.wfile.flush()
+            process(e)
         raise PreventDefaultResponse()
 
     def handle_error(self) -> None:
@@ -1430,7 +1428,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             size_str = self.log_size_string(print_size) + ' '
         else:
             size_str = ''
-        if not self.server.suppress_noise or (code != 200 and code != 304):
+        if not self.server.suppress_noise or code not in (200, 304):
             self.log_message(
                 '%s"%s" %s', size_str, self.requestline, str(code))
         if print_size >= 0:
@@ -1631,7 +1629,7 @@ class BaseWorker:
            response if not None else exception is a tuple `(msg, trace)` where
            msg is the message of the exception and trace is the formatted
            stacktrace. In case of a PreventDefaultResponse exception the
-           message uses the `PDR_MARK` prefix and the status code after.
+           message uses the `_PDR_MARK` prefix and the status code after.
            `trace` in this case is the message of the response.
         """
         raise NotImplementedError()  # pragma: no cover
@@ -1719,8 +1717,8 @@ class BaseWorker:
                         ERR_SOURCE_WORKER,
                         f"Error in purged worker for {cur_key}: {result}",
                         tb, self._msg)
-                return
-            self._msg("purged result that was never read ({0})", cur_key)
+            else:
+                self._msg("purged result that was never read ({0})", cur_key)
 
     def compute_worker(self,
                        req: QuickServerRequestHandler,
@@ -1778,9 +1776,9 @@ class BaseWorker:
                         "result": None,
                         "continue": False,
                     }
-                if err.startswith(PDR_MARK):
+                if err.startswith(_PDR_MARK):
                     # e encodes code, tb encodes message
-                    raise PreventDefaultResponse(int(err[len(PDR_MARK):]), tb)
+                    raise PreventDefaultResponse(int(err[len(_PDR_MARK):]), tb)
                 global_handle_error(
                     ERR_SOURCE_WORKER,
                     f"Error in worker for {self._mask} ({cur_key}): {err}",
@@ -1838,8 +1836,7 @@ class DefaultWorker(BaseWorker):
                 if next_ttl is None:
                     if self.remove_cleaner():
                         break
-                    else:
-                        continue
+                    continue
                 time_until = next_ttl - time.time()
                 if time_until > 0:
                     time.sleep(time_until)
@@ -1932,7 +1929,7 @@ class DefaultWorker(BaseWorker):
 
     def get_key(self) -> str:
         with self._lock:
-            crc32 = zlib.crc32(repr(get_time()).encode('utf8'))
+            crc32 = zlib.crc32(repr(get_time()).encode("utf-8"))
             cur_key = int(crc32 & 0xFFFFFFFF)
 
             def exists_somewhere(key: str) -> bool:
@@ -1980,7 +1977,7 @@ class DefaultWorker(BaseWorker):
                 return
             task = self._tasks[cur_key]
             task["running"] = False
-            task["exception"] = ("{0}{1}".format(PDR_MARK, p.code), p.msg)
+            task["exception"] = ("{0}{1}".format(_PDR_MARK, p.code), p.msg)
 
     def set_task_err(self, cur_key: str, e: Exception) -> None:
         with self._lock:
@@ -2032,10 +2029,10 @@ def construct_multipart_response(
 
     def binary(text: Union[str, bytes]) -> bytes:
         try:
-            text = text.decode('utf8')  # type: ignore
+            text = text.decode("utf-8")  # type: ignore
         except AttributeError:
             pass
-        return text.encode('utf8')  # type: ignore
+        return text.encode("utf-8")  # type: ignore
 
     bbound = binary(boundary)
     resp = BytesIO()
@@ -2082,7 +2079,7 @@ _token_default: Literal["DEFAULT"] = "DEFAULT"
 
 class QuickServer(http_server.HTTPServer):
     def __init__(self, server_address: Tuple[str, int], parallel: bool = True,
-                 thread_factory: Callable[..., threading.Thread] = None,
+                 thread_factory: Optional[Callable[..., threading.Thread]] = None,
                  token_handler: Optional[TokenHandler] = None,
                  worker_constructor: Optional[Callable[[], BaseWorker]] = None,
                  soft_worker_death: bool = False):
@@ -2470,10 +2467,10 @@ class QuickServer(http_server.HTTPServer):
             json_str = json_dumps(obj)
             if isinstance(json_str, (str, bytes)):
                 try:
-                    json_str = json_str.decode('utf8')  # type: ignore
+                    json_str = json_str.decode("utf-8")  # type: ignore
                 except AttributeError:
                     pass
-                json_str = json_str.encode('utf8')  # type: ignore
+                json_str = json_str.encode("utf-8")  # type: ignore
             f.write(json_str)  # type: ignore
             f.flush()
             size = f.tell()
@@ -2637,10 +2634,10 @@ class QuickServer(http_server.HTTPServer):
                 f = BytesIO()
                 if isinstance(text, (str, bytes)):
                     try:
-                        text = text.decode('utf8')  # type: ignore
+                        text = text.decode("utf-8")  # type: ignore
                     except AttributeError:
                         pass
-                    text = text.encode('utf8')
+                    text = text.encode("utf-8")
                 f.write(text)
                 f.flush()
                 size = f.tell()
@@ -3383,8 +3380,8 @@ class QuickServer(http_server.HTTPServer):
         @self.cmd(argc=0, no_replace=True)
         def restart(  # pylint: disable=unused-variable
                 args: List[str]) -> None:
-            global _do_restart
-            _do_restart = True
+            global _DO_RESTART
+            _DO_RESTART = True
             self.done = True
 
         @self.cmd(argc=0, no_replace=True)
