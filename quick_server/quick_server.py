@@ -205,7 +205,7 @@ def json_dumps(obj: Any) -> str:
             for (key, value) in obj.items():
                 res_obj[key] = do_map(value)
             res = res_obj
-        elif isinstance(obj, getattr(collections, "Iterable")):
+        elif isinstance(obj, (list, tuple)):
             res_list = []
             for elem in obj:
                 res_list.append(do_map(elem))
