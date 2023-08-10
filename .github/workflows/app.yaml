@@ -1,0 +1,77 @@
+name: Python Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+
+jobs:
+  lints_pipeline:
+    name: Lints CI Pipeline
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: [
+          '3.6',
+          '3.7',
+          '3.8',
+          '3.9',
+          '3.10',
+        ]
+    env:
+      ENV: CI
+      PYTHON: python
+      QUICK_SERVER_DEBUG: 1
+      RUN_ATEXIT: 1
+      COVERAGE_PROCESS_START: .coveragerc
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python }}
+
+    - name: Cache python modules
+      uses: actions/cache@v2
+      with:
+        path: ${{ env.pythonLocation }}
+        key: v1-${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}
+
+    - name: Install dependencies
+      run: |
+        pip install --progress-bar off --upgrade pip
+        && pip install --progress-bar off --upgrade coverage~=6.5.0
+        && pip install --progress-bar off --upgrade mypy==0.991
+        && pip install --progress-bar off --upgrade codecov~=2.1.0
+
+    - name: Lint Code (type-check)
+      run: |
+        ${{ env.PYTHON }} -m mypy --config-file mypy.ini .
+
+    - name: Code Coverage
+      run: |
+        mv test/cov.py sitecustomize.py
+
+    - name: Tests
+      run: |
+        ${{ env.PYTHON }} test/run.py
+
+    - name: Collect Coverage
+      run: |
+        find quick_server example test -name '.coverage*'
+        | while read i; do mv "$i" ".coverage.$(basename "$i")"; done
+
+    - name: Combine Coverage
+      run: |
+        coverage combine
+
+    - name: Codecov
+      run: |
+        codecov
