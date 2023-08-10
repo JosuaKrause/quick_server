@@ -18,6 +18,7 @@ jobs:
       matrix:
         python: [
           '3.10',
+          '3.11',
         ]
     env:
       ENV: CI
@@ -44,7 +45,7 @@ jobs:
       run: |
         pip install --progress-bar off --upgrade pip
         pip install --progress-bar off --upgrade mypy==0.991
-        pip install -e .
+        pip install --progress-bar off --upgrade -e .
 
     - name: Lint Code (type-check)
       run: |
