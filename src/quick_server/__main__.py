@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-from .quick_server import VERSION, create_server, msg, setup_restart
+from .quick_server import __version__, create_server, msg, setup_restart
 
 if __name__ == "__main__":
     setup_restart()
@@ -12,7 +12,7 @@ if __name__ == "__main__":
         "-v",
         "--version",
         action="version",
-        version=f"quick_server version {VERSION}")
+        version=f"quick_server version {__version__}")
     parser.add_argument(
         "-a",
         type=str,

@@ -143,7 +143,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-VERSION = "0.8.0"
+__version__ = "0.8.0"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -577,7 +577,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """
         shutil.copyfileobj(source, outputfile)
 
-    server_version = f"QuickServer/{VERSION}"
+    server_version = f"QuickServer/{__version__}"
 
     protocol_version = "HTTP/1.1"
 
@@ -3504,7 +3504,7 @@ class QuickServer(http_server.HTTPServer):
                         kill = True
                         self.done = True
                         continue
-                    except Exception:
+                    except Exception:  # pylint: disable=broad-except
                         global_handle_error(
                             ERR_SOURCE_COMMAND,
                             f"exception executing command {line}",
