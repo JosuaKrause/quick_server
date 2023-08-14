@@ -4,13 +4,12 @@ from .quick_server import (ActionObj, BaseWorker, CacheIdObj, CmdF, CmdState,
                            PreventDefaultResponse, QuickServer,
                            QuickServerRequestHandler, ReqArgs, ReqF, Response,
                            TokenHandler, TokenObj, WorkerArgs, WorkerDeath,
-                           WorkerF, WorkerResponse, WorkerTask, create_server,
-                           debug, get_exec_arr, get_time, get_worker_check,
-                           has_been_restarted, is_original, is_worker_alive,
-                           json_dumps, msg, set_error_exit_code,
-                           set_global_error_handler, set_log_file,
-                           set_restart_exit_code, setup_restart)
-from .quick_server import version as __version__
+                           WorkerF, WorkerResponse, WorkerTask, __version__,
+                           create_server, debug, get_exec_arr, get_time,
+                           get_worker_check, has_been_restarted, is_original,
+                           is_worker_alive, json_dumps, msg,
+                           set_error_exit_code, set_global_error_handler,
+                           set_log_file, set_restart_exit_code, setup_restart)
 from .worker_request import WorkerError, worker_request
 
 __all__ = [
