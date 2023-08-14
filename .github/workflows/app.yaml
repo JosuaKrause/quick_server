@@ -25,7 +25,6 @@ jobs:
       PYTHON: python
       QUICK_SERVER_DEBUG: 1
       RUN_ATEXIT: 1
-      COVERAGE_PROCESS_START: .coveragerc
 
     steps:
     - uses: actions/checkout@v2
@@ -43,13 +42,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install --progress-bar off --upgrade pip
-        pip install --progress-bar off --upgrade mypy==0.991
-        pip install --progress-bar off --upgrade -e .
+        PYTHON=${{ env.PYTHON }} make install
 
     - name: Lint Code (type-check)
       run: |
-        ${{ env.PYTHON }} -m mypy --config-file mypy.ini .
+        PYTHON=${{ env.PYTHON }} make lint-type-checker
 
     - name: Tests
       run: |

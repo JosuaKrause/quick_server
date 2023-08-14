@@ -1,3 +1,4 @@
+# pylint: disable=missing-module-docstring,invalid-name
 import json
 import time
 from typing import Any, Dict
@@ -15,6 +16,7 @@ DELAY_MUL = 1.01
 
 
 class WorkerError(ValueError):
+    # pylint: disable=missing-class-docstring
     def __init__(self, msg: str, status_code: int):
         super().__init__(msg)
         self._status_code = status_code
@@ -87,7 +89,6 @@ def worker_request(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
                         f"token mismatch {response['token']} != {ctoken}")
                 return response["result"]
 
-            # TODO: async would be better
             final = json.loads("".join(
                 check(ctoken, _single_request(url, {
                     "action": "cargo",

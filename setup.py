@@ -26,50 +26,10 @@ thread-safe.
 
 Please refer to the example folder for usage examples.
 """
-from os import path
 
 from setuptools import setup  # type: ignore
-
-here = path.abspath(path.dirname(__file__))
-
-with open(path.join(here, "README.rst"), encoding="utf-8") as f:
-    long_description = f.read()
 
 # NOTE! steps to distribute:
 # $ make publish
 
-setup(
-    name="quick_server",
-    version="0.8.0",
-    description=(
-        "QuickServer is a quick to use and "
-        "easy to set up server implementation."
-    ),
-    long_description=long_description,
-    url="https://github.com/JosuaKrause/quick_server",
-    author="Josua Krause",
-    author_email="josua.krause@gmail.com",
-    license="MIT",
-    classifiers=[
-        "Development Status :: 4 - Beta",
-        "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.10",
-    ],
-    keywords="server REST file quick easy",
-    packages=["quick_server"],
-    install_requires=["pyreadline; platform_system==\"Windows\""],
-    extras_require={
-        "dev": [],
-        "test": [],
-    },
-    package_data={
-        "quick_server": [
-            "favicon.ico",
-            "py.typed",
-            "worker.js",
-            "worker.legacy.js",
-        ],
-    },
-    data_files=[],
-)
+setup()
