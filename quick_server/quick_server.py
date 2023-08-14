@@ -143,6 +143,9 @@ def get_time() -> float:
     return time.monotonic()
 
 
+version = "0.8.0"
+
+
 def _getheader_fallback(obj: Any, key: str) -> Any:
     return obj.get(key)
 
@@ -333,13 +336,13 @@ def set_global_error_handler(
 def global_handle_error(
         source: str,
         errmsg: str,
-        tb: str,
+        tback: str,
         mfun: Callable[[str], None]) -> None:
     """The default error handler."""
     if ERR_HND is None:
-        mfun(f"ERROR in {source}: {errmsg}\n{tb}")
+        mfun(f"ERROR in {source}: {errmsg}\n{tback}")
         return
-    ERR_HND(source, errmsg, tb.splitlines())
+    ERR_HND(source, errmsg, tback.splitlines())
 
 
 DEBUG: Optional[bool] = None
@@ -576,7 +579,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """
         shutil.copyfileobj(source, outputfile)
 
-    server_version = "QuickServer/" + __version__
+    server_version = f"QuickServer/{version}"
 
     protocol_version = "HTTP/1.1"
 
