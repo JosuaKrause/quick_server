@@ -143,7 +143,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.8.0"
+VERSION = "0.8.0"
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -579,7 +579,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """
         shutil.copyfileobj(source, outputfile)
 
-    server_version = f"QuickServer/{__version__}"
+    server_version = f"QuickServer/{VERSION}"
 
     protocol_version = "HTTP/1.1"
 
