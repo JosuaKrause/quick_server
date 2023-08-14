@@ -31,3 +31,7 @@ publish:
 	git tag "v$(VERSION)"
 	git push origin "v$(VERSION)"
 	@echo "succesfully deployed $(VERSION)"
+
+
+run-test:
+	"${PYTHON}" test/run.py

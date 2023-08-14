@@ -50,4 +50,4 @@ jobs:
 
     - name: Tests
       run: |
-        ${{ env.PYTHON }} test/run.py
+        PYTHON=${{ env.PYTHON }} make run-test

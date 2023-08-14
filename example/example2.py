@@ -100,7 +100,7 @@ def run() -> None:
         return ["uptime"] if "uptime".startswith(text) else []
 
     @server.cmd(1, complete_requests)
-    def _requests(args: list[str]) -> None:
+    def requests(args: list[str]) -> None:
         if args[0] != 'uptime':
             msg("unknown request: {0}", args[0])
         else:
