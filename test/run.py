@@ -168,7 +168,7 @@ def run(*, python: list[str], skip: int) -> None:
                             fail_out=parr[3],
                             required_err=parr[4],
                             fail_err=parr[5],
-                            exit_code=parr[6] if len(parr) > 5 else 0):
+                            exit_code=parr[6] if len(parr) > 6 else 0):
                         return False  # pragma: no cover
                 done = True
             finally:
