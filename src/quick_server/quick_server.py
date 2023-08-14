@@ -242,11 +242,9 @@ def _caller_trace(frame: Any) -> Tuple[str, int]:
 
 def caller_trace() -> Tuple[str, int]:  # pragma: no cover
     """Gets the stack trace of the calling function."""
-    # pylint: disable=bare-except
-
     try:
         raise Exception()
-    except:  # nopep8
+    except:  # nopep8  # pylint: disable=bare-except
         frames: Optional[List[Any]] = None
         try:
             frames = [sys.exc_info()[2].tb_frame]  # type: ignore
@@ -459,7 +457,7 @@ def _start_restart_loop(exit_code: Optional[str], in_atexit: bool) -> None:
                         child_code = proc.wait()
                 except KeyboardInterrupt:
                     child_code = _ERROR_EXIT_CODE
-    except:  # nopep8
+    except:  # nopep8  # pylint: disable=bare-except
         global_handle_error(
             ERR_SOURCE_RESTART,
             "error during restart:", traceback.format_exc(), msg)
