@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# pylint: disable=missing-module-docstring
 from time import monotonic
 from typing import TypedDict
 
@@ -22,7 +21,6 @@ ResFoo = TypedDict('ResFoo', {
 
 
 def run() -> None:
-    # pylint: disable=missing-function-docstring
     addr = ""
     port = 8000
     server = create_server((addr, port))

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# pylint: disable=invalid-name,missing-module-docstring
 import json
 import os
 import select
@@ -14,8 +13,6 @@ from urllib.request import Request, urlopen
 
 
 def run(*, python: list[str], skip: int) -> None:
-    # pylint: disable=missing-function-docstring,too-many-locals
-    # pylint: disable=too-many-branches,too-many-statements
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     def get_time() -> float:
@@ -551,14 +548,13 @@ def run(*, python: list[str], skip: int) -> None:
         return True
 
     def token_test() -> bool:
-        from quick_server import QuickServer  # pylint: disable=import-error
+        from quick_server import QuickServer
 
         qs = QuickServer(("", 0))
         tkn = qs.create_token()
         note("time: {0}", get_time())
 
         def chk(name: str, expire: float, live: bool) -> bool:
-            # pylint: disable=protected-access
             with qs.get_token_obj(name, expire, readonly=True) as obj:
                 if live and "foo" not in obj:
                     note("time: {0}", get_time())

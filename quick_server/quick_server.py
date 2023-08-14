@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=too-many-lines,invalid-name,global-statement
-# pylint: disable=too-many-public-methods
 """
 Created on 2015-10-10
 
@@ -29,7 +27,6 @@ thread-safe.
 Please refer to the example folder for usage examples.
 """
 import atexit
-import collections
 import contextlib
 import ctypes
 import errno
@@ -262,9 +259,9 @@ def caller_trace() -> Tuple[str, int]:  # pragma: no cover
 
 
 if hasattr(sys, '_getframe'):
+
     def _caller_trace_gf() -> Tuple[str, int]:
         # pylint: disable=protected-access
-
         return _caller_trace(sys._getframe(2))
 
     caller_trace = _caller_trace_gf
@@ -424,9 +421,10 @@ atexit.register(_on_exit)
 
 
 def _start_restart_loop(exit_code: Optional[str], in_atexit: bool) -> None:
-    # pylint: disable=bare-except,protected-access
 
     def handle_exit() -> None:
+        # pylint: disable=protected-access
+
         if in_atexit:
             try:
                 if not os.environ.get("RUN_ATEXIT", None):
@@ -662,8 +660,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             post: Dict[str, str],
             files: Dict[str, BytesIO]) -> None:
         """Reads from a multipart/form-data."""
-        # pylint: disable=too-many-statements
-
         lens: PostFileLens = {
             "clen": clen,
             "push": [],
@@ -833,8 +829,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             ongoing = False
 
     def _handle_special(self, send_body: bool, method_str: str) -> bool:
-        # pylint: disable=protected-access,too-many-locals,too-many-statements
-        # pylint: disable=too-many-branches
+        # pylint: disable=protected-access
 
         path = self.path
         # interpreting the URL masks to find which method to call
@@ -3401,20 +3396,20 @@ class QuickServer(http_server.HTTPServer):
 
         # setup internal commands (no replace)
         @self.cmd(argc=0, no_replace=True)
-        def help(args: List[str]) -> None:  # pylint: disable=unused-variable
+        def help(args: List[str]) -> None:
             msg('available commands:')
             for key in self._cmd_methods.keys():
                 msg('    {0}', key.replace('_', ' '))
 
         @self.cmd(argc=0, no_replace=True)
-        def restart(  # pylint: disable=unused-variable
+        def restart(
                 args: List[str]) -> None:
             global _DO_RESTART
             _DO_RESTART = True
             self.done = True
 
         @self.cmd(argc=0, no_replace=True)
-        def quit(args: List[str]) -> None:  # pylint: disable=unused-variable
+        def quit(args: List[str]) -> None:
             self.done = True
 
         # set up command completion

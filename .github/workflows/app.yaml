@@ -46,7 +46,7 @@ jobs:
 
     - name: Lint Code (type-check)
       run: |
-        PYTHON=${{ env.PYTHON }} make lint-type-checker
+        PYTHON=${{ env.PYTHON }} make lint-type-check
 
     - name: Tests
       run: |

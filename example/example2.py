@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# pylint: disable=invalid-name,missing-module-docstring
 from time import monotonic, sleep
 from typing import Any, TypedDict
 
@@ -13,7 +12,6 @@ ResUptime = TypedDict('ResUptime', {
 
 
 def run() -> None:
-    # pylint: disable=too-many-statements,missing-function-docstring
     addr = ""
     port = 8000
     server = create_server((addr, port))
