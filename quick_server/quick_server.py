@@ -143,9 +143,6 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.8.0"
-
-
 def _getheader_fallback(obj: Any, key: str) -> Any:
     return obj.get(key)
 
