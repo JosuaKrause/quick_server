@@ -50,8 +50,8 @@ import uuid
 import zlib
 from http.server import SimpleHTTPRequestHandler
 from io import BytesIO, StringIO
-from typing import (Any, BinaryIO, Callable, ContextManager, Dict, Iterator,
-                    List, Optional, Set, TextIO, Tuple, TypeVar, Union, cast)
+from typing import (Any, BinaryIO, Callable, ContextManager, Iterator, Set,
+                    TextIO, TypeVar, cast)
 from urllib import parse as urlparse
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -64,20 +64,20 @@ try:
 except (ModuleNotFoundError, ImportError) as _:
     pass
 
-WorkerArgs = Dict[str, Any]
-TokenObj = Dict[str, Any]
-CacheIdObj = Dict[str, Any]
+WorkerArgs = dict[str, Any]
+TokenObj = dict[str, Any]
+CacheIdObj = dict[str, Any]
 
 CmdF = TypeVar(  # pylint: disable=invalid-name
-    'CmdF', bound=Callable[[List[str]], None])
+    'CmdF', bound=Callable[[list[str]], None])
 
 ReqArgs = TypedDict('ReqArgs', {
-    "paths": List[str],
-    "query": Dict[str, Union[str, float, int, bool]],
+    "paths": list[str],
+    "query": dict[str, str | float | int | bool],
     "post": WorkerArgs,
-    "files": Dict[str, BytesIO],
+    "files": dict[str, BytesIO],
     "fragment": str,
-    "segments": Dict[str, str],
+    "segments": dict[str, str],
 }, total=False)
 
 ReqF = TypeVar(  # pylint: disable=invalid-name
@@ -88,53 +88,49 @@ WorkerF = TypeVar(  # pylint: disable=invalid-name
 
 PostFileLens = TypedDict('PostFileLens', {
     "clen": int,
-    "push": List[BytesIO],
+    "push": list[BytesIO],
 })
 
 WorkerTask = TypedDict('WorkerTask', {
     "running": bool,
-    "result": Optional[str],
-    "exception": Optional[Tuple[str, Optional[str]]],
-    "thread": Optional[threading.Thread],
+    "result": str | None,
+    "exception": tuple[str, str | None] | None,
+    "thread": threading.Thread | None,
 })
 
 WorkerResponse = TypedDict('WorkerResponse', {
     "token": str,
     "done": bool,
-    "result": Optional[Union[List[str], str]],
+    "result": list[str] | str | None,
     "continue": bool,
 })
 
 MirrorObj = TypedDict('MirrorObj', {
     "impl": Literal["poll", "symlink", "none"],
-    "files": List[Tuple[str, str, float]],
+    "files": list[tuple[str, str, float]],
     "lock": threading.RLock,
 })
 
 DispatchObj = TypedDict('DispatchObj', {
-    "map": Dict[str, Any],
+    "map": dict[str, Any],
     "fun": Callable[..., Any],
     "value": Any,
     "type": str,
-    "child": Dict[str, Any],
+    "child": dict[str, Any],
 }, total=False)
 
 ActionObj = TypedDict('ActionObj', {
-    "queries": List[Any],
+    "queries": list[Any],
     "type": str,
     "value": Any,
 })
 
 CmdState = TypedDict('CmdState', {
-    "suggestions": List[str],
+    "suggestions": list[str],
     "clean_up_lock": threading.Lock,
     "clean": bool,
     "line": str,
 })
-
-
-basestring = (str, bytes)
-urlparse_unquote = urlparse.unquote
 
 
 def get_time() -> float:
@@ -163,17 +159,21 @@ _GETHEADER = _getheader_p2
 
 
 def create_server(
-        server_address: Tuple[str, int],
+        server_address: tuple[str, int],
         *,
         parallel: bool = True,
-        thread_factory: Optional[Callable[..., threading.Thread]] = None,
-        token_handler: Optional['TokenHandler'] = None,
-        worker_constructor: Optional[Callable[..., 'BaseWorker']] = None,
+        thread_factory: Callable[..., threading.Thread] | None = None,
+        token_handler: 'TokenHandler' | None = None,
+        worker_constructor: Callable[..., 'BaseWorker'] | None = None,
         soft_worker_death: bool = False) -> 'QuickServer':
     """Creates the server."""
     return QuickServer(
-        server_address, parallel, thread_factory, token_handler,
-        worker_constructor, soft_worker_death)
+        server_address,
+        parallel,
+        thread_factory,
+        token_handler,
+        worker_constructor,
+        soft_worker_death)
 
 
 def json_dumps(obj: Any) -> str:
@@ -194,7 +194,7 @@ def json_dumps(obj: Any) -> str:
     def do_map(obj: Any) -> Any:
         if obj is None:
             res: Any = None
-        elif isinstance(obj, basestring):
+        elif isinstance(obj, (str, bytes)):
             res = obj
         elif isinstance(obj, dict):
             res_obj = {}
@@ -220,7 +220,7 @@ def json_dumps(obj: Any) -> str:
         do_map(json_obj), indent=2, sort_keys=True, allow_nan=False)
 
 
-LOG_FILE: Optional[TextIO] = None
+LOG_FILE: TextIO | None = None
 
 
 def set_log_file(fname: TextIO) -> None:
@@ -230,7 +230,7 @@ def set_log_file(fname: TextIO) -> None:
     LOG_FILE = fname
 
 
-def _caller_trace(frame: Any) -> Tuple[str, int]:
+def _caller_trace(frame: Any) -> tuple[str, int]:
     try:
         if "__file__" not in frame.f_globals:
             return "???", frame.f_lineno
@@ -239,12 +239,12 @@ def _caller_trace(frame: Any) -> Tuple[str, int]:
         del frame
 
 
-def caller_trace() -> Tuple[str, int]:  # pragma: no cover
+def caller_trace() -> tuple[str, int]:  # pragma: no cover
     """Gets the stack trace of the calling function."""
     try:
         raise Exception()
     except:  # nopep8  # pylint: disable=bare-except
-        frames: Optional[List[Any]] = None
+        frames: list[Any] | None = None
         try:
             frames = [sys.exc_info()[2].tb_frame]  # type: ignore
             for _ in range(2):
@@ -257,7 +257,7 @@ def caller_trace() -> Tuple[str, int]:  # pragma: no cover
 
 if hasattr(sys, "_getframe"):
 
-    def _caller_trace_gf() -> Tuple[str, int]:
+    def _caller_trace_gf() -> tuple[str, int]:
         # pylint: disable=protected-access
         return _caller_trace(sys._getframe(2))
 
@@ -319,11 +319,11 @@ ERR_SOURCE_RESTART = "err_restart"
 ERR_SOURCE_WORKER = "err_worker"
 
 
-ERR_HND: Optional[Callable[[str, str, List[str]], None]] = None
+ERR_HND: Callable[[str, str, list[str]], None] | None = None
 
 
 def set_global_error_handler(
-        fun: Optional[Callable[[str, str, List[str]], None]]) -> None:
+        fun: Callable[[str, str, list[str]], None] | None) -> None:
     """Sets the error handler."""
     global ERR_HND
 
@@ -342,7 +342,7 @@ def global_handle_error(
     ERR_HND(source, errmsg, tback.splitlines())
 
 
-DEBUG: Optional[bool] = None
+DEBUG: bool | None = None
 
 
 def debug(fun: Callable[[], Any]) -> None:
@@ -382,7 +382,7 @@ def set_error_exit_code(code: int) -> None:
     _ERROR_EXIT_CODE = code
 
 
-def get_exec_arr() -> List[str]:
+def get_exec_arr() -> list[str]:
     """Gets the full process command."""
     executable = sys.executable
     if not executable:
@@ -417,7 +417,7 @@ def _on_exit() -> None:  # pragma: no cover
 atexit.register(_on_exit)
 
 
-def _start_restart_loop(exit_code: Optional[str], in_atexit: bool) -> None:
+def _start_restart_loop(exit_code: str | None, in_atexit: bool) -> None:
 
     def handle_exit() -> None:
         # pylint: disable=protected-access
@@ -503,8 +503,8 @@ class PreventDefaultResponse(Exception):
     """
     def __init__(
             self,
-            code: Optional[int] = None,
-            message: Optional[str] = None) -> None:
+            code: int | None = None,
+            message: str | None = None) -> None:
         super().__init__()
         self.code = code
         self.msg = message if message else ""
@@ -585,8 +585,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def convert_argmap(
             self,
-            query: Union[str, bytes],
-            ) -> Dict[str, Union[str, bool, int, float]]:
+            query: str | bytes,
+            ) -> dict[str, str | bool | int | float]:
         """Converts the query string of an URL to a map.
 
         Parameters
@@ -600,14 +600,14 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         without "=" in the URL are interpreted as flags and the value is set
         to True.
         """
-        res: Dict[str, Union[str, bool, int, float]] = {}
+        res: dict[str, str | bool | int | float] = {}
         if isinstance(query, bytes):
             query = query.decode("utf-8")
         for section in query.split("&"):
             eqs = section.split("=", 1)
-            name = urlparse_unquote(eqs[0])
+            name = urlparse.unquote(eqs[0])
             if len(eqs) > 1:
-                res[name] = urlparse_unquote(eqs[1])
+                res[name] = urlparse.unquote(eqs[1])
             else:
                 res[name] = True
         return res
@@ -637,13 +637,13 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         segs = filter(
             lambda p: len(p) and p != ".",
             os.path.normpath(query_split[0]).split("/"))
-        paths = [urlparse_unquote(p) for p in segs]
+        paths = [urlparse.unquote(p) for p in segs]
         query = self.convert_argmap(query_split[1]) \
             if len(query_split) > 1 else {}
         args["paths"] = paths
         args["query"] = query
         args["fragment"] = (
-            urlparse_unquote(fragment_split[1])
+            urlparse.unquote(fragment_split[1])
             if len(fragment_split) > 1 else
             "")
         return args
@@ -654,8 +654,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             hdr: str,
             f_in: BinaryIO,
             clen: int,
-            post: Dict[str, str],
-            files: Dict[str, BytesIO]) -> None:
+            post: dict[str, str],
+            files: dict[str, BytesIO]) -> None:
         """Reads from a multipart/form-data."""
         lens: PostFileLens = {
             "clen": clen,
@@ -758,7 +758,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                         break
                     key, value = line.split(b":", 1)
                     headers[key.lower()] = value.strip()
-                name: Optional[str] = None
+                name: str | None = None
                 if b"content-disposition" in headers:
                     cdis = headers[b"content-disposition"]
                     if not cdis.startswith(b"form-data"):
@@ -817,7 +817,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
             alarm_init = threading.Timer(5.0, do_report)
             alarm_init.start()
-            alarm: Optional[threading.Timer] = alarm_init
+            alarm: threading.Timer | None = alarm_init
         else:
             alarm = None
         try:
@@ -832,15 +832,15 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
         path = self.path
         # interpreting the URL masks to find which method to call
-        method: Optional[Callable[
-            [QuickServerRequestHandler, ReqArgs], Optional[BytesIO]]] = None
+        method: Callable[
+            [QuickServerRequestHandler, ReqArgs], BytesIO | None] | None = None
         method_mask = None
         rem_path = ""
-        segments: Dict[str, str] = {}
+        segments: dict[str, str] = {}
 
         def is_match(
                 mask: str,
-                cur_path: str) -> Tuple[bool, str, Dict[str, str]]:
+                cur_path: str) -> tuple[bool, str, dict[str, str]]:
             is_m = True
             segs = {}
             for seg in mask.split("/"):
@@ -872,9 +872,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
         def execute(
                 method: Callable[
-                    [QuickServerRequestHandler, ReqArgs], Optional[BytesIO]],
+                    [QuickServerRequestHandler, ReqArgs], BytesIO | None],
                 args: ReqArgs) -> None:
-            f: Optional[BytesIO] = None
+            f: BytesIO | None = None
             try:
                 f = method(self, args)
                 if f is not None and send_body:
@@ -895,7 +895,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if method is None:
             return False
         assert method_mask is not None
-        files: Dict[str, BytesIO] = {}
+        files: dict[str, BytesIO] = {}
         args: ReqArgs = {
             "segments": segments,
         }
@@ -949,7 +949,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     # optionally block the listing of directories
     def list_directory(
-            self, path: Union[str, os.PathLike[str]]) -> Optional[BytesIO]:
+            self, path: str | os.PathLike[str]) -> BytesIO | None:
         if not self.server.directory_listing:
             self.send_error(404, "No permission to list directory")
             return None
@@ -990,10 +990,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         orig_path = urlparse.urlparse(orig_path)[2]
         needs_redirect = False
         is_folder = len(orig_path) <= 1 or orig_path[-1] == "/"
-        orig_path = posixpath.normpath(urlparse_unquote(orig_path))
+        orig_path = posixpath.normpath(urlparse.unquote(orig_path))
         if is_folder:
             orig_path += "/"
-        mpath: Optional[str] = None
+        mpath: str | None = None
         try:
             cur_base = None
             for (name, fmask) in self.server._folder_masks:
@@ -1136,7 +1136,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         clen = _GETHEADER(self.headers, "content-length")
         clen = int(clen) if clen is not None else 0
         if clen > 0:
-            payload: Optional[bytes] = self.rfile.read(clen)
+            payload: bytes | None = self.rfile.read(clen)
         else:
             payload = None
 
@@ -1350,14 +1350,14 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     # responses and headers are not sent until end headers to enable
     # changing them if needed
     def send_response(
-            self, code: int, message: Optional[str] = None) -> None:
+            self, code: int, message: str | None = None) -> None:
         thread_local.status_code = code
         thread_local.message = message
 
     def send_header(
             self,
             keyword: str,
-            value: Union[int, str],
+            value: int | str,
             replace: bool = False,
             end_header: bool = False) -> None:
         thread_local.headers = getattr(thread_local, "headers", [])
@@ -1366,7 +1366,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             # replaces the last occurrence of the header,
             # otherwise append as specified
 
-            def do_replace(hdrs: List[Tuple[str, Union[str, int]]]) -> bool:
+            def do_replace(hdrs: list[tuple[str, str | int]]) -> bool:
                 replace_ix = -1
                 for (ix, (k, _)) in enumerate(hdrs):
                     if k == keyword:
@@ -1417,8 +1417,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     def _convert_unit(
             self,
             fmt: str,
-            value: Union[float, int],
-            units: List[Tuple[Union[int, float], str]]) -> str:
+            value: float | int,
+            units: list[tuple[int | float, str]]) -> str:
         cur = ""
         for (conv, unit) in units:
             if value / conv >= 1 or len(cur) == 0:
@@ -1472,8 +1472,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def log_request(
             self,
-            code: Union[int, str] = "-",
-            size: Union[int, str] = "-") -> None:
+            code: int | str = "-",
+            size: int | str = "-") -> None:
         """Logs the current request."""
         print_size = getattr(thread_local, "size", -1)
         if size != "-":
@@ -1493,11 +1493,11 @@ class TokenHandler:
     def __str__(self) -> str:
         return f"{self.__class__.__name__}"
 
-    def lock(self, key: Optional[str]) -> ContextManager:
+    def lock(self, key: str | None) -> ContextManager:
         """The lock for token handler operations."""
         raise NotImplementedError()
 
-    def ttl(self, key: str) -> Optional[float]:
+    def ttl(self, key: str) -> float | None:
         """Returns the time in seconds until the given key expires.
            If the key never expires it should return None. If the key doesn't
            exist it should return 0. The function must not update the
@@ -1509,7 +1509,7 @@ class TokenHandler:
         """Ensures that all expired tokens get removed."""
         raise NotImplementedError()  # pragma: no cover
 
-    def add_token(self, key: str, expire: Optional[float]) -> TokenObj:
+    def add_token(self, key: str, expire: float | None) -> TokenObj:
         """Returns the content of a token and updates the expiration in seconds
            of the token. Unknown tokens get initialized.
            `flush_old_tokens` is called immediately before this function.
@@ -1528,7 +1528,7 @@ class TokenHandler:
         """
         raise NotImplementedError()  # pragma: no cover
 
-    def get_tokens(self) -> List[str]:
+    def get_tokens(self) -> list[str]:
         """Returns a list of current tokens.
            `flush_old_tokens` is called immediately before this function.
         """
@@ -1538,14 +1538,14 @@ class TokenHandler:
 class DefaultTokenHandler(TokenHandler):
     def __init__(self) -> None:
         # _token_timings is keys sorted by time
-        self._token_map: Dict[str, Tuple[Optional[float], TokenObj]] = {}
-        self._token_timings: List[str] = []
+        self._token_map: dict[str, tuple[float | None, TokenObj]] = {}
+        self._token_timings: list[str] = []
         self._token_lock = threading.Lock()
 
-    def lock(self, key: Optional[str]) -> ContextManager:
+    def lock(self, key: str | None) -> ContextManager:
         return self._token_lock
 
-    def ttl(self, key: str) -> Optional[float]:
+    def ttl(self, key: str) -> float | None:
         # NOTE: has _token_lock
         try:
             until = self._token_map[key][0]
@@ -1572,7 +1572,7 @@ class DefaultTokenHandler(TokenHandler):
                 del self._token_map[k]
             self._token_timings = self._token_timings[first_valid:]
 
-    def add_token(self, key: str, expire: Optional[float]) -> TokenObj:
+    def add_token(self, key: str, expire: float | None) -> TokenObj:
         # NOTE: has _token_lock
         now = get_time()
         until = now + expire if expire is not None else None
@@ -1600,7 +1600,7 @@ class DefaultTokenHandler(TokenHandler):
             ]
             del self._token_map[key]
 
-    def get_tokens(self) -> List[str]:
+    def get_tokens(self) -> list[str]:
         # NOTE: has _token_lock
         return list(self._token_timings)
 
@@ -1639,7 +1639,7 @@ class BaseWorker:
             fun: Callable[[WorkerArgs], str],
             *,
             log: Callable[..., None],
-            cache_id: Optional[Callable[[CacheIdObj], Any]],
+            cache_id: Callable[[CacheIdObj], Any] | None,
             cache: Any,
             cache_method: str,
             cache_section: str,
@@ -1669,7 +1669,7 @@ class BaseWorker:
         """Returns whether the task with the given key has finished."""
         raise NotImplementedError()  # pragma: no cover
 
-    def add_cargo(self, content: str) -> List[str]:
+    def add_cargo(self, content: str) -> list[str]:
         """Splits content into chunks and returns a list of keys to retrieve
            them. This function also ensures that chunks get cleaned up after
            10min of no reads. The size of the chunks is
@@ -1685,7 +1685,7 @@ class BaseWorker:
     def remove_worker(
             self,
             cur_key: str,
-            ) -> Tuple[Optional[str], Optional[Tuple[str, Optional[str]]]]:
+            ) -> tuple[str | None, tuple[str, str | None] | None]:
         """Removes the task with the given key and returns its result.
            The result is a tuple `(result, exception)` where result is the
            response if not None else exception is a tuple `(msg, trace)` where
@@ -1802,7 +1802,7 @@ class BaseWorker:
         if action == "start":
             cur_key = self.reserve_worker()
             inner_post = post.get("payload", {})
-            th: List[threading.Thread] = []
+            th: list[threading.Thread] = []
 
             def start_worker(*args: Any) -> None:
                 self.start_worker(*args)
@@ -1881,9 +1881,9 @@ class DefaultWorker(BaseWorker):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         BaseWorker.__init__(self, *args, **kwargs)
         self._lock = threading.RLock()
-        self._tasks: Dict[str, WorkerTask] = {}
-        self._cargo: Dict[str, Tuple[float, str]] = {}
-        self._cargo_cleaner: Optional[threading.Thread] = None
+        self._tasks: dict[str, WorkerTask] = {}
+        self._cargo: dict[str, tuple[float, str]] = {}
+        self._cargo_cleaner: threading.Thread | None = None
         self._cancelled: Set[str] = set()
 
     def remove_from_cancelled(self, cur_key: str) -> None:
@@ -1919,7 +1919,7 @@ class DefaultWorker(BaseWorker):
             self._cargo_cleaner = cleaner
             cleaner.start()
 
-    def get_next_cargo(self) -> Optional[float]:
+    def get_next_cargo(self) -> float | None:
         with self._lock:
             next_ttl = None
             for value in self._cargo.values():
@@ -1947,7 +1947,7 @@ class DefaultWorker(BaseWorker):
             self._cargo_cleaner = None
             return True
 
-    def add_cargo(self, content: str) -> List[str]:
+    def add_cargo(self, content: str) -> list[str]:
         with self._lock:
             mcs = self._get_max_chunk_size()
             if mcs < 1:
@@ -1971,7 +1971,7 @@ class DefaultWorker(BaseWorker):
     def remove_worker(
             self,
             cur_key: str,
-            ) -> Tuple[Optional[str], Optional[Tuple[str, Optional[str]]]]:
+            ) -> tuple[str | None, tuple[str, str | None] | None]:
         with self._lock:
             task = self._tasks.pop(cur_key, None)
             if task is None:
@@ -2071,9 +2071,9 @@ class DefaultWorker(BaseWorker):
 class Response:
     def __init__(
             self,
-            response: Union[str, bytes, StringIO, BytesIO],
+            response: str | bytes | StringIO | BytesIO,
             code: int = 200,
-            ctype: Optional[str] = None) -> None:
+            ctype: str | None = None) -> None:
         """Constructs a response."""
         self.response = response
         self.code = code
@@ -2094,10 +2094,10 @@ class Response:
 
 
 def construct_multipart_response(
-        obj: Dict[Union[bytes, str], Any]) -> Tuple[BytesIO, str]:
+        obj: dict[bytes | str, Any]) -> tuple[BytesIO, str]:
     boundary = f"qsboundary{uuid.uuid4().hex}"
 
-    def binary(text: Union[str, bytes]) -> bytes:
+    def binary(text: str | bytes) -> bytes:
         try:
             text = text.decode("utf-8")  # type: ignore
         except AttributeError:
@@ -2150,11 +2150,11 @@ _token_default: Literal["DEFAULT"] = "DEFAULT"
 class QuickServer(http_server.HTTPServer):
     def __init__(
             self,
-            server_address: Tuple[str, int],
+            server_address: tuple[str, int],
             parallel: bool = True,
-            thread_factory: Optional[Callable[..., threading.Thread]] = None,
-            token_handler: Optional[TokenHandler] = None,
-            worker_constructor: Optional[Callable[[], BaseWorker]] = None,
+            thread_factory: Callable[..., threading.Thread] | None = None,
+            token_handler: TokenHandler | None = None,
+            worker_constructor: Callable[[], BaseWorker] | None = None,
             soft_worker_death: bool = False):
         """Creates a new QuickServer.
 
@@ -2257,17 +2257,16 @@ class QuickServer(http_server.HTTPServer):
         self.history_file = ".cmd_history"
         self.prompt = "> "
         self.favicon_everywhere = True
-        self.favicon_fallback: Optional[str] = None
+        self.favicon_fallback: str | None = None
         self.max_age = 0
         self.max_file_size = 50 * 1024 * 1024
         self.max_chunk_size = 10 * 1024 * 1024
         self.cross_origin = False
         self.suppress_noise = False
-        self.report_slow_requests: \
-            Union[bool, Callable[[str, str], None]] = False
+        self.report_slow_requests: bool | Callable[[str, str], None] = False
         self.verbose_workers = False
         self.no_command_loop = False
-        self.cache: Optional[Any] = None
+        self.cache: Any | None = None
         self.object_path = "/objects/"
         self.done = False
         self._parallel = parallel
@@ -2284,22 +2283,20 @@ class QuickServer(http_server.HTTPServer):
         else:
             self._worker_constructor = worker_constructor
         self._soft_worker_death = soft_worker_death
-        self._folder_masks: List[Tuple[str, str]] = []
-        self._folder_proxys: List[Tuple[str, str]] = []
-        self._f_mask: Dict[str, List[Tuple[str, Callable[
-            [QuickServerRequestHandler, ReqArgs], Optional[BytesIO]],
-        ]]] = {}
-        self._f_argc: Dict[str, Optional[int]] = {}
-        self._pattern_black: List[str] = []
-        self._pattern_white: List[str] = []
-        self._cmd_methods: Dict[str, Callable[[List[str]], None]] = {}
-        self._cmd_argc: Dict[str, Optional[int]] = {}
-        self._cmd_complete: Dict[str, Optional[
-            Callable[[List[str], str], Optional[List[str]]]
-        ]] = {}
+        self._folder_masks: list[tuple[str, str]] = []
+        self._folder_proxys: list[tuple[str, str]] = []
+        self._f_mask: dict[str, list[tuple[str, Callable[
+            [QuickServerRequestHandler, ReqArgs], BytesIO | None]]]] = {}
+        self._f_argc: dict[str, int | None] = {}
+        self._pattern_black: list[str] = []
+        self._pattern_white: list[str] = []
+        self._cmd_methods: dict[str, Callable[[list[str]], None]] = {}
+        self._cmd_argc: dict[str, int | None] = {}
+        self._cmd_complete: dict[str, Callable[
+            [list[str], str], list[str] | None] | None] = {}
         self._cmd_lock = threading.Lock()
         self._cmd_start = False
-        self._clean_up_call: Optional[Callable[[], None]] = None
+        self._clean_up_call: Callable[[], None] | None = None
         if token_handler is None:
             token_handler = DefaultTokenHandler()
         self._token_handler = token_handler
@@ -2309,8 +2306,8 @@ class QuickServer(http_server.HTTPServer):
             "files": [],
             "lock": threading.RLock(),
         }
-        self._object_dispatch: Optional[Dict[str, DispatchObj]] = None
-        self._file_fallback_cb: Optional[Callable[[str], str]] = None
+        self._object_dispatch: dict[str, DispatchObj] | None = None
+        self._file_fallback_cb: Callable[[str], str] | None = None
 
     def __str__(self) -> str:
         parallel = " parallel" if self._parallel else ""
@@ -2321,7 +2318,7 @@ class QuickServer(http_server.HTTPServer):
     def _process_request(
             self,
             request: bytes,
-            client_address: Tuple[str, int]) -> None:
+            client_address: tuple[str, int]) -> None:
         """Actually processes the request."""
         try:
             # FIXME
@@ -2334,7 +2331,7 @@ class QuickServer(http_server.HTTPServer):
     def process_request(  # type: ignore
             self,
             request: bytes,
-            client_address: Tuple[str, int]) -> None:
+            client_address: tuple[str, int]) -> None:
         """Processes the request by delegating to `_process_request`."""
         if not self._parallel:
             self._process_request(request, client_address)
@@ -2347,7 +2344,7 @@ class QuickServer(http_server.HTTPServer):
     # mask methods #
 
     def set_file_fallback_hook(
-            self, callback: Optional[Callable[[str], str]]) -> None:
+            self, callback: Callable[[str], str] | None) -> None:
         """Allows to rewrite the returned filename in case a path could not
            be resolved. This is useful for returning the index file everywhere.
            If callback is None a 404 response will be generated. The callback
@@ -2356,7 +2353,7 @@ class QuickServer(http_server.HTTPServer):
         """
         self._file_fallback_cb = callback
 
-    def add_file_patterns(self, patterns: List[str], blacklist: bool) -> None:
+    def add_file_patterns(self, patterns: list[str], blacklist: bool) -> None:
         """Adds a list of file patterns to either the black- or white-list.
            Note that this pattern is applied to the absolute path of the file
            that will be delivered. For including or excluding folders use
@@ -2413,11 +2410,10 @@ class QuickServer(http_server.HTTPServer):
     def add_cmd_method(
             self,
             name: str,
-            method: Callable[[List[str]], None],
-            argc: Optional[int] = None,
-            complete: Optional[
-                Callable[[List[str], str], Optional[List[str]]]
-            ] = None) -> None:
+            method: Callable[[list[str]], None],
+            argc: int | None = None,
+            complete: Callable[
+                [list[str], str], list[str] | None] | None = None) -> None:
         """Adds a command to the command line interface loop.
 
         Parameters
@@ -2447,7 +2443,7 @@ class QuickServer(http_server.HTTPServer):
         self._cmd_argc[name] = argc
         self._cmd_complete[name] = complete
 
-    def set_file_argc(self, mask: str, argc: Optional[int]) -> None:
+    def set_file_argc(self, mask: str, argc: int | None) -> None:
         """Sets the number of allowed further path segments to a request.
 
         Parameters
@@ -2466,8 +2462,7 @@ class QuickServer(http_server.HTTPServer):
             start: str,
             method_str: str,
             method: Callable[
-                [QuickServerRequestHandler, ReqArgs], Optional[BytesIO],
-            ]) -> None:
+                [QuickServerRequestHandler, ReqArgs], BytesIO | None]) -> None:
         """Adds a raw file mask for dynamic requests.
 
         Parameters
@@ -2526,7 +2521,7 @@ class QuickServer(http_server.HTTPServer):
 
         def send_json(
                 drh: QuickServerRequestHandler,
-                rem_path: ReqArgs) -> Optional[BytesIO]:
+                rem_path: ReqArgs) -> BytesIO | None:
             obj = json_producer(drh, rem_path)
             if not isinstance(obj, Response):
                 obj = Response(obj)
@@ -2684,7 +2679,7 @@ class QuickServer(http_server.HTTPServer):
 
         def send_text(
                 drh: QuickServerRequestHandler,
-                rem_path: ReqArgs) -> Optional[BytesIO]:
+                rem_path: ReqArgs) -> BytesIO | None:
             text = text_producer(drh, rem_path)
             if not isinstance(text, Response):
                 text = Response(text)
@@ -2828,8 +2823,8 @@ class QuickServer(http_server.HTTPServer):
 
     def cmd(
             self,
-            argc: Optional[int] = None,
-            complete: Optional[Callable[[List[str], str], List[str]]] = None,
+            argc: int | None = None,
+            complete: Callable[[list[str], str], list[str]] | None = None,
             no_replace: bool = False) -> Callable[[CmdF], CmdF]:
 
         def wrapper(fun: CmdF) -> CmdF:
@@ -2843,7 +2838,7 @@ class QuickServer(http_server.HTTPServer):
     def json_get(
             self,
             mask: str,
-            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_json_get_mask(mask, fun)
@@ -2855,7 +2850,7 @@ class QuickServer(http_server.HTTPServer):
     def json_put(
             self,
             mask: str,
-            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_json_put_mask(mask, fun)
@@ -2867,7 +2862,7 @@ class QuickServer(http_server.HTTPServer):
     def json_delete(
             self,
             mask: str,
-            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_json_delete_mask(mask, fun)
@@ -2879,7 +2874,7 @@ class QuickServer(http_server.HTTPServer):
     def json_post(
             self,
             mask: str,
-            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_json_post_mask(mask, fun)
@@ -2891,7 +2886,7 @@ class QuickServer(http_server.HTTPServer):
     def text_get(
             self,
             mask: str,
-            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_text_get_mask(mask, fun)
@@ -2903,7 +2898,7 @@ class QuickServer(http_server.HTTPServer):
     def text_put(
             self,
             mask: str,
-            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_text_put_mask(mask, fun)
@@ -2915,7 +2910,7 @@ class QuickServer(http_server.HTTPServer):
     def text_delete(
             self,
             mask: str,
-            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_text_delete_mask(mask, fun)
@@ -2927,7 +2922,7 @@ class QuickServer(http_server.HTTPServer):
     def text_post(
             self,
             mask: str,
-            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_text_post_mask(mask, fun)
@@ -2943,7 +2938,7 @@ class QuickServer(http_server.HTTPServer):
             mask: str,
             path: str,
             from_quick_server: bool,
-            ctype: Optional[str] = None) -> None:
+            ctype: str | None = None) -> None:
         """Adds a special file that might have a different actual path than
            its address.
 
@@ -3133,7 +3128,7 @@ class QuickServer(http_server.HTTPServer):
     def json_worker(
             self,
             mask: str,
-            cache_id: Optional[Callable[[CacheIdObj], Any]] = None,
+            cache_id: Callable[[CacheIdObj], Any] | None = None,
             cache_method: str = "string",
             cache_section: str = "www",
             ) -> Callable[[WorkerF], WorkerF]:
@@ -3221,7 +3216,7 @@ class QuickServer(http_server.HTTPServer):
     def get_token_obj(
             self,
             token: str,
-            expire: Union[float, None, Literal["DEFAULT"]] = _token_default,
+            expire: float | Literal["DEFAULT"] | None = _token_default,
             readonly: bool = False) -> Iterator[TokenObj]:
         """Returns or creates the object associaten with the given token.
            Must be used in a `with` block. After the block ends the content
@@ -3248,9 +3243,9 @@ class QuickServer(http_server.HTTPServer):
             happen.
         """
         if expire == _token_default:
-            aexpire: Optional[float] = self.get_default_token_expiration()
+            aexpire: float | None = self.get_default_token_expiration()
         else:
-            aexpire = cast(Optional[float], expire)
+            aexpire = cast(float | None, expire)
         write_back = False
         res = {}
         try:
@@ -3271,12 +3266,12 @@ class QuickServer(http_server.HTTPServer):
                 with self._token_handler.lock(token):
                     self._token_handler.put_token(token, res)
 
-    def get_tokens(self) -> List[str]:
+    def get_tokens(self) -> list[str]:
         with self._token_handler.lock(None):
             self._token_handler.flush_old_tokens()
             return self._token_handler.get_tokens()
 
-    def get_token_ttl(self, token: str) -> Optional[float]:
+    def get_token_ttl(self, token: str) -> float | None:
         with self._token_handler.lock(token):
             try:
                 ttl = self._token_handler.ttl(token)
@@ -3294,10 +3289,10 @@ class QuickServer(http_server.HTTPServer):
         self._object_dispatch = {}
 
         def do_dispatch(
-                query_obj: Dict[str, ActionObj],
-                odisp: Dict[str, DispatchObj],
-                parent: Optional[DispatchObj]) -> Any:
-            res: Dict[str, DispatchObj] = {}
+                query_obj: dict[str, ActionObj],
+                odisp: dict[str, DispatchObj],
+                parent: DispatchObj | None) -> Any:
+            res: dict[str, DispatchObj] = {}
             for (curq, action) in query_obj.items():
                 if curq not in odisp:
                     raise ValueError(f"unknown object name: '{curq}'")
@@ -3355,9 +3350,9 @@ class QuickServer(http_server.HTTPServer):
 
     def _add_object_dispatch(
             self,
-            path: List[str],
+            path: list[str],
             otype: str,
-            fun: Optional[Callable[..., Any]] = None,
+            fun: Callable[..., Any] | None = None,
             value: Any = None) -> None:
         self._init_object_dispatch()
         assert self._object_dispatch is not None
@@ -3390,15 +3385,15 @@ class QuickServer(http_server.HTTPServer):
                 odisp = odisp[p].get("child", {})
 
     def add_value_object(
-            self, path: List[str], default_value: Any = None) -> None:
+            self, path: list[str], default_value: Any = None) -> None:
         self._add_object_dispatch(path, "value", value=default_value)
 
     def add_lazy_value_object(
-            self, path: List[str], fun: Callable[..., Any]) -> None:
+            self, path: list[str], fun: Callable[..., Any]) -> None:
         self._add_object_dispatch(path, "lazy_value", fun=fun)
 
     def add_lazy_map_object(
-            self, path: List[str], fun: Callable[..., Any]) -> None:
+            self, path: list[str], fun: Callable[..., Any]) -> None:
         self._add_object_dispatch(path, "lazy_map", fun=fun)
 
     # miscellaneous #
@@ -3413,7 +3408,7 @@ class QuickServer(http_server.HTTPServer):
                 break
             # TODO implement escape sequences (also for \#)
             segments.append(s)
-        args: List[str] = []
+        args: list[str] = []
         if len(segments) == 0:
             return
         # process more specific commands first
@@ -3476,24 +3471,24 @@ class QuickServer(http_server.HTTPServer):
         # setup internal commands (no replace)
         @self.cmd(argc=0, no_replace=True)
         def help(  # pylint: disable=redefined-builtin
-                _args: List[str]) -> None:
+                _args: list[str]) -> None:
             msg("available commands:")
             for key in dict(self._cmd_methods):
                 msg("    {0}", key.replace("_", " "))
 
         @self.cmd(argc=0, no_replace=True)
-        def restart(_args: List[str]) -> None:
+        def restart(_args: list[str]) -> None:
             global _DO_RESTART
             _DO_RESTART = True
             self.done = True
 
         @self.cmd(argc=0, no_replace=True)
         def quit(  # pylint: disable=redefined-builtin
-                _args: List[str]) -> None:
+                _args: list[str]) -> None:
             self.done = True
 
         # set up command completion
-        def complete(text: str, state: int) -> Optional[str]:
+        def complete(text: str, state: int) -> str | None:
             if state == 0:
                 origline = readline.get_line_buffer()
                 line = origline.lstrip()
@@ -3517,7 +3512,7 @@ class QuickServer(http_server.HTTPServer):
                     m[begidx:_endidx(m)].replace("_", " ") for m in matches
                 ]
                 rest_cmd = line[:begidx].split()
-                args: List[str] = []
+                args: list[str] = []
                 while rest_cmd:
                     cur_cmd = "_".join(rest_cmd)
                     compl = self._cmd_complete.get(cur_cmd, None)
@@ -3528,7 +3523,7 @@ class QuickServer(http_server.HTTPServer):
                     args.insert(0, rest_cmd.pop())
                 cmd_state["suggestions"] = sorted(set(candidates))
                 cmd_state["line"] = line
-            suggestions: List[str] = cmd_state["suggestions"]
+            suggestions: list[str] = cmd_state["suggestions"]
             if len(suggestions) == 1 and text == suggestions[0]:
                 probe_cmd = cmd_state["line"].replace(" ", "_")
                 if probe_cmd in self._cmd_argc and \
@@ -3699,7 +3694,7 @@ class QuickServer(http_server.HTTPServer):
 
     def can_ignore_error(
             self,
-            reqhnd: Optional[QuickServerRequestHandler] = None) -> bool:
+            reqhnd: QuickServerRequestHandler | None = None) -> bool:
         """Tests if the error is worth reporting.
         """
         value = sys.exc_info()[1]
@@ -3720,7 +3715,7 @@ class QuickServer(http_server.HTTPServer):
     def handle_error(  # type: ignore
             self,
             request: bytes,
-            client_address: Tuple[str, int]) -> None:
+            client_address: tuple[str, int]) -> None:
         """Handle an error gracefully.
         """
         if self.can_ignore_error():
