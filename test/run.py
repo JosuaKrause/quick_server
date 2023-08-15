@@ -8,7 +8,6 @@ import time
 from fcntl import F_GETFL, F_SETFL, fcntl
 from subprocess import PIPE, Popen
 from typing import Any
-from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
@@ -66,12 +65,12 @@ def run(*, python: list[str], skip: int) -> None:
             name: str) -> bool:
         requireds = requireds[:]
         for line in text.split("\n"):
-            for fo in fails:
-                if fo in line:
+            for failout in fails:
+                if failout in line:
                     return fail(  # pragma: no cover
                         "invalid line encountered:"  # pragma: no cover
                         "\n{0}\ncontains {1}",  # pragma: no cover
-                        line, fo)  # pragma: no cover
+                        line, failout)  # pragma: no cover
             while len(requireds) and requireds[0] in line:
                 requireds.pop(0)
         if len(requireds):
@@ -150,7 +149,6 @@ def run(*, python: list[str], skip: int) -> None:
     def curl_server_run(
             probes: list[Any],
             script: str = "example.py") -> bool:
-        p = None
         done = False
         with Popen(
                 python + [script],
@@ -172,25 +170,24 @@ def run(*, python: list[str], skip: int) -> None:
                         return False  # pragma: no cover
                 done = True
             finally:
-                if p is not None:
-                    boutput, berr = p.communicate(b"quit\n")
-                    output = boutput.decode("utf-8")
-                    err = berr.decode("utf-8")
-                    if not done:
-                        report_output(  # pragma: no cover
-                            output.split("\n"),  # pragma: no cover
-                            err.split("\n"))  # pragma: no cover
-                    do_sleep(1)
-                    if p.poll() is None:  # pragma: no cover
-                        status(
-                            "WARNING: server takes "
-                            "unusually long to terminate -- "
-                            "coverage might report incorrect results")
-                        p.terminate()
-                        do_sleep(3)
-                        if p.poll() is None:
-                            status("WARNING: killed server")
-                            p.kill()
+                boutput, berr = p.communicate(b"quit\n")
+                output = boutput.decode("utf-8")
+                err = berr.decode("utf-8")
+                if not done:
+                    report_output(  # pragma: no cover
+                        output.split("\n"),  # pragma: no cover
+                        err.split("\n"))  # pragma: no cover
+                do_sleep(1)
+                if p.poll() is None:  # pragma: no cover
+                    status(
+                        "WARNING: server takes "
+                        "unusually long to terminate -- "
+                        "coverage might report incorrect results")
+                    p.terminate()
+                    do_sleep(3)
+                    if p.poll() is None:
+                        status("WARNING: killed server")
+                        p.kill()
         return True
 
     user_agent = "Mozilla/5.0 (Windows NT 6.1; Win64; x64)"
@@ -199,7 +196,7 @@ def run(*, python: list[str], skip: int) -> None:
             parr: list[Any],
             post: dict[str, Any] | None = None,
             json_response: dict[str, Any] | None = None) -> bool:
-        url = "http://localhost:8000/{0}".format(parr[0])
+        url = f"http://localhost:8000/{parr[0]}"
         status_code = parr[1]
         rest = parr[2] if len(parr) > 2 else None
         headers = {
@@ -214,49 +211,45 @@ def run(*, python: list[str], skip: int) -> None:
             req.add_header("Content-Type", "application/json")
             req.add_header("Content-Length", f"{len(post_str)}")
             req.data = post_str.encode("utf-8")
-        try:
-            response = urlopen(req)
-        except HTTPError as e:
-            response = e
-        if rest is not None and "url" in rest:
-            expected_url = f"http://localhost:8000/{rest['url']}"
-            if response.geturl() != expected_url:
-                status(  # pragma: no cover
+        with urlopen(req) as response:
+            if rest is not None and "url" in rest:
+                expected_url = f"http://localhost:8000/{rest['url']}"
+                if response.geturl() != expected_url:
+                    status(  # pragma: no cover
+                        "HEADERS:\n{0}\nBODY:\n{1}\n",  # pragma: no cover
+                        response.headers, response.read())  # pragma: no cover
+                    return fail(  # pragma: no cover
+                        "redirection failed! "  # pragma: no cover
+                        "expected '{0}' got '{1}'",  # pragma: no cover
+                        expected_url, response.geturl())  # pragma: no cover
+            if response.code != status_code:
+                status(
                     "HEADERS:\n{0}\nBODY:\n{1}\n",  # pragma: no cover
-                    response.headers, response.read())  # pragma: no cover
+                    response.headers,  # pragma: no cover
+                    response.read())  # pragma: no cover
                 return fail(  # pragma: no cover
-                    "redirection failed! "  # pragma: no cover
-                    "expected '{0}' got '{1}'",  # pragma: no cover
-                    expected_url, response.geturl())  # pragma: no cover
-        if response.code != status_code:
-            status(
-                "HEADERS:\n{0}\nBODY:\n{1}\n",  # pragma: no cover
-                response.headers,  # pragma: no cover
-                response.read())  # pragma: no cover
-            return fail(  # pragma: no cover
-                "{0} responded with {1} ({2} expected)",  # pragma: no cover
-                url, response.code, status_code)  # pragma: no cover
-        if json_response is not None:
-            json_response["response"] = json.loads(response.read())
+                    "{0} responded with "
+                    "{1} ({2} expected)",  # pragma: no cover
+                    url, response.code, status_code)  # pragma: no cover
+            if json_response is not None:
+                json_response["response"] = json.loads(response.read())
         return True
 
     def url_server_run(probes: list[Any], script: str = "example.py") -> bool:
-        p = None
         done = False
-        try:
-            p = Popen(
+        with Popen(
                 python + [script],
                 cwd="../example",
                 stdin=PIPE,
                 stdout=PIPE,
-                stderr=PIPE)
-            do_sleep(1)  # give the server some time to wake up
-            for parr in probes:
-                if not access_url(parr):
-                    return False  # pragma: no cover
-            done = True
-        finally:
-            if p is not None:
+                stderr=PIPE) as p:
+            try:
+                do_sleep(1)  # give the server some time to wake up
+                for parr in probes:
+                    if not access_url(parr):
+                        return False  # pragma: no cover
+                done = True
+            finally:
                 boutput, berr = p.communicate(b"quit\n")
                 output = boutput.decode("utf-8")
                 err = berr.decode("utf-8")
@@ -279,36 +272,36 @@ def run(*, python: list[str], skip: int) -> None:
     def url_response_run(
             probes: list[tuple[str, int, dict[str, str] | None]],
             script: str = "example.py") -> bool:
-        p = None
         done = False
-        try:
-            p = Popen(
+        with Popen(
                 python + [script],
                 cwd="../example",
                 stdin=PIPE,
                 stdout=PIPE,
-                stderr=PIPE)
-            do_sleep(1)  # give the server some time to wake up
-            for parr in probes:
-                expect_obj = parr[2]
-                json_res: dict[str, Any] | None = \
-                    {} if expect_obj is not None else None
-                if not access_url([parr[0], parr[1]], json_response=json_res):
-                    return False  # pragma: no cover
-                if expect_obj is not None:
-                    assert json_res is not None
-                    obj = json_res["response"]
-                    if sorted(obj.keys()) != sorted(expect_obj.keys()):
-                        return fail(  # pragme: no cover
-                            f"response doesnt match: {obj} != {expect_obj}")
-                    for (key, value) in expect_obj.items():
-                        if obj[key] != value:
+                stderr=PIPE) as p:
+            try:
+                do_sleep(1)  # give the server some time to wake up
+                for parr in probes:
+                    expect_obj = parr[2]
+                    json_res: dict[str, Any] | None = \
+                        {} if expect_obj is not None else None
+                    if not access_url(
+                            [parr[0], parr[1]], json_response=json_res):
+                        return False  # pragma: no cover
+                    if expect_obj is not None:
+                        assert json_res is not None
+                        obj = json_res["response"]
+                        if sorted(obj.keys()) != sorted(expect_obj.keys()):
                             return fail(  # pragme: no cover
                                 "response doesnt match: "
                                 f"{obj} != {expect_obj}")
-            done = True
-        finally:
-            if p is not None:
+                        for (key, value) in expect_obj.items():
+                            if obj[key] != value:
+                                return fail(  # pragme: no cover
+                                    "response doesnt match: "
+                                    f"{obj} != {expect_obj}")
+                done = True
+            finally:
                 boutput, berr = p.communicate(b"quit\n")
                 output = boutput.decode("utf-8")
                 err = berr.decode("utf-8")
@@ -361,7 +354,7 @@ def run(*, python: list[str], skip: int) -> None:
         tries = 0
         while True:
             answer: dict[str, Any] = {}
-            if max_tries > 0 and tries > max_tries:
+            if tries > max_tries:
                 cmd = {
                     "action": "stop",
                     "token":
@@ -369,7 +362,8 @@ def run(*, python: list[str], skip: int) -> None:
                 }
             if not access_url([url, 200], post=cmd, json_response=answer):
                 return "err"  # pragma: no cover
-            tries += 1
+            if max_tries > 0:
+                tries += 1  # NOTE: only increment tries if we have a maximum
             answer = answer["response"]
             cmd = {
                 "action": "get",
@@ -392,24 +386,22 @@ def run(*, python: list[str], skip: int) -> None:
 
     def worker_server_run(
             probes: list[Any], script: str = "example.py") -> bool:
-        p = None
         done = False
-        try:
-            p = Popen(
+        with Popen(
                 python + [script],
                 cwd="../example",
                 stdin=PIPE,
                 stdout=PIPE,
-                stderr=PIPE)
-            do_sleep(1)  # give the server some time to wake up
-            if not access_url(["js/worker.js", 200]):
-                return False  # pragma: no cover
-            for probe in probes:
-                if access_worker(*probe[:-1]) != probe[-1]:
+                stderr=PIPE) as p:
+            try:
+                do_sleep(1)  # give the server some time to wake up
+                if not access_url(["js/worker.js", 200]):
                     return False  # pragma: no cover
-            done = True
-        finally:
-            if p is not None:
+                for probe in probes:
+                    if access_worker(*probe[:-1]) != probe[-1]:
+                        return False  # pragma: no cover
+                done = True
+            finally:
                 boutput, berr = p.communicate(b"quit\n")
                 output = boutput.decode("utf-8")
                 err = berr.decode("utf-8")
@@ -457,7 +449,7 @@ def run(*, python: list[str], skip: int) -> None:
             written = 0
             while True:
                 sels = select.select([p.stdout, p.stderr], [p.stdin], [])
-                if not len(sels[0]) and written >= len(write):
+                if len(sels[0]) == 0 and written >= len(write):
                     break
                 for s in sels[0]:
                     if s == p.stdout:
@@ -477,68 +469,75 @@ def run(*, python: list[str], skip: int) -> None:
                     raise e
 
         p = None
-        pr = None
-        try:
-            pr = Popen(
+        with Popen(
                 python + [script],
                 cwd="../example",
                 stdin=PIPE,
                 stdout=PIPE,
-                stderr=PIPE)
-            # make pipes non-blocking
-            flags = fcntl(pr.stdin, F_GETFL)  # type: ignore
-            fcntl(pr.stdin, F_SETFL, flags | os.O_NONBLOCK)  # type: ignore
-            flags = fcntl(pr.stdout, F_GETFL)  # type: ignore
-            fcntl(pr.stdout, F_SETFL, flags | os.O_NONBLOCK)  # type: ignore
-            flags = fcntl(pr.stderr, F_GETFL)  # type: ignore
-            fcntl(pr.stderr, F_SETFL, flags | os.O_NONBLOCK)  # type: ignore
-            # start-up done
-            p = pr
-            read_all("")
-            do_sleep(1)  # give the server some time to wake up
-            read_all("")
-            for a in actions:
-                if a[0] == "cmd":
-                    status("command: {0}", a[1])
-                    cmd = a[1] + "\n"
-                    read_all(cmd)
-                    if cmd == "restart\n":
+                stderr=PIPE) as proc:
+            try:
+                assert proc.stdin is not None
+                assert proc.stdout is not None
+                assert proc.stderr is not None
+                # make pipes non-blocking
+                flags = fcntl(proc.stdin, F_GETFL)
+                fcntl(proc.stdin, F_SETFL, flags | os.O_NONBLOCK)
+                flags = fcntl(proc.stdout, F_GETFL)
+                fcntl(proc.stdout, F_SETFL, flags | os.O_NONBLOCK)
+                flags = fcntl(proc.stderr, F_GETFL)
+                fcntl(proc.stderr, F_SETFL, flags | os.O_NONBLOCK)
+                # start-up done
+                p = proc
+                read_all("")
+                do_sleep(1)  # give the server some time to wake up
+                read_all("")
+                for a in actions:
+                    if a[0] == "cmd":
+                        status("command: {0}", a[1])
+                        cmd = a[1] + "\n"
+                        read_all(cmd)
+                        if cmd == "restart\n":
+                            read_all("")
+                            do_sleep(1)  # give the server some time to restart
+                            read_all("")
+                    elif a[0] == "url":
+                        status("url: {0}", a[1])
+                        a.pop(0)
+                        if not access_url(a):  # pragma: no cover
+                            read_all("")
+                            report_output(output, error)
+                            return False
                         read_all("")
-                        do_sleep(1)  # give the server some time to restart
-                        read_all("")
-                elif a[0] == "url":
-                    status("url: {0}", a[1])
-                    a.pop(0)
-                    if not access_url(a):  # pragma: no cover
-                        read_all("")
-                        report_output(output, error)
-                        return False
-                    read_all("")
-                else:  # pragma: no cover
-                    return fail("unknown action {0}", a[0])
-            read_all("")
-            do_sleep(1)
-        finally:
-            if p is not None:
-                read_all("quit\n")
+                    else:  # pragma: no cover
+                        return fail("unknown action {0}", a[0])
+                read_all("")
                 do_sleep(1)
-                if p.poll() is None:  # pragma: no cover
-                    status(
-                        "WARNING: server takes unusually long to terminate -- "
-                        "coverage might report incorrect results")
-                    p.terminate()
-                    do_sleep(3)
-                    if p.poll() is None:
-                        status("WARNING: killed server")
-                        p.kill()
-                elif p.returncode != exit_code:
-                    return fail(  # pragma: no cover
-                        "wrong exit code {0} expected {1}",  # pragma: no cover
-                        p.returncode, exit_code)  # pragma: no cover
-            elif pr is not None:  # pragma: no cover
-                if pr.poll() is None:
-                    status("WARNING: kill server during start-up")
-                    pr.kill()
+            finally:
+                okay = True
+                if p is not None:
+                    read_all("quit\n")
+                    do_sleep(1)
+                    if p.poll() is None:  # pragma: no cover
+                        status(
+                            "WARNING: server takes unusually "
+                            "long to terminate -- "
+                            "coverage might report incorrect results")
+                        p.terminate()
+                        do_sleep(3)
+                        if p.poll() is None:
+                            status("WARNING: killed server")
+                            p.kill()
+                    elif p.returncode != exit_code:
+                        okay = fail(  # pragma: no cover
+                            "wrong exit code {0} "  # pragma: no cover
+                            "expected {1}",  # pragma: no cover
+                            p.returncode, exit_code)  # pragma: no cover
+                else:  # pragma: no cover
+                    if proc.poll() is None:
+                        status("WARNING: kill server during start-up")
+                        proc.kill()
+        if not okay:
+            return False
         output_str = "".join(output)
         error_str = "".join(error)
         if not check_stream(output_str, required_out, fail_out, "STD_OUT"):
@@ -550,25 +549,27 @@ def run(*, python: list[str], skip: int) -> None:
     def token_test() -> bool:
         from quick_server import QuickServer
 
-        qs = QuickServer(("", 0))
-        tkn = qs.create_token()
+        qserve = QuickServer(("", 0))
+        tkn = qserve.create_token()
         note("time: {0}", get_time())
 
         def chk(name: str, expire: float, live: bool) -> bool:
-            with qs.get_token_obj(name, expire, readonly=True) as obj:
+            # pylint: disable=protected-access
+
+            with qserve.get_token_obj(name, expire, readonly=True) as obj:
                 if live and "foo" not in obj:
                     note("time: {0}", get_time())
-                    note("{0}", qs._token_handler)
+                    note("{0}", qserve._token_handler)
                     return fail("'{0}' expected to live: {1}", name, obj)
                 if not live and "foo" in obj:
                     note("time: {0}", get_time())
-                    note("{0}", qs._token_handler)
+                    note("{0}", qserve._token_handler)
                     return fail("'{0}' should be cleared: {1}", name, obj)
                 return True
 
-        with qs.get_token_obj(tkn, 0.1) as tmp:
+        with qserve.get_token_obj(tkn, 0.1) as tmp:
             tmp["foo"] = True
-        with qs.get_token_obj("a", 0) as tmp:
+        with qserve.get_token_obj("a", 0) as tmp:
             tmp["foo"] = True
         if not chk(tkn, 0.1, True):
             return False
@@ -577,7 +578,7 @@ def run(*, python: list[str], skip: int) -> None:
         note("wait: {0}", get_time())
         do_sleep(0.2, ensure=True)
         note("time: {0}", get_time())
-        with qs.get_token_obj("b", None) as tmp:
+        with qserve.get_token_obj("b", None) as tmp:
             tmp["foo"] = True
         if not chk(tkn, 0.1, False):
             return False

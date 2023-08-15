@@ -17,7 +17,7 @@ You can install *quick\_server* with pip:
 
 .. code:: sh
 
-    pip install --user quick_server
+    pip install quick_server
 
 Import it in python via:
 
@@ -29,13 +29,13 @@ Note that python 2 support is discontinued. Use version *0.6.x*:
 
 .. code:: sh
 
-    pip install --user quick_server<0.7
+    pip install quick_server<0.7
 
 Note that python 3.9 and lower support is discontinued. Use version *0.7.x*:
 
 .. code:: sh
 
-    pip install --user quick_server<0.8
+    pip install quick_server<0.8
 
 Setting up a basic file server
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,32 +46,32 @@ full information.
 
 .. code:: python
 
-    setup_restart() # sets up restart functionality (if not called the `restart` command of the server needs external help to work)
+    setup_restart()  # sets up restart functionality (if not called the `restart` command of the server needs external help to work)
     # should be the first real executed command in the script
     # some services, like heroku, don't play well with this command and it should not be called if in such an environment
 
-    addr = '' # empty address is equivalent to 'localhost'
+    addr = ""  # empty address is equivalent to "localhost"
     port = 8080
-    server = create_server((addr, port), parallel=True) # parallel is recommended unless your code is not thread-safe
-    server.bind_path('/', 'www') # binds the 'www' directory to the server's root
-    server.add_default_white_list() # adds typical file types to the list of files that will be served; you can use server.add_file_patterns to add more file types
-    server.favicon_fallback = 'favicon.ico' # sets the default favicon file to the given file on disk (you'll need a file called 'favicon.ico')
+    server = create_server((addr, port), parallel=True)  # parallel is recommended unless your code is not thread-safe
+    server.bind_path("/", "www")  # binds the "www" directory to the server's root
+    server.add_default_white_list()  # adds typical file types to the list of files that will be served; you can use server.add_file_patterns to add more file types
+    server.favicon_fallback = "favicon.ico"  # sets the default favicon file to the given file on disk (you'll need a file called "favicon.ico")
     # you can also use server.link_empty_favicon_fallback()
 
-    server.suppress_noise = True # don't report successful requests (turn off if you want to measure performance)
-    server.report_slow_requests = True # reports requests that take longer than 5s
+    server.suppress_noise = True  # don't report successful requests (turn off if you want to measure performance)
+    server.report_slow_requests = True  # reports requests that take longer than 5s
 
 Starting the actual server:
 
 .. code:: python
 
-    msg("{0}", " ".join(sys.argv)) # prints how the script was started
-    msg("starting server at {0}:{1}", addr if addr else 'localhost', port)
+    msg("{0}", " ".join(sys.argv))  # prints how the script was started
+    msg("starting server at {0}:{1}", addr if addr else "localhost", port)
     try:
-        server.serve_forever() # starts the server -- only returns when the server stops (e.g., by typing `quit`, `restart`, or `CTRL-C`)
+        server.serve_forever()  # starts the server -- only returns when the server stops (e.g., by typing `quit`, `restart`, or `CTRL-C`)
     finally:
         msg("shutting down..")
-        msg("{0}", " ".join(sys.argv)) # print how the script was called before exit -- this way you don't have to scroll up to remember when the server was running for a while
+        msg("{0}", " ".join(sys.argv))  # print how the script was called before exit -- this way you don't have to scroll up to remember when the server was running for a while
         server.server_close() # make sure to clean up all resources
 
 Adding dynamic requests
@@ -84,7 +84,7 @@ A ``POST`` request in ``JSON`` format:
 
 .. code:: python
 
-    @server.json_post('/json_request', 0) # creates a request at http://localhost:8080/json_request -- 0 additional path segments are allowed
+    @server.json_post("/json_request", 0)  # creates a request at http://localhost:8080/json_request -- 0 additional path segments are allowed
     def json_request(req, args):
         return {
             "post": args["post"],
@@ -94,7 +94,7 @@ A ``GET`` request as ``plain text``:
 
 .. code:: python
 
-    @server.text_get('/text_request') # creates a request at http://localhost:8080/text_request -- additional path segments are allowed
+    @server.text_get("/text_request")  # creates a request at http://localhost:8080/text_request -- additional path segments are allowed
     def text_request(req, args):
         return "plain text"
 
@@ -121,9 +121,9 @@ First, provide the necessary JavaScript file via
 
 .. code:: python
 
-    server.link_worker_js('/js/worker.js')
+    server.link_worker_js("/js/worker.js")
 
-(use ``server.link_legacy_worker_js('/js/worker.js')`` if you are *not* using a transpiler)
+(use ``server.link_legacy_worker_js("/js/worker.js")`` if you are *not* using a transpiler)
 
 and load it on the client side:
 
@@ -135,7 +135,7 @@ A worker request can be set up on the server side with
 
 .. code:: python
 
-    @server.json_worker('/json_worker')
+    @server.json_worker("/json_worker")
     def json_worker(post):
         # post contains all post arguments
         # ...
@@ -188,7 +188,7 @@ Then caching can be used for workers:
 
 .. code:: python
 
-    @server.json_worker('/json_worker', cache_id=lambda args: {
+    @server.json_worker("/json_worker", cache_id=lambda args: {
             # uniquely identify the task from its arguments (must be JSON convertible)
         })
     def json_worker(post):
@@ -206,7 +206,7 @@ mirror the file into your source folder:
 
 .. code:: python
 
-    server.mirror_worker_js('src/worker.js')
+    server.mirror_worker_js("src/worker.js")
 
 and then import it:
 
@@ -234,7 +234,7 @@ To use *quick\_server* with a build bind the build folder:
 
 .. code:: python
 
-    server.bind_path('/', 'build/')
+    server.bind_path("/", "build/")
 
 During development it is recommended to forward
 requests from the *react* server to *quick\_server*.
@@ -260,12 +260,12 @@ The server can now access (read / write) data associated with this token:
 
 .. code:: python
 
-    @server.json_post('/json_request', 0)
+    @server.json_post("/json_request", 0)
     def json_request(req, args):
         # assuming the token-id was sent via post
         # expire can be the expiration time in seconds of a token,
         # None for no expiration, or be omitted for the default expiration (1h)
-        with server.get_token_obj(args['post']['token'], expire=None) as obj:
+        with server.get_token_obj(args["post"]["token"], expire=None) as obj:
             # do stuff with obj
             # ...
 
@@ -282,7 +282,7 @@ and requests can be redirected via proxy (if you want to avoid CORS):
 
 .. code:: python
 
-    server.bind_proxy('/foo/', 'http://localhost:12345')
+    server.bind_proxy("/foo/", "http://localhost:12345")
 
 redirects every request that begins with ``/foo/`` and
 has not been handled by *quick\_server* to ``http://localhost:12345``.
@@ -297,11 +297,11 @@ available commands), ``restart`` (restart the server), and ``quit``
 .. code:: python
 
     @server.cmd()
-    def name(args): # creates the command name
+    def name(args):  # creates the command name
         if not args:
             msg("hello")
         else:
-            msg("hi {0}", " ".join(args)) # words typed after name are printed here
+            msg("hi {0}", " ".join(args))  # words typed after name are printed here
 
 A common command to add when having caching functionality (e.g.,
 provided by
@@ -310,15 +310,15 @@ clear caches. This show-cases also auto-complete functionality:
 
 .. code:: python
 
-    def complete_cache_clear(args, text): # args contains already completed arguments; text the currently started one
-        if args: # we only allow up to one argument
+    def complete_cache_clear(args, text):  # args contains already completed arguments; text the currently started one
+        if args:  # we only allow up to one argument
             return []
-        return [ section for section in cache.list_sections() if section.startswith(text) ] # cache is the quick_cache object
+        return [ section for section in cache.list_sections() if section.startswith(text) ]  # cache is the quick_cache object
 
     @server.cmd(complete=complete_cache_clear)
     def cache_clear(args):
         if len(args) > 1: # we only allow up to one argument
-          msg("too many extra arguments! expected one got {0}", ' '.join(args))
+          msg("too many extra arguments! expected one got {0}", " ".join(args))
           return
         msg("clear {0}cache{1}{2}", "" if args else "all ", " " if args else "s", args[0] if args else "")
         cache.clean_cache(args[0] if args else None)
@@ -349,10 +349,10 @@ You can wrap the server socket to support HTTPS:
 
     import ssl
 
-    addr = '' # empty address is equivalent to 'localhost'
-    port = 443 # the HTTPS default port 443 might require root privileges
+    addr = ""  # empty address is equivalent to "localhost"
+    port = 443  # the HTTPS default port 443 might require root privileges
     server = create_server((addr, port), parallel=True)
-    server.socket = ssl.wrap_socket(server.socket, certfile='path/to/localhost.pem', server_side=True)
+    server.socket = ssl.wrap_socket(server.socket, certfile="path/to/localhost.pem", server_side=True)
 
     # setup your server
 
