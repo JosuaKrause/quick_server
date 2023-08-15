@@ -8,7 +8,9 @@ import time
 from fcntl import F_GETFL, F_SETFL, fcntl
 from subprocess import PIPE, Popen
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from urllib.response import addinfourl
 
 
 def run(*, python: list[str], skip: int) -> None:
@@ -211,7 +213,8 @@ def run(*, python: list[str], skip: int) -> None:
             req.add_header("Content-Type", "application/json")
             req.add_header("Content-Length", f"{len(post_str)}")
             req.data = post_str.encode("utf-8")
-        with urlopen(req) as response:
+
+        def handle(response: addinfourl | HTTPError) -> bool:
             if rest is not None and "url" in rest:
                 expected_url = f"http://localhost:8000/{rest['url']}"
                 if response.geturl() != expected_url:
@@ -233,7 +236,13 @@ def run(*, python: list[str], skip: int) -> None:
                     url, response.code, status_code)  # pragma: no cover
             if json_response is not None:
                 json_response["response"] = json.loads(response.read())
-        return True
+            return True
+
+        try:
+            with urlopen(req) as response:
+                return handle(response)
+        except HTTPError as e:
+            return handle(e)
 
     def url_server_run(probes: list[Any], script: str = "example.py") -> bool:
         done = False
