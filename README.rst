@@ -65,13 +65,13 @@ Starting the actual server:
 
 .. code:: python
 
-    msg("{0}", " ".join(sys.argv))  # prints how the script was started
-    msg("starting server at {0}:{1}", addr if addr else "localhost", port)
+    msg(f"{' '.join(sys.argv)}")  # prints how the script was started
+    msg(f"starting server at {addr if addr else 'localhost'}:{port}")
     try:
         server.serve_forever()  # starts the server -- only returns when the server stops (e.g., by typing `quit`, `restart`, or `CTRL-C`)
     finally:
         msg("shutting down..")
-        msg("{0}", " ".join(sys.argv))  # print how the script was called before exit -- this way you don't have to scroll up to remember when the server was running for a while
+        msg(f"{' '.join(sys.argv)}")  # print how the script was called before exit -- this way you don't have to scroll up to remember when the server was running for a while
         server.server_close() # make sure to clean up all resources
 
 Adding dynamic requests
@@ -301,7 +301,7 @@ available commands), ``restart`` (restart the server), and ``quit``
         if not args:
             msg("hello")
         else:
-            msg("hi {0}", " ".join(args))  # words typed after name are printed here
+            msg(f"hi {' '.join(args)}")  # words typed after name are printed here
 
 A common command to add when having caching functionality (e.g.,
 provided by
@@ -318,9 +318,9 @@ clear caches. This show-cases also auto-complete functionality:
     @server.cmd(complete=complete_cache_clear)
     def cache_clear(args):
         if len(args) > 1: # we only allow up to one argument
-          msg("too many extra arguments! expected one got {0}", " ".join(args))
+          msg(f"too many extra arguments! expected one got {' '.join(args)}")
           return
-        msg("clear {0}cache{1}{2}", "" if args else "all ", " " if args else "s", args[0] if args else "")
+        msg(f"clear {'' if args else 'all '}cache{' ' if args else 's'}{args[0] if args else ''}")
         cache.clean_cache(args[0] if args else None)
 
 Server without command loop

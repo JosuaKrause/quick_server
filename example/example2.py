@@ -80,7 +80,7 @@ def run() -> None:
     def uptime_worker(args: WorkerArgs) -> ResUptime:
         nonlocal count_uptime
 
-        msg("sleep {0}", int(args["time"]))
+        msg(f"sleep {int(args['time'])}")
         sleep(int(args["time"]))
         count_uptime += 1
         return {
@@ -102,11 +102,11 @@ def run() -> None:
     @server.cmd(1, complete_requests)
     def requests(args: list[str]) -> None:
         if args[0] != 'uptime':
-            msg("unknown request: {0}", args[0])
+            msg(f"unknown request: {args[0]}")
         else:
-            msg("requests made to {0}: {1}", args[0], count_uptime)
+            msg(f"requests made to {args[0]}: {count_uptime}")
 
-    msg("starting server at {0}:{1}", addr if addr else "localhost", port)
+    msg(f"starting server at {addr if addr else 'localhost'}:{port}")
     server.serve_forever()
     msg("shutting down..")
     server.server_close()

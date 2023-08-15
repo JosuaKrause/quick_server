@@ -250,7 +250,7 @@ LONG_MSG = True
 MSG_STDERR = False
 
 
-def msg(message: str, *args: Any, **kwargs: Any) -> None:
+def msg(message: str) -> None:
     """Prints a message from the server to the log file."""
     global LOG_FILE
 
@@ -269,19 +269,7 @@ def msg(message: str, *args: Any, **kwargs: Any) -> None:
     else:
         head = "[SERVER] "
     out = StringIO()
-    try:
-        full_message = message.format(*args, **kwargs)
-    except (ValueError, KeyError):
-        full_message = str(message)
-        for arg in args:
-            full_message += "\n"
-            full_message += str(arg)
-        for (key, value) in kwargs.items():
-            full_message += "\n"
-            full_message += str(key)
-            full_message += "="
-            full_message += str(value)
-    for curline in full_message.splitlines():
+    for curline in message.splitlines():
         out.write(f"{head}{curline}\n")
     out.flush()
     out.seek(0)
@@ -334,7 +322,7 @@ def debug(fun: Callable[[], Any]) -> None:
     if DEBUG is None:
         DEBUG = bool(int(os.environ.get("QUICK_SERVER_DEBUG", "0")))
     if DEBUG:
-        msg("[DEBUG] {0}", fun())
+        msg(f"[DEBUG] {fun()}")
 
 
 debug(lambda: sys.version)
@@ -420,7 +408,7 @@ def _start_restart_loop(exit_code: str | None, in_atexit: bool) -> None:
         else:
             exec_arr = get_exec_arr()
             if in_atexit:
-                msg("restarting: {0}", " ".join(exec_arr))
+                msg(f"restarting: {' '.join(exec_arr)}")
 
             debug(lambda: exec_arr)
             exit_code = str(_RESTART_EXIT_CODE)
@@ -504,7 +492,7 @@ class WorkerDeath(Exception):
 def kill_thread(
         th: threading.Thread,
         cur_key: str,
-        msgout: Callable[..., None],
+        msgout: Callable[[str], None],
         is_verbose_workers: Callable[[], bool]) -> None:
     """Kills a running thread."""
     # pylint: disable=protected-access
@@ -524,14 +512,14 @@ def kill_thread(
         if res == 0:
             # invalid thread id -- the thread might
             # be done already
-            msgout("invalid thread id for killing worker {0}", cur_key)
+            msgout(f"invalid thread id for killing worker {cur_key}")
         elif res != 1:
             # roll back
             pts_sae(ctypes.c_long(tid), None)
-            msgout("killed too many ({0}) workers? {1}", res, cur_key)
+            msgout(f"killed too many ({res}) workers? {cur_key}")
         else:
             if is_verbose_workers():
-                msgout("killed worker {0}", cur_key)
+                msgout(f"killed worker {cur_key}")
 
 
 class QuickServerRequestHandler(SimpleHTTPRequestHandler):
@@ -793,9 +781,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     report_slow_requests(method_str, path)
                 else:
                     msg(
-                        "request takes longer than expected: \"{0} {1}\"",
-                        method_str,
-                        path)
+                        "request takes longer than expected: "
+                        f"\"{method_str} {path}\"")
 
             alarm_init = threading.Timer(5.0, do_report)
             alarm_init.start()
@@ -1459,14 +1446,13 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """Logs the current request."""
         print_size = getattr(thread_local, "size", -1)
         if size != "-":
-            size_str = f" ({size})"
+            size_str = f"({size}) "
         elif print_size >= 0:
             size_str = f"{self.log_size_string(print_size)} "
         else:
             size_str = ""
         if not self.server.suppress_noise or code not in (200, 304):
-            self.log_message(
-                "%s\"%s\" %s", size_str, self.requestline, str(code))
+            self.log_message(f"{size_str}\"{self.requestline}\" {code}")
         if print_size >= 0:
             thread_local.size = -1
 
@@ -1620,7 +1606,7 @@ class BaseWorker:
             mask: str,
             fun: Callable[[WorkerArgs], str],
             *,
-            log: Callable[..., None],
+            log: Callable[[str], None],
             cache_id: Callable[[CacheIdObj], Any] | None,
             cache: Any,
             cache_method: str,
@@ -1764,7 +1750,7 @@ class BaseWorker:
                         f"Error in purged worker for {cur_key}: {result}",
                         tback, self._msg)
             else:
-                self._msg("purged result that was never read ({0})", cur_key)
+                self._msg(f"purged result that was never read ({cur_key})")
 
     def compute_worker(
             self,
@@ -1856,7 +1842,7 @@ class BaseWorker:
         }
 
     def on_error(self, post: WorkerArgs) -> None:
-        self._msg("Error processing worker command: {0}", post)
+        self._msg(f"Error processing worker command: {post}")
 
 
 class DefaultWorker(BaseWorker):
@@ -1920,7 +1906,7 @@ class DefaultWorker(BaseWorker):
                 keys.append(key)
             for k in keys:
                 self._cargo.pop(k)
-                self._msg("purged cargo that was never read ({0})", k)
+                self._msg(f"purged cargo that was never read ({k})")
 
     def remove_cleaner(self) -> bool:
         with self._lock:
@@ -2076,7 +2062,7 @@ class Response:
 
 
 def construct_multipart_response(
-        obj: dict[bytes | str, Any]) -> tuple[BytesIO, str]:
+        obj: dict[str | bytes, Any]) -> tuple[BytesIO, str]:
     boundary = f"qsboundary{uuid.uuid4().hex}"
 
     def binary(text: str | bytes) -> bytes:
@@ -3400,8 +3386,9 @@ class QuickServer(http_server.HTTPServer):
                 argc = self._cmd_argc[cur_cmd]
                 if argc is not None and len(args) != argc:
                     msg(
-                        "command {0} expects {1} argument(s), got {2}",
-                        " ".join(segments), argc, len(args))
+                        f"command {' '.join(segments)} "
+                        f"expects {argc} argument(s), "
+                        f"got {len(args)}")
                     return
                 self._cmd_methods[cur_cmd](args)
                 return
@@ -3419,14 +3406,13 @@ class QuickServer(http_server.HTTPServer):
                 m = m[:m.index("_")]
             candidates.add(m)
         if len(candidates) > 0:
-            msg("command \"{0}\" needs more arguments:", " ".join(args))
+            msg(f"command \"{' '.join(args)}\" needs more arguments:")
             for c in candidates:
-                msg("    {0}", c)
+                msg(f"    {c}")
         else:
             msg(
-                "command \"{0}\" invalid; type "
-                "help or use <TAB> for a list of commands",
-                " ".join(args))
+                f"command \"{' '.join(args)}\" invalid; type "
+                "help or use <TAB> for a list of commands")
 
     def start_cmd_loop(self) -> None:
         """Starts the command line loop. This method is called automatically by
@@ -3456,7 +3442,7 @@ class QuickServer(http_server.HTTPServer):
                 _args: list[str]) -> None:
             msg("available commands:")
             for key in dict(self._cmd_methods):
-                msg("    {0}", key.replace("_", " "))
+                msg(f"    {key.replace('_', ' ')}")
 
         @self.cmd(argc=0, no_replace=True)
         def restart(_args: list[str]) -> None:
@@ -3602,7 +3588,7 @@ class QuickServer(http_server.HTTPServer):
             t = self._thread_factory(target=cmd_loop, daemon=True)
             t.start()
 
-            def no_log(*_args: Any, **_kwargs: Any) -> None:
+            def no_log(_: str) -> None:
                 pass
 
             def not_verbose() -> bool:

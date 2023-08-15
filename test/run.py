@@ -12,6 +12,8 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from urllib.response import addinfourl
 
+NL = "\n"
+
 
 def run(*, python: list[str], skip: int) -> None:
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -30,33 +32,27 @@ def run(*, python: list[str], skip: int) -> None:
     def convert_b(bdata: bytes) -> str:
         return repr(bdata).lstrip("b").strip("'\"").replace("\\", "\\\\")
 
-    def print_msg(prefix: str, msg: str | bytes, *args: Any) -> None:
+    def to_str(msg: str | bytes) -> str:
         if isinstance(msg, bytes):
             bmsg: bytes = msg
             try:
-                smsg: str = bmsg.decode("utf-8")
+                return bmsg.decode("utf-8")
             except UnicodeDecodeError:
-                smsg = "\n".join([repr(m) for m in bmsg.split(b"\n")])
-        else:
-            smsg = msg
-        try:
-            full_message = smsg.format(*args)
-        except (ValueError, KeyError):
-            full_message = str(smsg)
-            for arg in args:
-                full_message += "\n"
-                full_message += str(arg)
-        for line in full_message.split("\n"):
+                return "\n".join([repr(m) for m in bmsg.split(b"\n")])
+        return msg
+
+    def print_msg(prefix: str, msg: str) -> None:
+        for line in msg.split("\n"):
             print(f"[{prefix}] {line}", file=sys.stderr)
 
-    def status(msg: str, *args: Any) -> None:
-        print_msg("TEST", msg, *args)
+    def status(msg: str) -> None:
+        print_msg("TEST", msg)
 
-    def note(msg: str, *args: Any) -> None:
-        print_msg("NOTE", msg, *args)
+    def note(msg: str) -> None:
+        print_msg("NOTE", msg)
 
-    def fail(msg: str, *args: Any) -> bool:  # pragma: no cover
-        status(msg, *args)  # pragma: no cover
+    def fail(msg: str) -> bool:  # pragma: no cover
+        status(msg)  # pragma: no cover
         status("test failed!")  # pragma: no cover
         return False  # pragma: no cover
 
@@ -71,16 +67,14 @@ def run(*, python: list[str], skip: int) -> None:
                 if failout in line:
                     return fail(  # pragma: no cover
                         "invalid line encountered:"  # pragma: no cover
-                        "\n{0}\ncontains {1}",  # pragma: no cover
-                        line, failout)  # pragma: no cover
+                        f"\n{line}\ncontains {failout}")  # pragma: no cover
             while len(requireds) and requireds[0] in line:
                 requireds.pop(0)
         if len(requireds):
-            status("complete output:\n{0}\n", text)  # pragma: no cover
+            status(f"complete output:\n{text}\n")  # pragma: no cover
             return fail(  # pragma: no cover
                 "not all required lines were "  # pragma: no cover
-                "found in {0}:\n{1}",  # pragma: no cover
-                name, "\n".join(requireds))  # pragma: no cover
+                f"found in {name}:\n{NL.join(requireds)}")  # pragma: no cover
         return True
 
     def cmd_server_run(
@@ -104,8 +98,8 @@ def run(*, python: list[str], skip: int) -> None:
                 report_output(  # pragma: no cover
                     output.split("\n"), error.split("\n"))  # pragma: no cover
                 return fail(  # pragma: no cover
-                    "wrong exit code {0} expected {1}",  # pragma: no cover
-                    p.returncode, exit_code)  # pragma: no cover
+                    f"wrong exit code {p.returncode} "  # pragma: no cover
+                    f"expected {exit_code}")  # pragma: no cover
             if not check_stream(output, required_out, fail_out, "STD_OUT"):
                 return False  # pragma: no cover
             if not check_stream(error, required_err, fail_err, "STD_ERR"):
@@ -140,8 +134,8 @@ def run(*, python: list[str], skip: int) -> None:
                 report_output(  # pragma: no cover
                     output.split("\n"), error.split("\n"))  # pragma: no cover
                 return fail(  # pragma: no cover
-                    "wrong exit code {0} expected {1}",  # pragma: no cover
-                    p.returncode, exit_code)  # pragma: no cover
+                    f"wrong exit code {p.returncode} "  # pragma: no cover
+                    f"expected {exit_code}")  # pragma: no cover
             if not check_stream(output, required_out, fail_out, "STD_OUT"):
                 return False  # pragma: no cover
             if not check_stream(error, required_err, fail_err, "STD_ERR"):
@@ -218,22 +212,23 @@ def run(*, python: list[str], skip: int) -> None:
             if rest is not None and "url" in rest:
                 expected_url = f"http://localhost:8000/{rest['url']}"
                 if response.geturl() != expected_url:
+                    bts = to_str(response.read())
                     status(  # pragma: no cover
-                        "HEADERS:\n{0}\nBODY:\n{1}\n",  # pragma: no cover
-                        response.headers, response.read())  # pragma: no cover
+                        f"HEADERS:\n{response.headers}\n"  # pragma: no cover
+                        f"BODY:\n{bts}\n")  # pragma: no cover
                     return fail(  # pragma: no cover
                         "redirection failed! "  # pragma: no cover
-                        "expected '{0}' got '{1}'",  # pragma: no cover
-                        expected_url, response.geturl())  # pragma: no cover
+                        f"expected \"{expected_url}\" "  # pragma: no cover
+                        f"got \"{response.geturl()}\"")  # pragma: no cover
             if response.code != status_code:
-                status(
-                    "HEADERS:\n{0}\nBODY:\n{1}\n",  # pragma: no cover
-                    response.headers,  # pragma: no cover
-                    response.read())  # pragma: no cover
+                bts = to_str(response.read())
+                status(  # pragma: no cover
+                    f"HEADERS:\n{response.headers}\n"  # pragma: no cover
+                    f"BODY:\n{bts}\n")  # pragma: no cover
                 return fail(  # pragma: no cover
-                    "{0} responded with "
-                    "{1} ({2} expected)",  # pragma: no cover
-                    url, response.code, status_code)  # pragma: no cover
+                    f"{url} responded with "  # pragma: no cover
+                    f"{response.code} "  # pragma: no cover
+                    f"({status_code} expected)")  # pragma: no cover
             if json_response is not None:
                 json_response["response"] = json.loads(response.read())
             return True
@@ -435,11 +430,11 @@ def run(*, python: list[str], skip: int) -> None:
             output: list[str], error: list[str]) -> None:  # pragma: no cover
         status("STD_OUT>>>")  # pragma: no cover
         for s in output:  # pragma: no cover
-            status("{0}", s.rstrip())  # pragma: no cover
+            status(f"{s.rstrip()}")  # pragma: no cover
         status("<<<STD_OUT")  # pragma: no cover
         status("STD_ERR>>>")  # pragma: no cover
         for s in error:  # pragma: no cover
-            status("{0}", s.rstrip())  # pragma: no cover
+            status(f"{s.rstrip()}")  # pragma: no cover
         status("<<<STD_ERR")  # pragma: no cover
 
     def cmd_url_server_run(
@@ -503,7 +498,7 @@ def run(*, python: list[str], skip: int) -> None:
                 read_all("")
                 for a in actions:
                     if a[0] == "cmd":
-                        status("command: {0}", a[1])
+                        status(f"command: {a[1]}")
                         cmd = a[1] + "\n"
                         read_all(cmd)
                         if cmd == "restart\n":
@@ -511,7 +506,7 @@ def run(*, python: list[str], skip: int) -> None:
                             do_sleep(1)  # give the server some time to restart
                             read_all("")
                     elif a[0] == "url":
-                        status("url: {0}", a[1])
+                        status(f"url: {a[1]}")
                         a.pop(0)
                         if not access_url(a):  # pragma: no cover
                             read_all("")
@@ -519,7 +514,7 @@ def run(*, python: list[str], skip: int) -> None:
                             return False
                         read_all("")
                     else:  # pragma: no cover
-                        return fail("unknown action {0}", a[0])
+                        return fail(f"unknown action {a[0]}")
                 read_all("")
                 do_sleep(1)
             finally:
@@ -539,9 +534,9 @@ def run(*, python: list[str], skip: int) -> None:
                             p.kill()
                     elif p.returncode != exit_code:
                         okay = fail(  # pragma: no cover
-                            "wrong exit code {0} "  # pragma: no cover
-                            "expected {1}",  # pragma: no cover
-                            p.returncode, exit_code)  # pragma: no cover
+                            f"wrong exit code "  # pragma: no cover
+                            f"{p.returncode} "  # pragma: no cover
+                            f"expected {exit_code}")  # pragma: no cover
                 else:  # pragma: no cover
                     if proc.poll() is None:
                         status("WARNING: kill server during start-up")
@@ -561,20 +556,20 @@ def run(*, python: list[str], skip: int) -> None:
 
         qserve = QuickServer(("", 0))
         tkn = qserve.create_token()
-        note("time: {0}", get_time())
+        note(f"time: {get_time()}")
 
         def chk(name: str, expire: float, live: bool) -> bool:
             # pylint: disable=protected-access
 
             with qserve.get_token_obj(name, expire, readonly=True) as obj:
                 if live and "foo" not in obj:
-                    note("time: {0}", get_time())
-                    note("{0}", qserve._token_handler)
-                    return fail("'{0}' expected to live: {1}", name, obj)
+                    note(f"time: {get_time()}")
+                    note(f"{qserve._token_handler}")
+                    return fail(f"\"{name}\" expected to live: {obj}")
                 if not live and "foo" in obj:
-                    note("time: {0}", get_time())
-                    note("{0}", qserve._token_handler)
-                    return fail("'{0}' should be cleared: {1}", name, obj)
+                    note(f"time: {get_time()}")
+                    note(f"{qserve._token_handler}")
+                    return fail(f"\"{name}\" should be cleared: {obj}")
                 return True
 
         with qserve.get_token_obj(tkn, 0.1) as tmp:
@@ -585,18 +580,18 @@ def run(*, python: list[str], skip: int) -> None:
             return False
         if not chk("a", 0, False):
             return False
-        note("wait: {0}", get_time())
+        note(f"wait: {get_time()}")
         do_sleep(0.2, ensure=True)
-        note("time: {0}", get_time())
+        note(f"time: {get_time()}")
         with qserve.get_token_obj("b", None) as tmp:
             tmp["foo"] = True
         if not chk(tkn, 0.1, False):
             return False
         if not chk("b", 0.1, True):
             return False
-        note("wait: {0}", get_time())
+        note(f"wait: {get_time()}")
         do_sleep(0.2, ensure=True)
-        note("time: {0}", get_time())
+        note(f"time: {get_time()}")
         if not chk("b", 0.1, False):
             return False
         return True

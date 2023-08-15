@@ -44,8 +44,8 @@ if __name__ == "__main__":
     server.suppress_noise = True
     server.report_slow_requests = True
 
-    msg("{0}", " ".join(sys.argv))
-    msg("starting server at {0}:{1}", addr if addr else "localhost", port)
+    msg(f"{' '.join(sys.argv)}")
+    msg(f"starting server at {addr if addr else 'localhost'}:{port}")
     server.serve_forever()
     msg("shutting down..")
     server.server_close()
