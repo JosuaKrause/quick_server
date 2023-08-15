@@ -94,11 +94,8 @@
     allow-wildcard-with-all = "yes"
 
 [tool.pylint.TYPECHECK]
-    generated-members = ["torch.*"]
-    ignored-modules = [
-        "datrie",
-        "dawg",
-    ]
+    generated-members = []
+    ignored-modules = []
 
 [tool.pylint]
     init-hook = "import sys; sys.path.append('.')"
@@ -109,9 +106,6 @@
         "ignore::DeprecationWarning",
         "ignore::RuntimeWarning",
         "ignore::ImportWarning",
-    ]
-    markers = [
-        "local: marks tests as local only (deselect with '-m \"not local\"')",
     ]
 
 [tool.coverage.run]

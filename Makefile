@@ -3,7 +3,9 @@ help:
 	@echo "install	install the library for local development (this is not meant for installing it to be used elsewhere)"
 	@echo "lint-type-check	run type check"
 	@echo "git-check	ensure that the working directory is clean"
+	@echo "build	build the library"
 	@echo "publish	publish the library on pypi"
+	@echo "run-test	run all tests"
 
 PYTHON=python
 
@@ -22,16 +24,16 @@ git-check:
 	@test -z `git ls-files --other --exclude-standard --directory` || (echo "there are untracked files" && exit 1)
 	@test `git rev-parse --abbrev-ref HEAD` = "master" || (grep -q -E "a|b|rc" <<< "$(VERSION)") || (echo "not on master" && exit 1)
 
-publish:
-	$(MAKE) git-check
-	rm -r dist build quick_server.egg-info || echo "no files to delete"
+build: git-check
 	"${PYTHON}" -m pip install --progress-bar off --upgrade setuptools twine wheel
+	rm -r dist build quick_server.egg-info || echo "no files to delete"
 	"${PYTHON}" setup.py sdist bdist_wheel
+
+publish: build
 	"${PYTHON}" -m twine upload dist/quick_server-$(VERSION)-py3-none-any.whl dist/quick_server-$(VERSION).tar.gz
 	git tag "v$(VERSION)"
 	git push origin "v$(VERSION)"
 	@echo "succesfully deployed $(VERSION)"
-
 
 run-test:
 	"${PYTHON}" test/run.py

@@ -1,2 +1,6 @@
 include README.rst
 include LICENSE
+include src/quick_server/favicon.ico
+include src/quick_server/py.typed
+include src/quick_server/worker.js
+include src/quick_server/worker.legacy.js
