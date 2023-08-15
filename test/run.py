@@ -838,6 +838,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and (sys.argv[1] == "-h" or sys.argv[1] == "--help"):
         print(f"usage: {sys.argv[0]} [skip]", file=sys.stderr)
         sys.exit(1)
+    PYTHON_ARR = os.environ.get("PYTHON", sys.executable).split()
     run(
-        python=os.environ.get("PYTHON", sys.executable).split(),
+        python=PYTHON_ARR if "-u" in PYTHON_ARR else PYTHON_ARR + ["-u"],
         skip=int(sys.argv[1]) if len(sys.argv) > 1 else 0)
