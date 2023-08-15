@@ -60,8 +60,7 @@ from typing_extensions import Literal, TypedDict
 
 try:
     # NOTE: avoid pyarrow atexit error
-    # pylint: disable=unused-import
-    import pyarrow  # type: ignore
+    import pyarrow  # type: ignore  # pylint: disable=unused-import
 except (ModuleNotFoundError, ImportError) as _:
     pass
 
@@ -69,7 +68,8 @@ WorkerArgs = Dict[str, Any]
 TokenObj = Dict[str, Any]
 CacheIdObj = Dict[str, Any]
 
-CmdF = TypeVar('CmdF', bound=Callable[[List[str]], None])
+CmdF = TypeVar(  # pylint: disable=invalid-name
+    'CmdF', bound=Callable[[List[str]], None])
 
 ReqArgs = TypedDict('ReqArgs', {
     'paths': List[str],
@@ -80,12 +80,11 @@ ReqArgs = TypedDict('ReqArgs', {
     'segments': Dict[str, str],
 }, total=False)
 
-ReqF = TypeVar(
+ReqF = TypeVar(  # pylint: disable=invalid-name
     'ReqF', bound=Callable[['QuickServerRequestHandler', ReqArgs], Any])
 
-WorkerF = TypeVar(
-    'WorkerF',
-    bound=Callable[[WorkerArgs], Any])
+WorkerF = TypeVar(  # pylint: disable=invalid-name
+    'WorkerF', bound=Callable[[WorkerArgs], Any])
 
 PostFileLens = TypedDict('PostFileLens', {
     'clen': int,
@@ -151,16 +150,16 @@ def _getheader_fallback(obj: Any, key: str) -> Any:
 
 
 def _getheader_p2(obj: Any, key: str) -> Any:
-    global _getheader
+    global _GETHEADER
 
     try:
         return obj.getheader(key)
     except AttributeError:
-        _getheader = _getheader_fallback
-        return _getheader(obj, key)
+        _GETHEADER = _getheader_fallback
+        return _GETHEADER(obj, key)
 
 
-_getheader = _getheader_p2
+_GETHEADER = _getheader_p2
 
 
 def create_server(
@@ -221,21 +220,21 @@ def json_dumps(obj: Any) -> str:
         do_map(json_obj), indent=2, sort_keys=True, allow_nan=False)
 
 
-log_file: Optional[TextIO] = None
+LOG_FILE: Optional[TextIO] = None
 
 
 def set_log_file(fname: TextIO) -> None:
     """Sets the log file. Defaults to STD_ERR."""
-    global log_file
+    global LOG_FILE
 
-    log_file = fname
+    LOG_FILE = fname
 
 
 def _caller_trace(frame: Any) -> Tuple[str, int]:
     try:
-        if '__file__' not in frame.f_globals:
+        if "__file__" not in frame.f_globals:
             return '???', frame.f_lineno
-        return frame.f_globals['__file__'], frame.f_lineno
+        return frame.f_globals["__file__"], frame.f_lineno
     finally:
         del frame
 
@@ -265,17 +264,17 @@ if hasattr(sys, '_getframe'):
     caller_trace = _caller_trace_gf
 
 
-long_msg = True
-_msg_stderr = False
+LONG_MSG = True
+MSG_STDERR = False
 
 
 def msg(message: str, *args: Any, **kwargs: Any) -> None:
     """Prints a message from the server to the log file."""
-    global log_file
+    global LOG_FILE
 
-    if log_file is None:
-        log_file = sys.stderr
-    if long_msg:
+    if LOG_FILE is None:
+        LOG_FILE = sys.stderr
+    if LONG_MSG:
         file_name, line = caller_trace()
         file_name, file_type = os.path.splitext(file_name)
         if file_name.endswith("/__init__"):
@@ -293,23 +292,23 @@ def msg(message: str, *args: Any, **kwargs: Any) -> None:
     except (ValueError, KeyError):
         full_message = str(message)
         for arg in args:
-            full_message += '\n'
+            full_message += "\n"
             full_message += str(arg)
         for (key, value) in kwargs.items():
-            full_message += '\n'
+            full_message += "\n"
             full_message += str(key)
-            full_message += '='
+            full_message += "="
             full_message += str(value)
     for curline in full_message.splitlines():
         out.write(f"{head}{curline}\n")
     out.flush()
     out.seek(0)
-    if _msg_stderr:
+    if MSG_STDERR:
         sys.stderr.write(out.read())
         sys.stderr.flush()
     else:
-        log_file.write(out.read())
-        log_file.flush()
+        LOG_FILE.write(out.read())
+        LOG_FILE.flush()
     out.close()
 
 
@@ -439,7 +438,7 @@ def _start_restart_loop(exit_code: Optional[str], in_atexit: bool) -> None:
         else:
             exec_arr = get_exec_arr()
             if in_atexit:
-                msg("restarting: {0}", ' '.join(exec_arr))
+                msg("restarting: {0}", " ".join(exec_arr))
 
             debug(lambda: exec_arr)
             exit_code = str(_RESTART_EXIT_CODE)
@@ -447,9 +446,9 @@ def _start_restart_loop(exit_code: Optional[str], in_atexit: bool) -> None:
             is_subsequent = False
             while child_code == int(exit_code):
                 environ = os.environ.copy()
-                environ['QUICK_SERVER_RESTART'] = exit_code
+                environ["QUICK_SERVER_RESTART"] = exit_code
                 if is_subsequent:
-                    environ['QUICK_SERVER_SUBSEQ'] = "1"
+                    environ["QUICK_SERVER_SUBSEQ"] = "1"
                 is_subsequent = True
                 try:
                     with subprocess.Popen(
@@ -532,9 +531,9 @@ def kill_thread(
         return
     # kill the thread
     tid = None
-    for tk, tobj in threading._active.items():  # type: ignore
+    for tkey, tobj in threading._active.items():  # type: ignore
         if tobj is th:
-            tid = tk
+            tid = tkey
             break
     if tid is not None:
         papi = ctypes.pythonapi
@@ -629,9 +628,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
         Returns
         -------
-        args enriched with 'paths', an array containing the remaining path
-        segments, 'query', a map containing the query fields and flags, and
-        'fragment' containing the fragment part as string.
+        args enriched with "paths", an array containing the remaining path
+        segments, "query", a map containing the query fields and flags, and
+        "fragment" containing the fragment part as string.
         """
         fragment_split = rem_path.split("#", 1)
         query_split = fragment_split[0].split("?", 1)
@@ -675,11 +674,11 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         def read(length: int) -> bytes:
             res = b""
             while len(res) < length and lens["push"]:
-                br = lens["push"].pop()
-                res += br.read(length - len(res))
-                if br.read(1) != b"":
-                    br.seek(br.tell() - 1)
-                    lens["push"].append(br)
+                buffr = lens["push"].pop()
+                res += buffr.read(length - len(res))
+                if buffr.read(1) != b"":
+                    buffr.seek(buffr.tell() - 1)
+                    lens["push"].append(buffr)
             if len(res) < length:
                 res += f_in.read(length - len(res))
             lens["clen"] -= len(res)
@@ -692,12 +691,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             buff_size = 10 * 1024
 
             def push_back(line: bytes) -> None:
-                ln = BytesIO()
-                ln.write(line)
-                ln.flush()
-                ln.seek(0)
+                buffl = BytesIO()
+                buffl.write(line)
+                buffl.flush()
+                buffl.seek(0)
                 lens["clen"] += len(line)
-                lens["push"].append(ln)
+                lens["push"].append(buffl)
 
             def write_buff(buff: bytes) -> None:
                 if f.tell() + len(buff) > self.server.max_file_size:
@@ -728,12 +727,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             def read_line() -> bytes:
                 line = b""
                 while not line.endswith(b"\n") and lens["push"]:
-                    br = lens["push"].pop()
-                    line += br.readline()
-                    tmp = br.read(1)
+                    buffr = lens["push"].pop()
+                    line += buffr.readline()
+                    tmp = buffr.read(1)
                     if tmp != b"":
-                        br.seek(br.tell() - 1)
-                        lens["push"].append(br)
+                        buffr.seek(buffr.tell() - 1)
+                        lens["push"].append(buffr)
                 if not line.endswith(b"\n"):
                     line += f_in.readline(lens["clen"])
                 lens["clen"] -= len(line)
@@ -811,8 +810,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 if callable(report_slow_requests):
                     report_slow_requests(method_str, path)
                 else:
-                    msg("request takes longer than expected: \"{0} {1}\"",
-                        method_str, path)
+                    msg(
+                        "request takes longer than expected: \"{0} {1}\"",
+                        method_str,
+                        path)
 
             alarm_init = threading.Timer(5.0, do_report)
             alarm_init.start()
@@ -900,44 +901,44 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         }
         try:
             # POST can accept forms encoded in JSON
-            if method_str in ['POST', 'DELETE', 'PUT']:
-                ctype = _getheader(self.headers, 'content-type')
+            if method_str in ["POST", "DELETE", "PUT"]:
+                ctype = _GETHEADER(self.headers, "content-type")
                 crest = ""
                 if ctype is None:
                     ctype = ""
-                if ';' in ctype:
-                    splix = ctype.index(';')
+                if ";" in ctype:
+                    splix = ctype.index(";")
                     crest = ctype[splix+1:].strip() \
                         if len(ctype) > splix + 1 else ""
                     ctype = ctype[:splix].strip()
-                clen = int(_getheader(self.headers, 'content-length'))
-                if ctype == 'multipart/form-data':
-                    args['post'] = {}
-                    args['files'] = {}
+                clen = int(_GETHEADER(self.headers, "content-length"))
+                if ctype == "multipart/form-data":
+                    args["post"] = {}
+                    args["files"] = {}
                     self.get_post_file(
                         hdr=crest,
                         f_in=self.rfile,
                         clen=clen,
-                        post=args['post'],
-                        files=args['files'])
+                        post=args["post"],
+                        files=args["files"])
                 else:
                     content = self.rfile.read(clen)
                     post_res: WorkerArgs = {}
-                    if ctype == 'application/json':
+                    if ctype == "application/json":
                         try:
                             post_res = json.loads(content)
                         except json.decoder.JSONDecodeError as json_err:
                             raise ValueError(
                                 "request is not JSON formatted!",
                                 content) from json_err
-                    elif ctype == 'application/x-www-form-urlencoded':
+                    elif ctype == "application/x-www-form-urlencoded":
                         post_res = self.convert_argmap(content)
-                    args['post'] = post_res
+                    args["post"] = post_res
 
             args = self.convert_args(rem_path, args)
             # check for correct path length
             if (self.server._f_argc[method_mask] is not None and
-                    self.server._f_argc[method_mask] != len(args['paths'])):
+                    self.server._f_argc[method_mask] != len(args["paths"])):
                 return False
             # call the method with the arguments
             execute(method, args)
@@ -988,27 +989,27 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         init_path = orig_path
         orig_path = urlparse.urlparse(orig_path)[2]
         needs_redirect = False
-        is_folder = len(orig_path) <= 1 or orig_path[-1] == '/'
+        is_folder = len(orig_path) <= 1 or orig_path[-1] == "/"
         orig_path = posixpath.normpath(urlparse_unquote(orig_path))
         if is_folder:
-            orig_path += '/'
+            orig_path += "/"
         mpath: Optional[str] = None
         try:
             cur_base = None
-            for (name, fm) in self.server._folder_masks:
+            for (name, fmask) in self.server._folder_masks:
                 if not orig_path.startswith(name):
                     continue
                 cur_base = os.path.abspath(
-                    os.path.join(self.server.base_path, fm))
+                    os.path.join(self.server.base_path, fmask))
                 mpath = cur_base
-                words = filter(None, orig_path[len(name):].split('/'))
+                words = filter(None, orig_path[len(name):].split("/"))
                 for word in words:
                     _drive, word = os.path.splitdrive(word)
                     _head, word = os.path.split(word)
                     if word in (os.curdir, os.pardir):
                         continue
                     # don't ever allow any hidden files
-                    if word.startswith('.'):
+                    if word.startswith("."):
                         raise PreventDefaultResponse(404, "File not found")
                     mpath = os.path.join(mpath, word)
                 # make path absolute and check if it exists
@@ -1064,20 +1065,22 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             # make sure to not accept any trickery to get away
             # from the base path
             if cur_base is None or not path.startswith(cur_base):
-                raise ValueError("WARNING: attempt to access {0}".format(path))
+                raise ValueError(f"WARNING: attempt to access {path}")
             # favicon handling
-            if self.server.favicon_everywhere and \
-                    os.path.basename(path) == 'favicon.ico' and \
-                    not os.path.exists(path):
-                for (name, fm) in self.server._folder_masks:
+            if (
+                    self.server.favicon_everywhere
+                    and os.path.basename(path) == "favicon.ico"
+                    and not os.path.exists(path)):
+                for (name, fmask) in self.server._folder_masks:
                     fav_base = os.path.abspath(
-                        os.path.join(self.server.base_path, fm))
-                    favicon = os.path.join(fav_base, 'favicon.ico')
+                        os.path.join(self.server.base_path, fmask))
+                    favicon = os.path.join(fav_base, "favicon.ico")
                     if os.path.exists(favicon):
                         path = favicon
                         break
-                    if self.server.favicon_fallback is not None and \
-                            os.path.exists(self.server.favicon_fallback):
+                    if (
+                            self.server.favicon_fallback is not None
+                            and os.path.exists(self.server.favicon_fallback)):
                         path = os.path.join(
                             self.server.base_path,
                             self.server.favicon_fallback)
@@ -1086,7 +1089,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if needs_redirect:
                 self.send_response(301, "Use index page with slash")
                 location = urlparse.urlunparse(tuple(
-                    seg if ix != 2 else seg + '/'
+                    seg if ix != 2 else f"{seg}/"
                     for (ix, seg) in enumerate(urlparse.urlparse(init_path))
                 ))
                 self.send_header("Location", location)
@@ -1101,18 +1104,19 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         # handle ETag caching
         if self.request_version >= "HTTP/1.1" and os.path.isfile(path):
             e_tag = None
-            with open(path, 'rb') as input_f:
-                e_tag = "{0:x}".format(zlib.crc32(input_f.read()) & 0xFFFFFFFF)
+            with open(path, "rb") as input_f:
+                e_tag = f"{zlib.crc32(input_f.read()) & 0xFFFFFFFF:x}"
                 thread_local.size = input_f.tell()
             if e_tag is not None:
-                match = _getheader(self.headers, 'if-none-match')
+                match = _GETHEADER(self.headers, "if-none-match")
                 if match is not None:
                     if self.check_cache(e_tag, match):
                         raise PreventDefaultResponse()
                 self.send_header("ETag", e_tag, end_header=True)
-                self.send_header("Cache-Control",
-                                 "max-age={0}".format(self.server.max_age),
-                                 end_header=True)
+                self.send_header(
+                    "Cache-Control",
+                    f"max-age={self.server.max_age}",
+                    end_header=True)
         return path
 
     def check_cache(self, e_tag: str, match: str) -> bool:
@@ -1121,31 +1125,33 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             return False
         self.send_response(304)
         self.send_header("ETag", e_tag)
-        self.send_header("Cache-Control",
-                         "max-age={0}".format(self.server.max_age))
+        self.send_header(
+            "Cache-Control",
+            f"max-age={self.server.max_age}")
         self.end_headers()
         thread_local.size = 0
         return True
 
     def send_to_proxy(self, proxy_url: str) -> None:
-        clen = _getheader(self.headers, 'content-length')
+        clen = _GETHEADER(self.headers, "content-length")
         clen = int(clen) if clen is not None else 0
         if clen > 0:
             payload: Optional[bytes] = self.rfile.read(clen)
         else:
             payload = None
 
-        req = Request(proxy_url,
-                      data=payload,
-                      headers=dict(self.headers.items()),
-                      method=thread_local.method)
+        req = Request(
+            proxy_url,
+            data=payload,
+            headers=dict(self.headers.items()),
+            method=thread_local.method)
 
         def process(response: Any) -> None:
             self.send_response(response.code)
-            for (hk, hv) in response.headers.items():
-                self.send_header(hk, hv)
+            for (hkey, hval) in response.headers.items():
+                self.send_header(hkey, hval)
             self.end_headers()
-            if _getheader(response.headers, 'transfer-encoding') == 'chunked':
+            if _GETHEADER(response.headers, "transfer-encoding") == "chunked":
                 # FIXME implement proper
                 while True:
                     cur = response.read(1024)
@@ -1170,10 +1176,11 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if self.server.can_ignore_error(self):
             return
         if thread_local.status_code is None:
-            global_handle_error(ERR_SOURCE_REQUEST,
-                                "ERROR: Cannot send error status code! "
-                                "Header already sent!",
-                                traceback.format_exc(), msg)
+            global_handle_error(
+                ERR_SOURCE_REQUEST,
+                "ERROR: Cannot send error status code! "
+                "Header already sent!",
+                traceback.format_exc(), msg)
         else:
             global_handle_error(
                 ERR_SOURCE_REQUEST,
@@ -1181,7 +1188,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 traceback.format_exc(), msg)
             try:
                 self.send_error(500, "Internal Error")
-            except:  # nopep8
+            except:  # nopep8  # pylint: disable=bare-except
                 if self.server.can_ignore_error(self):
                     return
                 global_handle_error(
@@ -1197,17 +1204,17 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if not self.is_cross_origin():
             return False
         # we allow everything
-        self.send_header("Access-Control-Allow-Methods",
-                         "GET, POST, PUT, DELETE, HEAD")
-        allow_headers = _getheader(self.headers,
-                                   'access-control-request-headers')
+        self.send_header(
+            "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, HEAD")
+        allow_headers = _GETHEADER(
+            self.headers, "access-control-request-headers")
         if allow_headers is not None:
             self.send_header("Access-Control-Allow-Headers", allow_headers)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Credentials", "true")
         return allow_headers is not None
 
-    def do_OPTIONS(self) -> None:
+    def do_OPTIONS(self) -> None:  # pylint: disable=invalid-name
         """Handles an OPTIONS request."""
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
@@ -1215,29 +1222,31 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
-        thread_local.method = 'OPTIONS'
+        thread_local.method = "OPTIONS"
         self.send_response(200)
         if self.is_cross_origin():
             no_caching = self.cross_origin_headers()
             # ten minutes if no custom headers requested
-            self.send_header("Access-Control-Max-Age",
-                             0 if no_caching else 10*60)
+            self.send_header(
+                "Access-Control-Max-Age", 0 if no_caching else 10*60)
         self.send_header("Content-Length", 0)
         self.end_headers()
         thread_local.size = 0
 
-    def do_DELETE(self) -> None:
+    def do_DELETE(self) -> None:  # pylint: disable=invalid-name
         """Handles a DELETE request."""
+        # pylint: disable=try-except-raise,broad-except
+
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
-        thread_local.method = 'DELETE'
+        thread_local.method = "DELETE"
         try:
             self.cross_origin_headers()
-            self.handle_special(True, 'DELETE')
+            self.handle_special(True, "DELETE")
         except PreventDefaultResponse as pdr:
             if pdr.code:
                 self.send_error(pdr.code, pdr.msg)
@@ -1246,18 +1255,20 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         except Exception:
             self.handle_error()
 
-    def do_PUT(self) -> None:
+    def do_PUT(self) -> None:  # pylint: disable=invalid-name
         """Handles a PUT request."""
+        # pylint: disable=try-except-raise,broad-except
+
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
-        thread_local.method = 'PUT'
+        thread_local.method = "PUT"
         try:
             self.cross_origin_headers()
-            self.handle_special(True, 'PUT')
+            self.handle_special(True, "PUT")
         except PreventDefaultResponse as pdr:
             if pdr.code:
                 self.send_error(pdr.code, pdr.msg)
@@ -1266,18 +1277,20 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         except Exception:
             self.handle_error()
 
-    def do_POST(self) -> None:
+    def do_POST(self) -> None:  # pylint: disable=invalid-name
         """Handles a POST request."""
+        # pylint: disable=try-except-raise,broad-except
+
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
-        thread_local.method = 'POST'
+        thread_local.method = "POST"
         try:
             self.cross_origin_headers()
-            self.handle_special(True, 'POST')
+            self.handle_special(True, "POST")
         except PreventDefaultResponse as pdr:
             if pdr.code:
                 self.send_error(pdr.code, pdr.msg)
@@ -1288,16 +1301,18 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         """Handles a GET request."""
+        # pylint: disable=try-except-raise,broad-except
+
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
-        thread_local.method = 'GET'
+        thread_local.method = "GET"
         try:
             self.cross_origin_headers()
-            if self.handle_special(True, 'GET'):
+            if self.handle_special(True, "GET"):
                 return
             SimpleHTTPRequestHandler.do_GET(self)
         except PreventDefaultResponse as pdr:
@@ -1310,16 +1325,18 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def do_HEAD(self) -> None:
         """Handles a HEAD request."""
+        # pylint: disable=try-except-raise,broad-except
+
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
-        thread_local.method = 'HEAD'
+        thread_local.method = "HEAD"
         try:
             self.cross_origin_headers()
-            if self.handle_special(False, 'GET'):
+            if self.handle_special(False, "GET"):
                 return
             SimpleHTTPRequestHandler.do_HEAD(self)
         except PreventDefaultResponse as pdr:
@@ -1333,17 +1350,18 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     # responses and headers are not sent until end headers to enable
     # changing them if needed
     def send_response(
-            self, status_code: int, message: Optional[str] = None) -> None:
-        thread_local.status_code = status_code
+            self, code: int, message: Optional[str] = None) -> None:
+        thread_local.status_code = code
         thread_local.message = message
 
-    def send_header(self,
-                    key: str,
-                    value: Union[int, str],
-                    replace: bool = False,
-                    end_header: bool = False) -> None:
-        thread_local.headers = getattr(thread_local, 'headers', [])
-        thread_local.end_headers = getattr(thread_local, 'end_headers', [])
+    def send_header(
+            self,
+            keyword: str,
+            value: Union[int, str],
+            replace: bool = False,
+            end_header: bool = False) -> None:
+        thread_local.headers = getattr(thread_local, "headers", [])
+        thread_local.end_headers = getattr(thread_local, "end_headers", [])
         if replace:
             # replaces the last occurrence of the header,
             # otherwise append as specified
@@ -1351,12 +1369,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             def do_replace(hdrs: List[Tuple[str, Union[str, int]]]) -> bool:
                 replace_ix = -1
                 for (ix, (k, _)) in enumerate(hdrs):
-                    if k == key:
+                    if k == keyword:
                         # no break -- we want the last index
                         replace_ix = ix
                 did_replace = replace_ix >= 0
                 if did_replace:
-                    hdrs[replace_ix] = (key, value)
+                    hdrs[replace_ix] = (keyword, value)
                 return did_replace
 
             if do_replace(thread_local.end_headers):
@@ -1364,19 +1382,20 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if do_replace(thread_local.headers):
                 return
         if not end_header:
-            hd = thread_local.headers
+            hdr = thread_local.headers
         else:
-            hd = thread_local.end_headers
-        hd.append((key, value))
+            hdr = thread_local.end_headers
+        hdr.append((keyword, value))
 
     def end_headers(self) -> None:
-        thread_local.headers = getattr(thread_local, 'headers', [])
-        thread_local.end_headers = getattr(thread_local, 'end_headers', [])
-        thread_local.clock_start = getattr(thread_local,
-                                           'clock_start',
-                                           get_time())
-        thread_local.status_code = getattr(thread_local, 'status_code', 500)
-        thread_local.message = getattr(thread_local, 'message', None)
+        thread_local.headers = getattr(thread_local, "headers", [])
+        thread_local.end_headers = getattr(thread_local, "end_headers", [])
+        thread_local.clock_start = getattr(
+            thread_local,
+            "clock_start",
+            get_time())
+        thread_local.status_code = getattr(thread_local, "status_code", 500)
+        thread_local.message = getattr(thread_local, "message", None)
         thread_local.headers.extend(thread_local.end_headers)
         thread_local.end_headers = thread_local.headers
         thread_local.headers = []
@@ -1393,15 +1412,16 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def log_date_time_string(self) -> str:
         """Server log date time format."""
-        return time.strftime("%Y-%m-%d %H:%M:%S")
+        return time.strftime(r"%Y-%m-%d %H:%M:%S")
 
-    def _convert_unit(self,
-                      fmt: str,
-                      value: Union[float, int],
-                      units: List[Tuple[Union[int, float], str]]) -> str:
-        cur = ''
+    def _convert_unit(
+            self,
+            fmt: str,
+            value: Union[float, int],
+            units: List[Tuple[Union[int, float], str]]) -> str:
+        cur = ""
         for (conv, unit) in units:
-            if value / conv >= 1 or not len(cur):
+            if value / conv >= 1 or len(cur) == 0:
                 cur = fmt.format(value / conv) + unit
             else:
                 break
@@ -1409,11 +1429,11 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     # time units for logging request durations
     elapsed_units = [
-        (1e-3, 'ms'),
-        (1, 's'),
-        (60, 'min'),
-        (60*60, 'h'),
-        (60*60*24, 'd'),
+        (1e-3, "ms"),
+        (1, "s"),
+        (60, "min"),
+        (60*60, "h"),
+        (60*60*24, "d"),
     ]
 
     def log_elapsed_time_string(self, elapsed: float) -> str:
@@ -1422,10 +1442,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     # size units for logging request sizes
     size_units = [
-        (1.0, ' B'),
-        (1024, ' kB'),
-        (1024*1024, ' MB'),
-        (1024*1024*1024, ' GB'),
+        (1.0, " B"),
+        (1024, " kB"),
+        (1024*1024, " MB"),
+        (1024*1024*1024, " GB"),
     ]
 
     def log_size_string(self, size: int) -> str:
@@ -1436,35 +1456,42 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """Logs a message. All messages get prefixed with '[SERVER]'
            and the arguments act like `format`.
         """
-        clock_start = getattr(thread_local, 'clock_start', None)
-        thread_local.clock_start = None
-        timing = self.log_elapsed_time_string(
-            get_time() - clock_start) if clock_start is not None else ''
-        msg("%s[%s] %s" % (
-            timing + ' ' if len(timing) else '', self.log_date_time_string(),
-            format % args))
+        # pylint: disable=redefined-builtin
 
-    def log_request(self,
-                    code: Union[int, str] = '-',
-                    size: Union[int, str] = '-') -> None:
+        clock_start = getattr(thread_local, "clock_start", None)
+        thread_local.clock_start = None
+        timing = (
+            self.log_elapsed_time_string(get_time() - clock_start)
+            if clock_start is not None
+            else ""
+        )
+        msg(
+            f"{timing + ' ' if len(timing) > 0 else ''}"
+            f"[{self.log_date_time_string()}] "
+            f"{format % args}")
+
+    def log_request(
+            self,
+            code: Union[int, str] = "-",
+            size: Union[int, str] = "-") -> None:
         """Logs the current request."""
-        print_size = getattr(thread_local, 'size', -1)
-        if size != '-':
-            size_str = ' (%s)' % size
+        print_size = getattr(thread_local, "size", -1)
+        if size != "-":
+            size_str = f" ({size})"
         elif print_size >= 0:
-            size_str = self.log_size_string(print_size) + ' '
+            size_str = f"{self.log_size_string(print_size)} "
         else:
-            size_str = ''
+            size_str = ""
         if not self.server.suppress_noise or code not in (200, 304):
             self.log_message(
-                '%s"%s" %s', size_str, self.requestline, str(code))
+                "%s\"%s\" %s", size_str, self.requestline, str(code))
         if print_size >= 0:
             thread_local.size = -1
 
 
 class TokenHandler:
     def __str__(self) -> str:
-        return "{0}".format(self.__class__.__name__)
+        return f"{self.__class__.__name__}"
 
     def lock(self, key: Optional[str]) -> ContextManager:
         """The lock for token handler operations."""
@@ -1578,8 +1605,10 @@ class DefaultTokenHandler(TokenHandler):
         return list(self._token_timings)
 
     def __str__(self) -> str:
-        return "{0}: {1}\n{2}".format(
-            self.__class__.__name__, self._token_timings, self._token_map)
+        return (
+            f"{self.__class__.__name__}: "
+            f"{self._token_timings}\n{self._token_map}"
+        )
 
 
 def get_worker_check() -> Callable[[], bool]:
@@ -1604,17 +1633,24 @@ def is_worker_alive() -> bool:
 
 
 class BaseWorker:
-    def __init__(self, mask: str, fun: Callable[[WorkerArgs], str],
-                 msg: Callable[..., None],
-                 cache_id: Optional[Callable[[CacheIdObj], Any]],
-                 cache: Any, cache_method: str, cache_section: str,
-                 thread_factory: Callable[..., threading.Thread],
-                 name_prefix: str, soft_worker_death: bool,
-                 get_max_chunk_size: Callable[[], int],
-                 is_verbose_workers: Callable[[], bool]):
+    def __init__(
+            self,
+            mask: str,
+            fun: Callable[[WorkerArgs], str],
+            *,
+            log: Callable[..., None],
+            cache_id: Optional[Callable[[CacheIdObj], Any]],
+            cache: Any,
+            cache_method: str,
+            cache_section: str,
+            thread_factory: Callable[..., threading.Thread],
+            name_prefix: str,
+            soft_worker_death: bool,
+            get_max_chunk_size: Callable[[], int],
+            is_verbose_workers: Callable[[], bool]):
         self._mask = mask
         self._fun = fun
-        self._msg = msg
+        self._msg = log
         self._use_cache = cache_id is not None
         self._cache_id = cache_id
         self._cache = cache
@@ -1627,8 +1663,7 @@ class BaseWorker:
         self._is_verbose_workers = is_verbose_workers
 
     def __str__(self) -> str:
-        return "{0}[{1}]".format(
-            self.__class__.__name__, self._mask)
+        return f"{self.__class__.__name__}[{self._mask}]"
 
     def is_done(self, cur_key: str) -> bool:
         """Returns whether the task with the given key has finished."""
@@ -1647,10 +1682,10 @@ class BaseWorker:
         """
         raise NotImplementedError()  # pragma: no cover
 
-    def remove_worker(self,
-                      cur_key: str) -> Tuple[
-                          Optional[str],
-                          Optional[Tuple[str, Optional[str]]]]:
+    def remove_worker(
+            self,
+            cur_key: str,
+            ) -> Tuple[Optional[str], Optional[Tuple[str, Optional[str]]]]:
         """Removes the task with the given key and returns its result.
            The result is a tuple `(result, exception)` where result is the
            response if not None else exception is a tuple `(msg, trace)` where
@@ -1671,10 +1706,11 @@ class BaseWorker:
         """
         raise NotImplementedError()  # pragma: no cover
 
-    def add_task(self,
-                 cur_key: str,
-                 get_thread: Callable[..., threading.Thread],
-                 soft_death: bool) -> None:
+    def add_task(
+            self,
+            cur_key: str,
+            get_thread: Callable[..., threading.Thread],
+            soft_death: bool) -> None:
         """Marks a key as actually running. The thread executing the worker
            can be retrieved via `get_thread`. `soft_death` indicates whether
            an exception should be thrown when canceling a worker.
@@ -1699,10 +1735,11 @@ class BaseWorker:
         """
         raise NotImplementedError()  # pragma: no cover
 
-    def start_worker(self,
-                     args: WorkerArgs,
-                     cur_key: str,
-                     get_thread: Callable[[], threading.Thread]) -> None:
+    def start_worker(
+            self,
+            args: WorkerArgs,
+            cur_key: str,
+            get_thread: Callable[[], threading.Thread]) -> None:
         try:
             self.add_task(cur_key, get_thread, self._soft_worker_death)
             if self._use_cache:
@@ -1727,7 +1764,7 @@ class BaseWorker:
             raise
         except PreventDefaultResponse as p:
             self.set_task_pdr(cur_key, p)
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             self.set_task_err(cur_key, e)
         finally:
             self.remove_from_cancelled(cur_key)
@@ -1738,18 +1775,19 @@ class BaseWorker:
         finally:
             _result, err = self.remove_worker(cur_key)
             if err is not None:
-                result, tb = err
-                if tb is not None:
+                result, tback = err
+                if tback is not None:
                     global_handle_error(
                         ERR_SOURCE_WORKER,
                         f"Error in purged worker for {cur_key}: {result}",
-                        tb, self._msg)
+                        tback, self._msg)
             else:
                 self._msg("purged result that was never read ({0})", cur_key)
 
-    def compute_worker(self,
-                       req: QuickServerRequestHandler,
-                       post: WorkerArgs) -> WorkerResponse:
+    def compute_worker(
+            self,
+            _req: QuickServerRequestHandler,
+            post: WorkerArgs) -> WorkerResponse:
         action = post["action"]
         cur_key = None
         if action == "stop":
@@ -1769,7 +1807,7 @@ class BaseWorker:
             def start_worker(*args: Any) -> None:
                 self.start_worker(*args)
 
-            wname = "{0}-Worker-{1}".format(self._name_prefix, cur_key)
+            wname = f"{self._name_prefix}-Worker-{cur_key}"
             worker = self._thread_factory(
                 target=start_worker,
                 name=wname,
@@ -1790,12 +1828,12 @@ class BaseWorker:
         if action == "get":
             cur_key = post["token"]
         if cur_key is None:
-            raise ValueError("invalid action: {0}".format(action))
+            raise ValueError(f"invalid action: {action}")
         if self.is_done(cur_key):
             mresult, exception = self.remove_worker(cur_key)
             if exception is not None:
-                err, tb = exception
-                if tb is None:
+                err, tback = exception
+                if tback is None:
                     # token does not exist anymore
                     return {
                         "token": cur_key,
@@ -1805,14 +1843,16 @@ class BaseWorker:
                     }
                 if err.startswith(_PDR_MARK):
                     # e encodes code, tb encodes message
-                    raise PreventDefaultResponse(int(err[len(_PDR_MARK):]), tb)
+                    raise PreventDefaultResponse(
+                        int(err[len(_PDR_MARK):]), tback)
                 global_handle_error(
                     ERR_SOURCE_WORKER,
                     f"Error in worker for {self._mask} ({cur_key}): {err}",
-                    tb, self._msg)
+                    tback, self._msg)
                 raise PreventDefaultResponse(500, "worker error")
-            if mresult is not None and \
-                    len(mresult) > self._get_max_chunk_size():
+            if (
+                    mresult is not None
+                    and len(mresult) > self._get_max_chunk_size()):
                 cargo_keys = self.add_cargo(mresult)
                 return {
                     "token": cur_key,
@@ -1874,7 +1914,7 @@ class DefaultWorker(BaseWorker):
                 return
             cleaner = self._thread_factory(
                 target=clean,
-                name="{0}-Cargo-Cleaner".format(self._name_prefix))
+                name=f"{self._name_prefix}-Cargo-Cleaner")
             cleaner.daemon = True
             self._cargo_cleaner = cleaner
             cleaner.start()
@@ -1911,7 +1951,7 @@ class DefaultWorker(BaseWorker):
         with self._lock:
             mcs = self._get_max_chunk_size()
             if mcs < 1:
-                raise ValueError("invalid chunk size: {0}".format(mcs))
+                raise ValueError(f"invalid chunk size: {mcs}")
             ttl = time.time() + 10 * 60  # 10 minutes
             chunks = []
             while len(content) > 0:
@@ -1935,11 +1975,11 @@ class DefaultWorker(BaseWorker):
         with self._lock:
             task = self._tasks.pop(cur_key, None)
             if task is None:
-                err_msg = "Error: Task {0} not found!".format(cur_key)
+                err_msg = f"Error: Task {cur_key} not found!"
                 return None, (err_msg, None)
             if task["running"]:
                 th = task["thread"]
-                err_msg = "Error: Task {0} is still running!".format(cur_key)
+                err_msg = f"Error: Task {cur_key} is still running!"
                 if th is not None:
                     kill_thread(
                         th, cur_key, self._msg, self._is_verbose_workers)
@@ -1971,10 +2011,11 @@ class DefaultWorker(BaseWorker):
                 cur_key = key
             return str(cur_key)
 
-    def add_task(self,
-                 cur_key: str,
-                 get_thread: Callable[[], threading.Thread],
-                 soft_death: bool) -> None:
+    def add_task(
+            self,
+            cur_key: str,
+            get_thread: Callable[[], threading.Thread],
+            soft_death: bool) -> None:
         with self._lock:
             task: WorkerTask = {
                 "running": True,
@@ -2004,7 +2045,7 @@ class DefaultWorker(BaseWorker):
                 return
             task = self._tasks[cur_key]
             task["running"] = False
-            task["exception"] = ("{0}{1}".format(_PDR_MARK, p.code), p.msg)
+            task["exception"] = (f"{_PDR_MARK}{p.code}", p.msg)
 
     def set_task_err(self, cur_key: str, e: Exception) -> None:
         with self._lock:
@@ -2012,7 +2053,7 @@ class DefaultWorker(BaseWorker):
                 return
             task = self._tasks[cur_key]
             task["running"] = False
-            task["exception"] = ("{0}".format(e), traceback.format_exc())
+            task["exception"] = (f"{e}", traceback.format_exc())
 
     def reserve_worker(self) -> str:
         with self._lock:
@@ -2028,20 +2069,22 @@ class DefaultWorker(BaseWorker):
 
 
 class Response:
-    def __init__(self,
-                 response: Union[str, bytes, StringIO, BytesIO],
-                 code: int = 200,
-                 ctype: Optional[str] = None) -> None:
+    def __init__(
+            self,
+            response: Union[str, bytes, StringIO, BytesIO],
+            code: int = 200,
+            ctype: Optional[str] = None) -> None:
         """Constructs a response."""
         self.response = response
         self.code = code
         self._ctype = ctype
 
     def __str__(self) -> str:
-        return "{0}[{1}{2}]".format(
-            self.__class__.__name__,
-            self.code,
-            " {0}".format(self._ctype) if self._ctype is not None else "")
+        ctype = f" {self._ctype}" if self._ctype is not None else ""
+        return (
+            f"{self.__class__.__name__}"
+            f"[{self.code}{ctype}]"
+        )
 
     def get_ctype(self, ctype: str) -> str:
         """Returns the content type with the given default value."""
@@ -2052,7 +2095,7 @@ class Response:
 
 def construct_multipart_response(
         obj: Dict[Union[bytes, str], Any]) -> Tuple[BytesIO, str]:
-    boundary = "qsboundary{0}".format(uuid.uuid4().hex)
+    boundary = f"qsboundary{uuid.uuid4().hex}"
 
     def binary(text: Union[str, bytes]) -> bytes:
         try:
@@ -2092,10 +2135,10 @@ def construct_multipart_response(
     resp.write(bbound)
     resp.write(b"--\r\n")
     resp.seek(0)
-    return resp, "multipart/form-data; boundary=\"{0}\"".format(boundary)
+    return resp, f"multipart/form-data; boundary=\"{boundary}\""
 
 
-class MultipartResponse(Response):
+class MultipartResponse(Response):  # pylint: disable=too-few-public-methods
     def __init__(self, obj: Any) -> None:
         response, ctype = construct_multipart_response(obj)
         Response.__init__(self, response=response, code=200, ctype=ctype)
@@ -2145,7 +2188,7 @@ class QuickServer(http_server.HTTPServer):
             by `init_paths`.
 
         directory_listing : bool
-            Whether to allow listing the directory if the 'index.html'
+            Whether to allow listing the directory if the "index.html"
             is missing. Defaults to `False`.
 
         shutdown_latency : float
@@ -2159,14 +2202,14 @@ class QuickServer(http_server.HTTPServer):
             The prompt shown in the command line input.
 
         favicon_everywhere : boolean
-            If True any path ending with 'favicon.ico' will try to serve the
+            If True any path ending with "favicon.ico" will try to serve the
             favicon file found at any root.
 
         favicon_fallback : string or None
-            If set points to the fallback 'favicon.ico' file.
+            If set points to the fallback "favicon.ico" file.
 
         max_age : number
-            The content of the 'max-age' directive for the 'Cache-Control'
+            The content of the "max-age" directive for the "Cache-Control"
             header used by cached responses. Defaults to 0.
 
         max_file_size : number
@@ -2211,8 +2254,8 @@ class QuickServer(http_server.HTTPServer):
         self.base_path = os.path.abspath(".")
         self.directory_listing = False
         self.shutdown_latency = 0.1
-        self.history_file = '.cmd_history'
-        self.prompt = '> '
+        self.history_file = ".cmd_history"
+        self.prompt = "> "
         self.favicon_everywhere = True
         self.favicon_fallback: Optional[str] = None
         self.max_age = 0
@@ -2270,10 +2313,8 @@ class QuickServer(http_server.HTTPServer):
         self._file_fallback_cb: Optional[Callable[[str], str]] = None
 
     def __str__(self) -> str:
-        return "{0}[{1}{2}]".format(
-            self.__class__.__name__,
-            self.server_address,
-            " parallel" if self._parallel else "")
+        parallel = " parallel" if self._parallel else ""
+        return f"{self.__class__.__name__}[{self.server_address}{parallel}]"
 
     # request processing #
 
@@ -2285,7 +2326,7 @@ class QuickServer(http_server.HTTPServer):
         try:
             # FIXME
             self.finish_request(request, client_address)  # type: ignore
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             self.handle_error(request, client_address)
         finally:
             self.shutdown_request(request)  # type: ignore
@@ -2321,9 +2362,9 @@ class QuickServer(http_server.HTTPServer):
            that will be delivered. For including or excluding folders use
            `bind_path` or `bind_path_fallback`.
         """
-        bl = self._pattern_black if blacklist else self._pattern_white
+        blist = self._pattern_black if blacklist else self._pattern_white
         for pattern in patterns:
-            bl.append(pattern)
+            blist.append(pattern)
 
     def add_default_white_list(self) -> None:
         """Adds a list of common file patterns to the white-list."""
@@ -2353,32 +2394,30 @@ class QuickServer(http_server.HTTPServer):
 
     def bind_path(self, name: str, folder: str) -> None:
         """Adds a mask that maps to a given folder relative to `base_path`."""
-        if not len(name) or name[0] != '/' or name[-1] != '/':
-            raise ValueError(
-                "name must start and end with '/': {0}".format(name))
+        if len(name) == 0 or name[0] != "/" or name[-1] != "/":
+            raise ValueError(f"name must start and end with '/': {name}")
         self._folder_masks.insert(0, (name, folder))
 
     def bind_path_fallback(self, name: str, folder: str) -> None:
         """Adds a fallback for a given folder relative to `base_path`."""
-        if not len(name) or name[0] != '/' or name[-1] != '/':
-            raise ValueError(
-                "name must start and end with '/': {0}".format(name))
+        if len(name) == 0 or name[0] != "/" or name[-1] != "/":
+            raise ValueError(f"name must start and end with '/': {name}")
         self._folder_masks.append((name, folder))
 
     def bind_proxy(self, name: str, proxy: str) -> None:
         """Adds a mask that maps to a given proxy."""
-        if not len(name) or name[0] != '/' or name[-1] != '/':
-            raise ValueError(
-                "name must start and end with '/': {0}".format(name))
+        if len(name) == 0 or name[0] != "/" or name[-1] != "/":
+            raise ValueError(f"name must start and end with '/': {name}")
         self._folder_proxys.insert(0, (name, proxy))
 
-    def add_cmd_method(self,
-                       name: str,
-                       method: Callable[[List[str]], None],
-                       argc: Optional[int] = None,
-                       complete: Optional[
-                           Callable[[List[str], str], Optional[List[str]]]
-                       ] = None) -> None:
+    def add_cmd_method(
+            self,
+            name: str,
+            method: Callable[[List[str]], None],
+            argc: Optional[int] = None,
+            complete: Optional[
+                Callable[[List[str], str], Optional[List[str]]]
+            ] = None) -> None:
         """Adds a command to the command line interface loop.
 
         Parameters
@@ -2402,8 +2441,8 @@ class QuickServer(http_server.HTTPServer):
             argument. The function must returns a list of suggestions or None
             if text is valid already and there are no further suggestions.
         """
-        if ' ' in name:
-            raise ValueError("' ' cannot be in command name {0}".format(name))
+        if " " in name:
+            raise ValueError(f"' ' cannot be in command name {name}")
         self._cmd_methods[name] = method
         self._cmd_argc[name] = argc
         self._cmd_complete[name] = complete
@@ -2441,20 +2480,20 @@ class QuickServer(http_server.HTTPServer):
 
         method : function(esrh, args)
             The function to execute to perform the request. The function takes
-            two arguments. esrh is the QuickServerRequestHandler object that
-            called the function. args is a map containing the arguments to the
-            request (i.e., the rest of the URL as path segment array 'paths', a
-            map of all query fields / flags 'query', the fragment string
-            'fragment', and if the method was a POST the JSON form content
-            'post'). The function must return a file object containing the
-            response (preferably BytesIO). If the result is None no response
-            body is sent. In this case make sure to send an appropriate error
-            code.
+            two arguments. `esrh` is the QuickServerRequestHandler object that
+            called the function. `args` is a map containing the arguments to
+            the request (i.e., the rest of the URL as path segment array
+            "paths", a map of all query fields / flags "query", the fragment
+            string "fragment", and if the method was a POST the JSON form
+            content "post"). The function must return a file object containing
+            the response (preferably BytesIO). If the result is None no
+            response body is sent. In this case make sure to send an
+            appropriate error code.
         """
-        fm = self._f_mask.get(method_str, [])
-        fm.append((start, method))
-        fm.sort(key=lambda k: len(k[0]), reverse=True)
-        self._f_mask[method_str] = fm
+        fmask = self._f_mask.get(method_str, [])
+        fmask.append((start, method))
+        fmask.sort(key=lambda k: len(k[0]), reverse=True)
+        self._f_mask[method_str] = fmask
         self._f_argc[method_str] = None
 
     def add_json_mask(
@@ -2476,12 +2515,13 @@ class QuickServer(http_server.HTTPServer):
 
         json_producer : function(esrh, args)
             A function returning an object that can be converted to JSON. The
-            function takes two arguments. esrh is the QuickServerRequestHandler
-            object that called the function. args is a map containing the
-            arguments to the request (i.e., the rest of the URL as path segment
-            array 'paths', a map of all query fields / flags 'query', the
-            fragment string 'fragment', and if the method was a POST the JSON
-            form content 'post'). If the result is None a 404 error is sent.
+            function takes two arguments. `esrh` is the
+            QuickServerRequestHandler object that called the function. `args`
+            is a map containing the arguments to the request (i.e., the rest of
+            the URL as path segment array "paths", a map of all query
+            fields / flags "query", the fragment string "fragment", and if the
+            method was a POST the JSON form content "post"). If the result is
+            `None` a 404 error is sent.
         """
 
         def send_json(
@@ -2510,17 +2550,18 @@ class QuickServer(http_server.HTTPServer):
             f.seek(0)
             # handle ETag caching
             if drh.request_version >= "HTTP/1.1":
-                e_tag = "{0:x}".format(zlib.crc32(f.read()) & 0xFFFFFFFF)
+                e_tag = f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"
                 f.seek(0)
-                match = _getheader(drh.headers, 'if-none-match')
+                match = _GETHEADER(drh.headers, "if-none-match")
                 if match is not None:
                     if drh.check_cache(e_tag, match):
                         f.close()
                         return None
                 drh.send_header("ETag", e_tag, end_header=True)
-                drh.send_header("Cache-Control",
-                                "max-age={0}".format(self.max_age),
-                                end_header=True)
+                drh.send_header(
+                    "Cache-Control",
+                    f"max-age={self.max_age}",
+                    end_header=True)
             drh.send_response(code)
             drh.send_header("Content-Type", ctype)
             drh.send_header("Content-Length", size)
@@ -2542,14 +2583,14 @@ class QuickServer(http_server.HTTPServer):
 
         json_producer : function(esrh, args)
             A function returning an object that can be converted to JSON. The
-            function takes two arguments. esrh is the QuickServerRequestHandler
-            object that called the function. args is a map containing the
-            arguments to the request (i.e., the rest of the URL as path segment
-            array 'paths', a map of all query fields / flags 'query', and the
-            fragment string 'fragment'). If the result is None a 404 error is
-            sent.
+            function takes two arguments. `esrh` is the
+            QuickServerRequestHandler object that called the function. `args`
+            is a map containing the arguments to the request (i.e., the rest of
+            the URL as path segment array "paths", a map of all query
+            fields / flags "query", and the fragment string "fragment"). If the
+            result is `None` a 404 error is sent.
         """
-        self.add_json_mask(start, 'GET', json_producer)
+        self.add_json_mask(start, "GET", json_producer)
 
     def add_json_put_mask(
             self, start: str, json_producer: Callable[
@@ -2564,14 +2605,14 @@ class QuickServer(http_server.HTTPServer):
 
         json_producer : function(esrh, args)
             A function returning an object that can be converted to JSON. The
-            function takes two arguments. esrh is the QuickServerRequestHandler
-            object that called the function. args is a map containing the
-            arguments to the request (i.e., the rest of the URL as path segment
-            array 'paths', a map of all query fields / flags 'query', and the
-            fragment string 'fragment'). If the result is None a 404 error is
-            sent.
+            function takes two arguments. `esrh` is the
+            QuickServerRequestHandler object that called the function. `args`
+            is a map containing the arguments to the request (i.e., the rest of
+            the URL as path segment array "paths", a map of all query
+            fields / flags "query", and the fragment string "fragment"). If the
+            result is `None` a 404 error is sent.
         """
-        self.add_json_mask(start, 'PUT', json_producer)
+        self.add_json_mask(start, "PUT", json_producer)
 
     def add_json_delete_mask(
             self, start: str, json_producer: Callable[
@@ -2586,14 +2627,14 @@ class QuickServer(http_server.HTTPServer):
 
         json_producer : function(esrh, args)
             A function returning an object that can be converted to JSON. The
-            function takes two arguments. esrh is the QuickServerRequestHandler
-            object that called the function. args is a map containing the
-            arguments to the request (i.e., the rest of the URL as path segment
-            array 'paths', a map of all query fields / flags 'query', and the
-            fragment string 'fragment'). If the result is None a 404 error is
-            sent.
+            function takes two arguments. `esrh` is the
+            QuickServerRequestHandler object that called the function. `args`
+            is a map containing the arguments to the request (i.e., the rest of
+            the URL as path segment array "paths", a map of all query
+            fields / flags "query", and the fragment string "fragment"). If the
+            result is `None` a 404 error is sent.
         """
-        self.add_json_mask(start, 'DELETE', json_producer)
+        self.add_json_mask(start, "DELETE", json_producer)
 
     def add_json_post_mask(
             self, start: str, json_producer: Callable[
@@ -2608,14 +2649,14 @@ class QuickServer(http_server.HTTPServer):
 
         json_producer : function(esrh, args)
             A function returning an object that can be converted to JSON. The
-            function takes two arguments. esrh is the QuickServerRequestHandler
-            object that called the function. args is a map containing the
-            arguments to the request (i.e., the rest of the URL as path segment
-            array 'paths', a map of all query fields / flags 'query', the
-            fragment string 'fragment', and the JSON form content 'post'). If
-            the result is None a 404 error is sent.
+            function takes two arguments. `esrh` is the
+            QuickServerRequestHandler object that called the function. `args`
+            is a map containing the arguments to the request (i.e., the rest of
+            the URL as path segment array "paths", a map of all query
+            fields / flags "query", and the fragment string "fragment"). If the
+            result is `None` a 404 error is sent.
         """
-        self.add_json_mask(start, 'POST', json_producer)
+        self.add_json_mask(start, "POST", json_producer)
 
     def add_text_mask(
             self, start: str, method_str: str, text_producer: Callable[
@@ -2633,12 +2674,12 @@ class QuickServer(http_server.HTTPServer):
 
         text_producer : function(esrh, args)
             A function returning a string. The function takes two arguments.
-            esrh is the QuickServerRequestHandler object that called the
-            function. args is a map containing the arguments to the request
-            (i.e., the rest of the URL as path segment array 'paths', a map of
-            all query fields / flags 'query', the fragment string 'fragment',
-            and if the method was a POST the JSON form content 'post'). If the
-            result is None a 404 error is sent.
+            `esrh` is the QuickServerRequestHandler object that called the
+            function. `args` is a map containing the arguments to the request
+            (i.e., the rest of the URL as path segment array "paths", a map of
+            all query fields / flags "query", the fragment string "fragment",
+            and if the method was a POST the JSON form content "post"). If the
+            result is `None` a 404 error is sent.
         """
 
         def send_text(
@@ -2680,7 +2721,7 @@ class QuickServer(http_server.HTTPServer):
                 e_tag = \
                     f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"  # type: ignore
                 f.seek(0)  # type: ignore
-                match = _getheader(drh.headers, 'if-none-match')
+                match = _GETHEADER(drh.headers, "if-none-match")
                 if match is not None:
                     if drh.check_cache(e_tag, match):
                         f.close()  # type: ignore
@@ -2711,13 +2752,13 @@ class QuickServer(http_server.HTTPServer):
 
         text_producer : function(esrh, args)
             A function returning a string. The function takes two arguments.
-            esrh is the QuickServerRequestHandler object that called the
-            function. args is a map containing the arguments to the request
-            (i.e., the rest of the URL as path segment array 'paths', a map of
-            all query fields / flags 'query', and the fragment string
-            'fragment'). If the result is None a 404 error is sent.
+            `esrh` is the QuickServerRequestHandler object that called the
+            function. `args` is a map containing the arguments to the request
+            (i.e., the rest of the URL as path segment array "paths", a map of
+            all query fields / flags "query", and the fragment string
+            "fragment"). If the result is `None` a 404 error is sent.
         """
-        self.add_text_mask(start, 'GET', text_producer)
+        self.add_text_mask(start, "GET", text_producer)
 
     def add_text_put_mask(
             self, start: str, text_producer: Callable[
@@ -2732,13 +2773,13 @@ class QuickServer(http_server.HTTPServer):
 
         text_producer : function(esrh, args)
             A function returning a string. The function takes two arguments.
-            esrh is the QuickServerRequestHandler object that called the
-            function. args is a map containing the arguments to the request
-            (i.e., the rest of the URL as path segment array 'paths', a map of
-            all query fields / flags 'query', and the fragment string
-            'fragment'). If the result is None a 404 error is sent.
+            `esrh` is the QuickServerRequestHandler object that called the
+            function. `args` is a map containing the arguments to the request
+            (i.e., the rest of the URL as path segment array "paths", a map of
+            all query fields / flags "query", and the fragment string
+            "fragment"). If the result is `None` a 404 error is sent.
         """
-        self.add_text_mask(start, 'PUT', text_producer)
+        self.add_text_mask(start, "PUT", text_producer)
 
     def add_text_delete_mask(
             self, start: str, text_producer: Callable[
@@ -2753,13 +2794,13 @@ class QuickServer(http_server.HTTPServer):
 
         text_producer : function(esrh, args)
             A function returning a string. The function takes two arguments.
-            esrh is the QuickServerRequestHandler object that called the
-            function. args is a map containing the arguments to the request
-            (i.e., the rest of the URL as path segment array 'paths', a map of
-            all query fields / flags 'query', and the fragment string
-            'fragment'). If the result is None a 404 error is sent.
+            `esrh` is the QuickServerRequestHandler object that called the
+            function. `args` is a map containing the arguments to the request
+            (i.e., the rest of the URL as path segment array "paths", a map of
+            all query fields / flags "query", and the fragment string
+            "fragment"). If the result is `None` a 404 error is sent.
         """
-        self.add_text_mask(start, 'DELETE', text_producer)
+        self.add_text_mask(start, "DELETE", text_producer)
 
     def add_text_post_mask(
             self, start: str, text_producer: Callable[
@@ -2774,18 +2815,19 @@ class QuickServer(http_server.HTTPServer):
 
         text_producer : function(esrh, args)
             A function returning a string. The function takes two arguments.
-            esrh is the QuickServerRequestHandler object that called the
-            function. args is a map containing the arguments to the request
-            (i.e., the rest of the URL as path segment array 'paths', a map of
-            all query fields / flags 'query', the fragment string 'fragment',
-            and the JSON form content 'post'). If the result is None a 404
+            `esrh` is the QuickServerRequestHandler object that called the
+            function. `args` is a map containing the arguments to the request
+            (i.e., the rest of the URL as path segment array "paths", a map of
+            all query fields / flags "query", the fragment string "fragment",
+            and the JSON form content "post"). If the result is None a 404
             error is sent.
         """
-        self.add_text_mask(start, 'POST', text_producer)
+        self.add_text_mask(start, "POST", text_producer)
 
     # wrappers #
 
-    def cmd(self,
+    def cmd(
+            self,
             argc: Optional[int] = None,
             complete: Optional[Callable[[List[str], str], List[str]]] = None,
             no_replace: bool = False) -> Callable[[CmdF], CmdF]:
@@ -2798,9 +2840,10 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def json_get(self,
-                 mask: str,
-                 argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+    def json_get(
+            self,
+            mask: str,
+            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_json_get_mask(mask, fun)
@@ -2809,9 +2852,10 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def json_put(self,
-                 mask: str,
-                 argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+    def json_put(
+            self,
+            mask: str,
+            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_json_put_mask(mask, fun)
@@ -2820,9 +2864,10 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def json_delete(self,
-                    mask: str,
-                    argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+    def json_delete(
+            self,
+            mask: str,
+            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_json_delete_mask(mask, fun)
@@ -2831,9 +2876,10 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def json_post(self,
-                  mask: str,
-                  argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+    def json_post(
+            self,
+            mask: str,
+            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_json_post_mask(mask, fun)
@@ -2842,9 +2888,10 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def text_get(self,
-                 mask: str,
-                 argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+    def text_get(
+            self,
+            mask: str,
+            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_text_get_mask(mask, fun)
@@ -2853,9 +2900,10 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def text_put(self,
-                 mask: str,
-                 argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+    def text_put(
+            self,
+            mask: str,
+            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_text_put_mask(mask, fun)
@@ -2864,9 +2912,10 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def text_delete(self,
-                    mask: str,
-                    argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+    def text_delete(
+            self,
+            mask: str,
+            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_text_delete_mask(mask, fun)
@@ -2875,9 +2924,10 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def text_post(self,
-                  mask: str,
-                  argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
+    def text_post(
+            self,
+            mask: str,
+            argc: Optional[int] = None) -> Callable[[ReqF], ReqF]:
 
         def wrapper(fun: ReqF) -> ReqF:
             self.add_text_post_mask(mask, fun)
@@ -2915,20 +2965,22 @@ class QuickServer(http_server.HTTPServer):
         full_path = path if not from_quick_server else os.path.join(
             os.path.dirname(__file__), path)
 
-        def read_file(_req: QuickServerRequestHandler,
-                      _args: ReqArgs) -> Response:
-            with open(full_path, 'rb') as f_out:
+        def read_file(
+                _req: QuickServerRequestHandler,
+                _args: ReqArgs) -> Response:
+            with open(full_path, "rb") as f_out:
                 return Response(f_out.read(), ctype=ctype)
 
         self.add_text_get_mask(mask, read_file)
         self.set_file_argc(mask, 0)
 
-    def mirror_file(self,
-                    path_to: str,
-                    path_from: str,
-                    from_quick_server: bool = True) -> None:
+    def mirror_file(
+            self,
+            path_to: str,
+            path_from: str,
+            from_quick_server: bool = True) -> None:
         """Mirrors a file to a different location. Each time the file changes
-           while the process is running it will be copied to 'path_to',
+           while the process is running it will be copied to "path_to",
            overwriting the destination.
 
         Parameters
@@ -2954,7 +3006,7 @@ class QuickServer(http_server.HTTPServer):
         elif impl == "poll":
             self._poll_mirror(path_to, full_path, init=False)
         else:
-            raise ValueError("unknown mirror implementation: {0}".format(impl))
+            raise ValueError(f"unknown mirror implementation: {impl}")
 
     def _symlink_mirror(
             self, path_to: str, path_from: str, init: bool) -> bool:
@@ -2970,7 +3022,7 @@ class QuickServer(http_server.HTTPServer):
 
     def _poll_mirror(self, path_to: str, path_from: str, init: bool) -> bool:
 
-        def get_time(path: str) -> float:
+        def get_mtime(path: str) -> float:
             return os.path.getmtime(path)
 
         if init:
@@ -2980,7 +3032,7 @@ class QuickServer(http_server.HTTPServer):
                 with self._mirror["lock"]:
                     shutil.copyfile(f_from, f_to)
                     self._mirror["files"][ix] = \
-                        (f_from, f_to, get_time(f_from))
+                        (f_from, f_to, get_mtime(f_from))
 
             def monitor() -> None:
                 while True:
@@ -2988,18 +3040,18 @@ class QuickServer(http_server.HTTPServer):
                     with self._mirror["lock"]:
                         for (ix, f) in enumerate(self._mirror["files"]):
                             f_from, f_to, f_time = f
-                            if f_time < get_time(f_from):
+                            if f_time < get_mtime(f_from):
                                 act(ix, f_from, f_to)
 
             poll_monitor = self._thread_factory(
                 target=monitor,
-                name="{0}-Poll-Monitor".format(self.__class__.__name__))
+                name=f"{self.__class__.__name__}-Poll-Monitor")
             poll_monitor.daemon = True
             poll_monitor.start()
         if not os.path.exists(path_from):
-            raise ValueError("file does not exist: {0}".format(path_from))
+            raise ValueError(f"file does not exist: {path_from}")
         if path_from == path_to:
-            raise ValueError("cannot mirror itself: {0}".format(path_from))
+            raise ValueError(f"cannot mirror itself: {path_from}")
         with self._mirror["lock"]:
             for f in self._mirror["files"]:
                 # sanity checks
@@ -3007,18 +3059,18 @@ class QuickServer(http_server.HTTPServer):
                 if f_to == path_to:
                     if f_from == path_from:
                         return True  # nothing to do here!
-                    raise ValueError("cannot point two different " +
-                                     "files to the same location: " +
-                                     "({0} != {1}) -> {2}".format(
-                                         f_from, path_from, f_to))
+                    raise ValueError(
+                        "cannot point two different "
+                        "files to the same location: "
+                        f"({f_from} != {path_from}) -> {f_to}")
                 if f_to == path_from:
-                    raise ValueError("cannot chain mirrors: " +
-                                     "{0} -> {1} -> {2}".format(
-                                         f_from, f_to, path_to))
+                    raise ValueError(
+                        "cannot chain mirrors: "
+                        f"{f_from} -> {f_to} -> {path_to}")
                 if f_from == path_to:
-                    raise ValueError("cannot chain mirrors: " +
-                                     "{0} -> {1} -> {2}".format(
-                                         path_from, path_to, f_to))
+                    raise ValueError(
+                        "cannot chain mirrors: "
+                        f"{path_from} -> {path_to} -> {f_to}")
             # forces an initial write
             self._mirror["files"].append((path_from, path_to, 0))
         return True
@@ -3026,7 +3078,7 @@ class QuickServer(http_server.HTTPServer):
     def link_empty_favicon_fallback(self) -> None:
         """Links the empty favicon as default favicon."""
         self.favicon_fallback = os.path.join(
-            os.path.dirname(__file__), 'favicon.ico')
+            os.path.dirname(__file__), "favicon.ico")
 
     # worker based #
 
@@ -3038,10 +3090,11 @@ class QuickServer(http_server.HTTPServer):
         mask : string
             The URL that must be matched to get the worker javascript.
         """
-        self.add_special_file(mask,
-                              'worker.js',
-                              from_quick_server=True,
-                              ctype='application/javascript; charset=utf-8')
+        self.add_special_file(
+            mask,
+            "worker.js",
+            from_quick_server=True,
+            ctype="application/javascript; charset=utf-8")
 
     def mirror_worker_js(self, path: str) -> None:
         """Mirrors the worker javascript.
@@ -3051,7 +3104,7 @@ class QuickServer(http_server.HTTPServer):
         path : string
             The path to mirror to.
         """
-        self.mirror_file(path, 'worker.js', from_quick_server=True)
+        self.mirror_file(path, "worker.js", from_quick_server=True)
 
     def link_legacy_worker_js(self, mask: str) -> None:
         """Links the legacy worker javascript.
@@ -3061,10 +3114,11 @@ class QuickServer(http_server.HTTPServer):
         mask : string
             The URL that must be matched to get the worker javascript.
         """
-        self.add_special_file(mask,
-                              'worker.legacy.js',
-                              from_quick_server=True,
-                              ctype='application/javascript; charset=utf-8')
+        self.add_special_file(
+            mask,
+            "worker.legacy.js",
+            from_quick_server=True,
+            ctype="application/javascript; charset=utf-8")
 
     def mirror_legacy_worker_js(self, path: str) -> None:
         """Mirrors the legacy worker javascript.
@@ -3074,14 +3128,15 @@ class QuickServer(http_server.HTTPServer):
         path : string
             The path to mirror to.
         """
-        self.mirror_file(path, 'worker.legacy.js', from_quick_server=True)
+        self.mirror_file(path, "worker.legacy.js", from_quick_server=True)
 
-    def json_worker(self,
-                    mask: str,
-                    cache_id: Optional[Callable[[CacheIdObj], Any]] = None,
-                    cache_method: str = "string",
-                    cache_section: str = "www",
-                    ) -> Callable[[WorkerF], WorkerF]:
+    def json_worker(
+            self,
+            mask: str,
+            cache_id: Optional[Callable[[CacheIdObj], Any]] = None,
+            cache_method: str = "string",
+            cache_section: str = "www",
+            ) -> Callable[[WorkerF], WorkerF]:
         """A function annotation that adds a worker request. A worker request
            is a POST request that is computed asynchronously. That is, the
            actual task is performed in a different thread and the network
@@ -3117,10 +3172,18 @@ class QuickServer(http_server.HTTPServer):
 
         def wrapper(fun: WorkerF) -> WorkerF:
             worker = self._worker_constructor(
-                mask, fun, msg, cache_id, self.cache, cache_method,
-                cache_section, self._thread_factory, self.__class__.__name__,
-                self._soft_worker_death, lambda: self.max_chunk_size,
-                lambda: self.verbose_workers)
+                mask,
+                fun,
+                log=msg,
+                cache_id=cache_id,
+                cache=self.cache,
+                cache_method=cache_method,
+                cache_section=cache_section,
+                thread_factory=self._thread_factory,
+                name_prefix=self.__class__.__name__,
+                soft_worker_death=self._soft_worker_death,
+                get_max_chunk_size=lambda: self.max_chunk_size,
+                is_verbose_worker=lambda: self.verbose_workers)
 
             def run_worker(
                     req: QuickServerRequestHandler,
@@ -3232,14 +3295,14 @@ class QuickServer(http_server.HTTPServer):
 
         def do_dispatch(
                 query_obj: Dict[str, ActionObj],
-                od: Dict[str, DispatchObj],
+                odisp: Dict[str, DispatchObj],
                 parent: Optional[DispatchObj]) -> Any:
             res: Dict[str, DispatchObj] = {}
             for (curq, action) in query_obj.items():
-                if curq not in od:
-                    raise ValueError("unknown object name: '{0}'".format(curq))
+                if curq not in odisp:
+                    raise ValueError(f"unknown object name: '{curq}'")
                 atype = action["type"]
-                obj = od[curq]
+                obj = odisp[curq]
                 otype = obj.get("type")
                 if otype == "value":
                     if atype == "set":
@@ -3285,8 +3348,8 @@ class QuickServer(http_server.HTTPServer):
         def dispatch(args: WorkerArgs) -> Any:
             query_obj = args["query"]
             assert self._object_dispatch is not None
-            od = self._object_dispatch
-            return do_dispatch(query_obj, od, {})
+            odisp = self._object_dispatch
+            return do_dispatch(query_obj, odisp, {})
 
         self.json_worker(self.object_path)(dispatch)
 
@@ -3298,15 +3361,14 @@ class QuickServer(http_server.HTTPServer):
             value: Any = None) -> None:
         self._init_object_dispatch()
         assert self._object_dispatch is not None
-        od = self._object_dispatch
+        odisp = self._object_dispatch
         cur_p = []
         while len(path):
             p = path.pop(0)
             cur_p.append(p)
-            if p not in od:
+            if p not in odisp:
                 if path:
-                    raise ValueError(
-                        "path prefix must exist: {0}".format(cur_p))
+                    raise ValueError(f"path prefix must exist: {cur_p}")
                 new_od: DispatchObj = {
                     "type": otype,
                 }
@@ -3323,9 +3385,9 @@ class QuickServer(http_server.HTTPServer):
                     new_od["child"] = {}
                 else:
                     raise ValueError(f"invalid object type: '{otype}'")
-                od[p] = new_od
+                odisp[p] = new_od
             else:
-                od = od[p].get("child", {})
+                odisp = odisp[p].get("child", {})
 
     def add_value_object(
             self, path: List[str], default_value: Any = None) -> None:
@@ -3347,12 +3409,12 @@ class QuickServer(http_server.HTTPServer):
         segments = []
         for s in cmd.split():
             # remove bash-like comments
-            if s.startswith('#'):
+            if s.startswith("#"):
                 break
             # TODO implement escape sequences (also for \#)
             segments.append(s)
         args: List[str] = []
-        if not len(segments):
+        if len(segments) == 0:
             return
         # process more specific commands first
         while segments:
@@ -3360,14 +3422,15 @@ class QuickServer(http_server.HTTPServer):
             if cur_cmd in self._cmd_methods:
                 argc = self._cmd_argc[cur_cmd]
                 if argc is not None and len(args) != argc:
-                    msg('command {0} expects {1} argument(s), got {2}',
+                    msg(
+                        "command {0} expects {1} argument(s), got {2}",
                         " ".join(segments), argc, len(args))
                     return
                 self._cmd_methods[cur_cmd](args)
                 return
             args.insert(0, segments.pop())
         # invalid command
-        prefix = '_'.join(args) + '_'
+        prefix = "_".join(args) + "_"
         matches = filter(
             lambda cmd: cmd.startswith(prefix), self._cmd_methods.keys())
         candidates = set([])
@@ -3375,17 +3438,18 @@ class QuickServer(http_server.HTTPServer):
             if len(m) <= len(prefix):
                 continue
             m = m[len(prefix):]
-            if '_' in m:
-                m = m[:m.index('_')]
+            if "_" in m:
+                m = m[:m.index("_")]
             candidates.add(m)
-        if len(candidates):
-            msg('command "{0}" needs more arguments:', ' '.join(args))
+        if len(candidates) > 0:
+            msg("command \"{0}\" needs more arguments:", " ".join(args))
             for c in candidates:
-                msg('    {0}', c)
+                msg("    {0}", c)
         else:
-            msg('command "{0}" invalid; type ' +
-                'help or use <TAB> for a list of commands',
-                ' '.join(args))
+            msg(
+                "command \"{0}\" invalid; type "
+                "help or use <TAB> for a list of commands",
+                " ".join(args))
 
     def start_cmd_loop(self) -> None:
         """Starts the command line loop. This method is called automatically by
@@ -3403,28 +3467,29 @@ class QuickServer(http_server.HTTPServer):
             return
 
         cmd_state: CmdState = {
-            'suggestions': [],
-            'clean_up_lock': threading.Lock(),
-            'clean': False,
-            'line': '',
+            "suggestions": [],
+            "clean_up_lock": threading.Lock(),
+            "clean": False,
+            "line": "",
         }
 
         # setup internal commands (no replace)
         @self.cmd(argc=0, no_replace=True)
-        def help(args: List[str]) -> None:
-            msg('available commands:')
-            for key in self._cmd_methods.keys():
-                msg('    {0}', key.replace('_', ' '))
+        def help(  # pylint: disable=redefined-builtin
+                _args: List[str]) -> None:
+            msg("available commands:")
+            for key in dict(self._cmd_methods):
+                msg("    {0}", key.replace("_", " "))
 
         @self.cmd(argc=0, no_replace=True)
-        def restart(
-                args: List[str]) -> None:
+        def restart(_args: List[str]) -> None:
             global _DO_RESTART
             _DO_RESTART = True
             self.done = True
 
         @self.cmd(argc=0, no_replace=True)
-        def quit(args: List[str]) -> None:
+        def quit(  # pylint: disable=redefined-builtin
+                _args: List[str]) -> None:
             self.done = True
 
         # set up command completion
@@ -3435,40 +3500,41 @@ class QuickServer(http_server.HTTPServer):
                 stripped = len(origline) - len(line)
                 begidx = readline.get_begidx() - stripped
                 endidx = readline.get_endidx() - stripped
-                prefix = line[:begidx].replace(' ', '_')
+                prefix = line[:begidx].replace(" ", "_")
 
                 def match_cmd(cmd: str) -> bool:
-                    return cmd.startswith(prefix) and \
-                           cmd[begidx:].startswith(text)
+                    return (
+                        cmd.startswith(prefix)
+                        and cmd[begidx:].startswith(text))
 
                 matches = filter(match_cmd, self._cmd_methods.keys())
 
                 def _endidx(m: str) -> int:
-                    eix = m.find('_', endidx)
+                    eix = m.find("_", endidx)
                     return eix + 1 if eix >= 0 else len(m)
 
                 candidates = [
-                    m[begidx:_endidx(m)].replace('_', ' ') for m in matches
+                    m[begidx:_endidx(m)].replace("_", " ") for m in matches
                 ]
                 rest_cmd = line[:begidx].split()
                 args: List[str] = []
                 while rest_cmd:
-                    cur_cmd = '_'.join(rest_cmd)
+                    cur_cmd = "_".join(rest_cmd)
                     compl = self._cmd_complete.get(cur_cmd, None)
                     if compl is not None:
-                        cc = compl(args, text)
-                        if cc is not None:
-                            candidates.extend(cc)
+                        ccan = compl(args, text)
+                        if ccan is not None:
+                            candidates.extend(ccan)
                     args.insert(0, rest_cmd.pop())
-                cmd_state['suggestions'] = sorted(set(candidates))
-                cmd_state['line'] = line
-            suggestions: List[str] = cmd_state['suggestions']
+                cmd_state["suggestions"] = sorted(set(candidates))
+                cmd_state["line"] = line
+            suggestions: List[str] = cmd_state["suggestions"]
             if len(suggestions) == 1 and text == suggestions[0]:
-                probe_cmd = cmd_state['line'].replace(' ', '_')
+                probe_cmd = cmd_state["line"].replace(" ", "_")
                 if probe_cmd in self._cmd_argc and \
                         self._cmd_argc[probe_cmd] != 0:
-                    cmd_state['line'] = ""
-                    return text + ' '
+                    cmd_state["line"] = ""
+                    return f"{text} "
                 return None
             if state < len(suggestions):
                 return suggestions[state]
@@ -3476,9 +3542,9 @@ class QuickServer(http_server.HTTPServer):
 
         # remember to clean up before exit -- the call must be idempotent!
         def clean_up() -> None:
-            with cmd_state['clean_up_lock']:
-                clean = cmd_state['clean']
-                cmd_state['clean'] = True
+            with cmd_state["clean_up_lock"]:
+                clean = cmd_state["clean"]
+                cmd_state["clean"] = True
 
             if clean:
                 return
@@ -3490,11 +3556,14 @@ class QuickServer(http_server.HTTPServer):
             close = False
             kill = True
             try:
-                while not self.done and \
-                        not close and not self.no_command_loop:
+                while (
+                        not self.done
+                        and not close
+                        and not self.no_command_loop):
                     line = ""
                     try:
                         try:
+                            # pylint: disable=using-constant-test
                             if sys.stdin.closed:
                                 self.done = True
                                 continue
@@ -3503,10 +3572,10 @@ class QuickServer(http_server.HTTPServer):
                             if e.errno == errno.EBADF:
                                 close = True
                                 kill = False
-                            elif (
-                                    e.errno == errno.EWOULDBLOCK or
-                                    e.errno == errno.EAGAIN or
-                                    e.errno == errno.EINTR):
+                            elif e.errno in (
+                                    errno.EWOULDBLOCK,
+                                    errno.EAGAIN,
+                                    errno.EINTR):
                                 continue
                             else:
                                 raise e
@@ -3544,7 +3613,7 @@ class QuickServer(http_server.HTTPServer):
         old_completer = readline.get_completer()
         readline.set_completer(complete)
         # be mac compatible
-        if readline.__doc__ is not None and 'libedit' in readline.__doc__:
+        if readline.__doc__ is not None and "libedit" in readline.__doc__:
             readline.parse_and_bind("python:bind ^I rl_complete")
         else:
             readline.parse_and_bind("tab: complete")
@@ -3556,7 +3625,7 @@ class QuickServer(http_server.HTTPServer):
             t = self._thread_factory(target=cmd_loop, daemon=True)
             t.start()
 
-            def no_log(*args: Any, **kwargs: Any) -> None:
+            def no_log(*_args: Any, **_kwargs: Any) -> None:
                 pass
 
             def not_verbose() -> bool:
@@ -3588,9 +3657,12 @@ class QuickServer(http_server.HTTPServer):
         if timeout is not None:
             shutdown_latency = min(shutdown_latency, timeout) \
                 if shutdown_latency is not None else timeout
-        while not (self.done or done_req) and (timeout is None or
-                                               timeout == 0 or
-                                               (get_time() - ctime) < timeout):
+        while (
+                not (self.done or done_req)
+                and (
+                    timeout is None
+                    or timeout == 0
+                    or (get_time() - ctime) < timeout)):
             try:
                 fd_sets = select.select([self], [], [], shutdown_latency)
             except (OSError, select.error) as e:
@@ -3618,8 +3690,8 @@ class QuickServer(http_server.HTTPServer):
                 self.handle_request()
         except KeyboardInterrupt:
             # clean error output if log file is STD_ERR
-            if log_file is not None and log_file == sys.stderr:
-                log_file.write("\n")
+            if LOG_FILE is not None and LOG_FILE == sys.stderr:
+                LOG_FILE.write("\n")
         finally:
             if self._clean_up_call is not None:
                 self._clean_up_call()
@@ -3632,8 +3704,7 @@ class QuickServer(http_server.HTTPServer):
         """
         value = sys.exc_info()[1]
         try:
-            if isinstance(value, BrokenPipeError) or \
-                    isinstance(value, ConnectionResetError):
+            if isinstance(value, (BrokenPipeError, ConnectionResetError)):
                 return True
         except NameError:
             pass
@@ -3658,4 +3729,6 @@ class QuickServer(http_server.HTTPServer):
         global_handle_error(
             ERR_SOURCE_GENERAL_QS,
             f"Error in request ({client_address}): "
-            f"{repr(request)} in {thread.name}", traceback.format_exc(), msg)
+            f"{repr(request)} in {thread.name}",
+            traceback.format_exc(),
+            msg)
