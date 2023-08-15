@@ -12,12 +12,12 @@ PYTHON=python
 VERSION=`echo "import quick_server;print(quick_server.__version__)" | python3 2>/dev/null`
 
 install:
-	"${PYTHON}" -m pip install --progress-bar off --upgrade pip
-	"${PYTHON}" -m pip install --progress-bar off --upgrade mypy==0.991
-	"${PYTHON}" -m pip install --progress-bar off --upgrade -e .
+	$(PYTHON) -m pip install --progress-bar off --upgrade pip
+	$(PYTHON) -m pip install --progress-bar off --upgrade mypy==0.991
+	$(PYTHON) -m pip install --progress-bar off --upgrade -e .
 
 lint-type-check:
-	"${PYTHON}" -m mypy --config-file mypy.ini .
+	$(PYTHON) -m mypy --config-file mypy.ini .
 
 git-check:
 	@git diff --exit-code 2>&1 >/dev/null && git diff --cached --exit-code 2>&1 >/dev/null || (echo "working copy is not clean" && exit 1)
@@ -25,15 +25,15 @@ git-check:
 	@test `git rev-parse --abbrev-ref HEAD` = "master" || (grep -q -E "a|b|rc" <<< "$(VERSION)") || (echo "not on master" && exit 1)
 
 build:
-	"${PYTHON}" -m pip install --progress-bar off --upgrade setuptools twine wheel
+	$(PYTHON) -m pip install --progress-bar off --upgrade setuptools twine wheel
 	rm -r dist build quick_server.egg-info || echo "no files to delete"
-	"${PYTHON}" setup.py sdist bdist_wheel
+	$(PYTHON) setup.py sdist bdist_wheel
 
 publish: git-check build
-	"${PYTHON}" -m twine upload dist/quick_server-$(VERSION)-py3-none-any.whl dist/quick_server-$(VERSION).tar.gz
+	$(PYTHON) -m twine upload dist/quick_server-$(VERSION)-py3-none-any.whl dist/quick_server-$(VERSION).tar.gz
 	git tag "v$(VERSION)"
 	git push origin "v$(VERSION)"
 	@echo "succesfully deployed $(VERSION)"
 
 run-test:
-	"${PYTHON}" test/run.py
+	$(PYTHON) test/run.py $(SKIP)

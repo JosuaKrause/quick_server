@@ -214,7 +214,7 @@ def run(*, python: list[str], skip: int) -> None:
             req.add_header("Content-Length", f"{len(post_str)}")
             req.data = post_str.encode("utf-8")
 
-        def handle(response: addinfourl | HTTPError) -> bool:
+        def handle(response: addinfourl) -> bool:
             if rest is not None and "url" in rest:
                 expected_url = f"http://localhost:8000/{rest['url']}"
                 if response.geturl() != expected_url:
@@ -335,7 +335,7 @@ def run(*, python: list[str], skip: int) -> None:
             args: dict[str, Any],
             expected_keys: list[str],
             max_tries: int,
-            force_token: bool) -> str:
+            force_token: bool | None) -> str:
 
         def rebuild(keys: list[str]) -> str:
             res = ""
@@ -361,6 +361,7 @@ def run(*, python: list[str], skip: int) -> None:
             "payload": args,
         }
         tries = 0
+        max_tries = max(max_tries, 0)
         while True:
             answer: dict[str, Any] = {}
             if tries > max_tries:
@@ -391,7 +392,7 @@ def run(*, python: list[str], skip: int) -> None:
                     return "normal"
             if not answer["continue"]:
                 return "cancel"
-            do_sleep(0.1)  # don"t spam the server
+            do_sleep(0.1)  # don't spam the server
 
     def worker_server_run(
             probes: list[Any], script: str = "example.py") -> bool:

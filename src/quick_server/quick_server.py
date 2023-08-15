@@ -955,7 +955,22 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         return SimpleHTTPRequestHandler.list_directory(  # type: ignore
             self, path)
 
-    def translate_path(self, orig_path: str) -> str:
+    def translate_path(self, path: str) -> str:
+        """Translates a path for a static file request. The server base path
+           could be different from our cwd.
+
+        Parameters
+        ----------
+        path : string
+            The path.
+
+        Returns
+        -------
+        The absolute file path denoted by the original path.
+        """
+        return self._translate_path(path)
+
+    def _translate_path(self, orig_path: str) -> str:
         """Translates a path for a static file request. The server base path
            could be different from our cwd.
 
@@ -968,6 +983,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         -------
         The absolute file path denoted by the original path.
         """
+        # pylint: disable=protected-access
+
         init_path = orig_path
         orig_path = urlparse.urlparse(orig_path)[2]
         needs_redirect = False
@@ -1010,13 +1027,13 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     pxya = urlparse.urlunparse((
                         proxy[0],  # scheme
                         proxy[1],  # netloc
-                        "{0}{1}".format(proxy[2], remain),  # path
+                        f"{proxy[2]}{remain}",  # path
                         reala[3],  # params
                         reala[4],  # query
                         reala[5],  # fragment
                     ))
                     self.send_to_proxy(pxya)  # raises PreventDefaultResponse
-                msg("no matching folder alias: {0}".format(orig_path))
+                msg(f"no matching folder alias: {orig_path}")
                 raise PreventDefaultResponse(404, "File not found")
             path: str = mpath
             if os.path.isdir(path):
