@@ -19,7 +19,7 @@ HTTP method (e.g., GET, POST). POST requests can contain JSON encoded form
 data. You can bind static paths with the `bind_path` method.
 
 Commands can be added via the `cmd` annotation where the function name is
-the command. 'help', 'restart', and 'quit' are built-in commands ready to use.
+the command. "help", "restart", and "quit" are built-in commands ready to use.
 
 Note: The server is thread based so all callback functions should be
 thread-safe.
@@ -72,12 +72,12 @@ CmdF = TypeVar(  # pylint: disable=invalid-name
     'CmdF', bound=Callable[[List[str]], None])
 
 ReqArgs = TypedDict('ReqArgs', {
-    'paths': List[str],
-    'query': Dict[str, Union[str, float, int, bool]],
-    'post': WorkerArgs,
-    'files': Dict[str, BytesIO],
-    'fragment': str,
-    'segments': Dict[str, str],
+    "paths": List[str],
+    "query": Dict[str, Union[str, float, int, bool]],
+    "post": WorkerArgs,
+    "files": Dict[str, BytesIO],
+    "fragment": str,
+    "segments": Dict[str, str],
 }, total=False)
 
 ReqF = TypeVar(  # pylint: disable=invalid-name
@@ -87,49 +87,49 @@ WorkerF = TypeVar(  # pylint: disable=invalid-name
     'WorkerF', bound=Callable[[WorkerArgs], Any])
 
 PostFileLens = TypedDict('PostFileLens', {
-    'clen': int,
-    'push': List[BytesIO],
+    "clen": int,
+    "push": List[BytesIO],
 })
 
 WorkerTask = TypedDict('WorkerTask', {
-    'running': bool,
-    'result': Optional[str],
-    'exception': Optional[Tuple[str, Optional[str]]],
-    'thread': Optional[threading.Thread],
+    "running": bool,
+    "result": Optional[str],
+    "exception": Optional[Tuple[str, Optional[str]]],
+    "thread": Optional[threading.Thread],
 })
 
 WorkerResponse = TypedDict('WorkerResponse', {
-    'token': str,
-    'done': bool,
-    'result': Optional[Union[List[str], str]],
-    'continue': bool,
+    "token": str,
+    "done": bool,
+    "result": Optional[Union[List[str], str]],
+    "continue": bool,
 })
 
 MirrorObj = TypedDict('MirrorObj', {
-    'impl': Literal["poll", "symlink", "none"],
-    'files': List[Tuple[str, str, float]],
-    'lock': threading.RLock,
+    "impl": Literal["poll", "symlink", "none"],
+    "files": List[Tuple[str, str, float]],
+    "lock": threading.RLock,
 })
 
 DispatchObj = TypedDict('DispatchObj', {
-    'map': Dict[str, Any],
-    'fun': Callable[..., Any],
-    'value': Any,
-    'type': str,
-    'child': Dict[str, Any],
+    "map": Dict[str, Any],
+    "fun": Callable[..., Any],
+    "value": Any,
+    "type": str,
+    "child": Dict[str, Any],
 }, total=False)
 
 ActionObj = TypedDict('ActionObj', {
-    'queries': List[Any],
-    'type': str,
-    'value': Any,
+    "queries": List[Any],
+    "type": str,
+    "value": Any,
 })
 
 CmdState = TypedDict('CmdState', {
-    'suggestions': List[str],
-    'clean_up_lock': threading.Lock,
-    'clean': bool,
-    'line': str,
+    "suggestions": List[str],
+    "clean_up_lock": threading.Lock,
+    "clean": bool,
+    "line": str,
 })
 
 
@@ -233,7 +233,7 @@ def set_log_file(fname: TextIO) -> None:
 def _caller_trace(frame: Any) -> Tuple[str, int]:
     try:
         if "__file__" not in frame.f_globals:
-            return '???', frame.f_lineno
+            return "???", frame.f_lineno
         return frame.f_globals["__file__"], frame.f_lineno
     finally:
         del frame
@@ -255,7 +255,7 @@ def caller_trace() -> Tuple[str, int]:  # pragma: no cover
                 del frames
 
 
-if hasattr(sys, '_getframe'):
+if hasattr(sys, "_getframe"):
 
     def _caller_trace_gf() -> Tuple[str, int]:
         # pylint: disable=protected-access
@@ -399,7 +399,7 @@ def get_exec_arr() -> List[str]:
     return exex_arr + script + args
 
 
-# handling the 'restart' command
+# handling the "restart" command
 _DO_RESTART = False
 
 
@@ -772,7 +772,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 ctype = headers.get(b"content-type")
                 if name is None:
                     raise ValueError("field name not set")
-                # b'application/octet-stream': # we treat all files the same
+                # b"application/octet-stream": # we treat all files the same
                 if ctype is not None:
                     files[name] = parse_file()
                 else:
@@ -1453,7 +1453,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         return self._convert_unit("{0:.3g}", size, self.size_units)
 
     def log_message(self, format: str, *args: Any) -> None:
-        """Logs a message. All messages get prefixed with '[SERVER]'
+        """Logs a message. All messages get prefixed with "[SERVER]"
            and the arguments act like `format`.
         """
         # pylint: disable=redefined-builtin
@@ -2369,27 +2369,27 @@ class QuickServer(http_server.HTTPServer):
     def add_default_white_list(self) -> None:
         """Adds a list of common file patterns to the white-list."""
         self.add_file_patterns([
-            '*.css',
-            '*.csv',
-            '*.eot',
-            '*.gif',
-            '*.htm',
-            '*.html',
-            '*.ico',
-            '*.jpeg',
-            '*.jpg',
-            '*.js',
-            '*.json',
-            '*.md',
-            '*.otf',
-            '*.pdf',
-            '*.png',
-            '*.svg',
-            '*.tsv',
-            '*.ttf',
-            '*.txt',
-            '*.woff',
-            '*.woff2',
+            "*.css",
+            "*.csv",
+            "*.eot",
+            "*.gif",
+            "*.htm",
+            "*.html",
+            "*.ico",
+            "*.jpeg",
+            "*.jpg",
+            "*.js",
+            "*.json",
+            "*.md",
+            "*.otf",
+            "*.pdf",
+            "*.png",
+            "*.svg",
+            "*.tsv",
+            "*.ttf",
+            "*.txt",
+            "*.woff",
+            "*.woff2",
         ], blacklist=False)
 
     def bind_path(self, name: str, folder: str) -> None:
