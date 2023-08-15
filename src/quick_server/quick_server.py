@@ -1619,7 +1619,6 @@ class BaseWorker:
         self._mask = mask
         self._fun = fun
         self._msg = log
-        self._use_cache = cache_id is not None
         self._cache_id = cache_id
         self._cache = cache
         self._cache_method = cache_method
@@ -1710,8 +1709,7 @@ class BaseWorker:
             get_thread: Callable[[], threading.Thread]) -> None:
         try:
             self.add_task(cur_key, get_thread, self._soft_worker_death)
-            if self._use_cache:
-                assert self._cache_id is not None
+            if self._cache_id is not None:
                 cache_obj = self._cache_id(args)
                 if cache_obj is not None and self._cache is not None:
                     with self._cache.get_hnd(
