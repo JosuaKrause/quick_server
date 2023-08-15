@@ -3183,7 +3183,7 @@ class QuickServer(http_server.HTTPServer):
                 name_prefix=self.__class__.__name__,
                 soft_worker_death=self._soft_worker_death,
                 get_max_chunk_size=lambda: self.max_chunk_size,
-                is_verbose_worker=lambda: self.verbose_workers)
+                is_verbose_workers=lambda: self.verbose_workers)
 
             def run_worker(
                     req: QuickServerRequestHandler,
