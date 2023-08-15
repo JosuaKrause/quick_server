@@ -158,24 +158,6 @@ def _getheader_p2(obj: Any, key: str) -> Any:
 _GETHEADER = _getheader_p2
 
 
-def create_server(
-        server_address: tuple[str, int],
-        *,
-        parallel: bool = True,
-        thread_factory: Callable[..., threading.Thread] | None = None,
-        token_handler: 'TokenHandler' | None = None,
-        worker_constructor: Callable[..., 'BaseWorker'] | None = None,
-        soft_worker_death: bool = False) -> 'QuickServer':
-    """Creates the server."""
-    return QuickServer(
-        server_address,
-        parallel,
-        thread_factory,
-        token_handler,
-        worker_constructor,
-        soft_worker_death)
-
-
 def json_dumps(obj: Any) -> str:
     """A safe JSON dump function that provides correct diverging numbers for a
        ECMAscript consumer.
@@ -2392,19 +2374,19 @@ class QuickServer(http_server.HTTPServer):
     def bind_path(self, name: str, folder: str) -> None:
         """Adds a mask that maps to a given folder relative to `base_path`."""
         if len(name) == 0 or name[0] != "/" or name[-1] != "/":
-            raise ValueError(f"name must start and end with '/': {name}")
+            raise ValueError(f"name must start and end with \"/\": {name}")
         self._folder_masks.insert(0, (name, folder))
 
     def bind_path_fallback(self, name: str, folder: str) -> None:
         """Adds a fallback for a given folder relative to `base_path`."""
         if len(name) == 0 or name[0] != "/" or name[-1] != "/":
-            raise ValueError(f"name must start and end with '/': {name}")
+            raise ValueError(f"name must start and end with \"/\": {name}")
         self._folder_masks.append((name, folder))
 
     def bind_proxy(self, name: str, proxy: str) -> None:
         """Adds a mask that maps to a given proxy."""
         if len(name) == 0 or name[0] != "/" or name[-1] != "/":
-            raise ValueError(f"name must start and end with '/': {name}")
+            raise ValueError(f"name must start and end with \"/\": {name}")
         self._folder_proxys.insert(0, (name, proxy))
 
     def add_cmd_method(
@@ -2438,7 +2420,7 @@ class QuickServer(http_server.HTTPServer):
             if text is valid already and there are no further suggestions.
         """
         if " " in name:
-            raise ValueError(f"' ' cannot be in command name {name}")
+            raise ValueError(f"\" \" cannot be in command name {name}")
         self._cmd_methods[name] = method
         self._cmd_argc[name] = argc
         self._cmd_complete[name] = complete
@@ -3295,7 +3277,7 @@ class QuickServer(http_server.HTTPServer):
             res: dict[str, DispatchObj] = {}
             for (curq, action) in query_obj.items():
                 if curq not in odisp:
-                    raise ValueError(f"unknown object name: '{curq}'")
+                    raise ValueError(f"unknown object name: \"{curq}\"")
                 atype = action["type"]
                 obj = odisp[curq]
                 otype = obj.get("type")
@@ -3303,14 +3285,14 @@ class QuickServer(http_server.HTTPServer):
                     if atype == "set":
                         obj["value"] = action["value"]
                     elif atype != "get":
-                        raise ValueError(f"invalid action: '{atype}'")
+                        raise ValueError(f"invalid action: \"{atype}\"")
                     res[curq] = {
                         "value": obj.get("value"),
                     }
                 elif otype == "lazy_value":
                     fun = obj.get("fun")
                     if fun is None:
-                        raise ValueError(f"invalid action: '{atype}'")
+                        raise ValueError(f"invalid action: \"{atype}\"")
                     if atype == "set":
                         res[curq] = {
                             "value": fun(
@@ -3321,13 +3303,13 @@ class QuickServer(http_server.HTTPServer):
                             "value": fun(parent),
                         }
                     else:
-                        raise ValueError(f"invalid action: '{atype}'")
+                        raise ValueError(f"invalid action: \"{atype}\"")
                 elif otype == "lazy_map":
                     fun = obj.get("fun")
                     if fun is None:
-                        raise ValueError(f"invalid action: '{atype}'")
+                        raise ValueError(f"invalid action: \"{atype}\"")
                     if atype != "get":
-                        raise ValueError(f"invalid action: '{atype}'")
+                        raise ValueError(f"invalid action: \"{atype}\"")
                     cur_res = {}
                     for (name, query) in action["queries"]:
                         next_level = fun(parent, name)
@@ -3337,7 +3319,7 @@ class QuickServer(http_server.HTTPServer):
                         "map": cur_res,
                     }
                 else:
-                    raise ValueError(f"invalid object type: '{otype}'")
+                    raise ValueError(f"invalid object type: \"{otype}\"")
             return res
 
         def dispatch(args: WorkerArgs) -> Any:
@@ -3379,7 +3361,7 @@ class QuickServer(http_server.HTTPServer):
                     new_od["fun"] = fun
                     new_od["child"] = {}
                 else:
-                    raise ValueError(f"invalid object type: '{otype}'")
+                    raise ValueError(f"invalid object type: \"{otype}\"")
                 odisp[p] = new_od
             else:
                 odisp = odisp[p].get("child", {})
@@ -3727,3 +3709,21 @@ class QuickServer(http_server.HTTPServer):
             f"{repr(request)} in {thread.name}",
             traceback.format_exc(),
             msg)
+
+
+def create_server(
+        server_address: tuple[str, int],
+        *,
+        parallel: bool = True,
+        thread_factory: Callable[..., threading.Thread] | None = None,
+        token_handler: TokenHandler | None = None,
+        worker_constructor: Callable[..., BaseWorker] | None = None,
+        soft_worker_death: bool = False) -> QuickServer:
+    """Creates the server."""
+    return QuickServer(
+        server_address,
+        parallel,
+        thread_factory,
+        token_handler,
+        worker_constructor,
+        soft_worker_death)
