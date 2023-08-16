@@ -7,6 +7,7 @@ help:
 	@echo "pack	build the library"
 	@echo "publish	publish the library on pypi"
 	@echo "run-test	run all tests"
+	@echo "pre-commit 	sort python package imports using isort"
 
 export LC_ALL=C
 export LANG=C
@@ -16,7 +17,7 @@ VERSION=`echo "import quick_server;print(quick_server.__version__)" | python3 2>
 
 install:
 	$(PYTHON) -m pip install --progress-bar off --upgrade pip
-	$(PYTHON) -m pip install --progress-bar off --upgrade mypy==0.991 pylint==2.15.10
+	$(PYTHON) -m pip install --progress-bar off --upgrade mypy==0.991 pylint==2.15.10 pre-commit==3.0.3
 	$(PYTHON) -m pip install --progress-bar off --upgrade -e .
 
 lint-type-check:
@@ -44,3 +45,7 @@ publish: git-check pack
 
 run-test:
 	$(PYTHON) test/run.py $(SKIP)
+
+pre-commit:
+	pre-commit install
+	isort .
