@@ -87,7 +87,7 @@ A ``POST`` request in ``JSON`` format:
     from quick_server import QuickServerRequestHandler, ReqArgs
 
     @server.json_post("/json_request", 0)  # creates a request at http://localhost:8080/json_request -- 0 additional path segments are allowed
-    def json_request(req: QuickServerRequestHandler, args: ReqArgs) -> dict:
+    def _json_request(req: QuickServerRequestHandler, args: ReqArgs) -> dict:
         return {
             "post": args["post"],
         }
@@ -97,7 +97,7 @@ A ``GET`` request as ``plain text``:
 .. code:: python
 
     @server.text_get("/text_request")  # creates a request at http://localhost:8080/text_request -- additional path segments are allowed
-    def text_request(req: QuickServerRequestHandler, args: ReqArgs) -> str:
+    def _text_request(req: QuickServerRequestHandler, args: ReqArgs) -> str:
         return "plain text"
 
 Other forms of requests are also supported, namely ``DELETE`` and ``PUT``.
@@ -141,7 +141,7 @@ passed through the middleware and can be modified by it.
 
     @server.json_post("/user_details")
     @server.middleware(check_login)
-    def json_request(req: QuickServerRequestHandler, args: ReqArgs) -> dict:
+    def _user_details(req: QuickServerRequestHandler, args: ReqArgs) -> dict:
         return {
             "success": True,
             "username": args["meta"]["username"],
@@ -178,7 +178,7 @@ A worker request can be set up on the server side with
     from quick_server import WorkerArgs
 
     @server.json_worker("/json_worker")
-    def json_worker(post: WorkerArgs) -> dict:
+    def _json_worker(post: WorkerArgs) -> dict:
         # post contains all post arguments
         # ...
         # long, slow computation
@@ -235,7 +235,7 @@ Then caching can be used for workers:
     @server.json_worker("/json_worker", cache_id=lambda args: {
             ...  # uniquely identify the task from its arguments (must be JSON convertible)
         })
-    def json_worker(post: WorkerArgs) -> dict:
+    def _json_worker(post: WorkerArgs) -> dict:
         # ...
         # long, slow computation
         return myresult  # myresult must be JSON convertible
@@ -305,7 +305,7 @@ The server can now access (read / write) data associated with this token:
 .. code:: python
 
     @server.json_post("/json_request", 0)
-    def json_request(req: QuickServerRequestHandler, args: ReqArgs) -> ...:
+    def _json_request(req: QuickServerRequestHandler, args: ReqArgs) -> ...:
         # assuming the token-id was sent via post
         # expire can be the expiration time in seconds of a token,
         # None for no expiration, or be omitted for the default expiration (1h)
