@@ -108,7 +108,7 @@ def run() -> None:
     def check_login(
             _req: QuickServerRequestHandler,
             args: ReqArgs,
-            okay: ReqNext) -> ReqNext | dict[str, str]:
+            okay: ReqNext) -> ReqNext | Response | dict[str, str]:
         token = args["query"].get("token")
         if token == "secret":
             args["meta"]["username"] = "user"
