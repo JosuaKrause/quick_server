@@ -3,6 +3,7 @@ help:
 	@echo "install	install the library for local development (this is not meant for installing it to be used elsewhere)"
 	@echo "lint-type-check	run type check"
 	@echo "lint-pylint	run linter check using pylint standard"
+	@echo "lint-all	run all lints"
 	@echo "git-check	ensure that the working directory is clean"
 	@echo "pack	build the library"
 	@echo "publish	publish the library on pypi"
@@ -26,6 +27,10 @@ lint-type-check:
 lint-pylint:
 	sh/findpy.sh | sort
 	sh/findpy.sh | sort | xargs $(PYTHON) -m pylint -j 6 -v
+
+lint-all: \
+	lint-pylint \
+	lint-type-check
 
 git-check:
 	@git diff --exit-code 2>&1 >/dev/null && git diff --cached --exit-code 2>&1 >/dev/null || (echo "working copy is not clean" && exit 1)
