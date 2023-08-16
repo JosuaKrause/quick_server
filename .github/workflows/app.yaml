@@ -1,0 +1,57 @@
+name: Python Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+
+jobs:
+  lints_pipeline:
+    name: Lints CI Pipeline
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: [
+          '3.10',
+          '3.11',
+        ]
+    env:
+      ENV: CI
+      PYTHON: python
+      QUICK_SERVER_DEBUG: 1
+      RUN_ATEXIT: 1
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python }}
+
+    - name: Cache python modules
+      uses: actions/cache@v2
+      with:
+        path: ${{ env.pythonLocation }}
+        key: v1-${{ env.pythonLocation }}-${{ hashFiles('Makefile') }}-${{ hashFiles('MANIFEST.in') }}-${{ hashFiles('setup.cfg') }}-${{ hashFiles('pyproject.toml') }}
+
+    - name: Install dependencies
+      run: |
+        PYTHON=${{ env.PYTHON }} make install
+
+    - name: Lint Code (type-check)
+      run: |
+        PYTHON=${{ env.PYTHON }} make lint-type-check
+
+    - name: Tests
+      run: |
+        PYTHON=${{ env.PYTHON }} make run-test
+
+    - name: Lint Code (pylint)
+      run: |
+        PYTHON=${{ env.PYTHON }} make lint-pylint

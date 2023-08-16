@@ -1,0 +1,127 @@
+[tool.isort]
+    extend_skip = [".json", ".md"]
+    profile = "black"
+    include_trailing_comma = true
+    line_length = 79
+    force_alphabetical_sort_within_sections = true
+    skip_glob = []
+    multi_line_output = 3
+    lines_after_imports = 2
+
+[tool.pylint.BASIC]
+    good-names = [
+        "_",
+        "a",
+        "ax",
+        "b",
+        "c",
+        "ci",
+        "cm",
+        "db",
+        "df",
+        "e",
+        "el",
+        "f",
+        "fn",
+        "fn",
+        "fp",
+        "fs",
+        "ft",
+        "gc",
+        "io",
+        "ip",
+        "ix",
+        "jx",
+        "k",
+        "le",
+        "lr",
+        "m",
+        "ms",
+        "n",
+        "nl",
+        "op",
+        "p",
+        "pf",
+        "q",
+        "qa",
+        "r",
+        "s",
+        "t",
+        "th",
+        "tn",
+        "tp",
+        "tz",
+        "v",
+        "w",
+        "ws",
+        "x",
+        "x1",
+        "x2",
+        "y",
+        "y1",
+        "y2",
+    ]
+    bad-names = [
+        "i",
+        "j",
+    ]
+
+[tool.pylint."MESSAGES CONTROL"]
+    disable = [
+        "duplicate-code",
+        "fixme",
+        "global-statement",
+        "import-outside-toplevel",
+        "invalid-unary-operand-type",
+        "missing-docstring",
+        "not-an-iterable",
+        "not-callable",
+        "too-many-arguments",
+        "too-many-branches",
+        "too-many-instance-attributes",
+        "too-many-lines",
+        "too-many-locals",
+        "too-many-public-methods",
+        "too-many-return-statements",
+        "too-many-statements",
+        "unsubscriptable-object"
+    ]
+    enable = "useless-suppression"
+
+[tool.pylint.VARIABLES]
+    init-import = "yes"
+
+[tool.pylint.IMPORTS]
+    allow-wildcard-with-all = "yes"
+
+[tool.pylint.TYPECHECK]
+    generated-members = []
+    ignored-modules = []
+
+[tool.pylint]
+    init-hook = "import sys; sys.path.append('.')"
+
+[tool.pytest.ini_options]
+    filterwarnings = [
+        "error",
+        "ignore::DeprecationWarning",
+        "ignore::RuntimeWarning",
+        "ignore::ImportWarning",
+    ]
+
+[tool.coverage.run]
+    branch = true
+    omit = [
+        "*/__init__*",
+        "*/sitecustomize*",
+        "*/test/*",
+    ]
+
+[tool.coverage.report]
+    exclude_lines = [
+        "if TYPE_CHECKING:",
+        "raise NotImplementedError()",
+    ]
+
+[tool.coverage.html]
+    directory = "coverage/html_report"

@@ -1,13 +1,12 @@
 /**
- * !!! This file can be found as worker.legacy.js in the quick_server folder !!!
+ * !!! This file can be found as worker.js in the quick_server folder !!!
  *
  * Provides worker oriented networking interface.
- * This version does not need a transpiler and can be loaded directly in HTML.
  *
- * Created by krause on 2019-03-06.
+ * Created by krause on 2016-06-22.
  */
 
-window.CONFIG = {
+export const CONFIG = {
   preDelay: 500,
   timeStart: 500,
   // has to be below 2min so the server doesn't remove the result
@@ -18,9 +17,9 @@ window.CONFIG = {
   // animation: ['/', '-', '\\', '|'],
   animationTime: 300,
 };
-window.VERSION = '0.7.15';
+export const VERSION = '0.8.0';
 
-class Worker {
+export class Worker {
   constructor() {
     window.addEventListener('beforeunload', () => {
       Object.keys(this._tokens).forEach((ref) => {
@@ -342,5 +341,3 @@ class Worker {
     });
   } // cancel
 } // Worker
-
-window.Worker = Worker;
