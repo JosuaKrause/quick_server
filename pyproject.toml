@@ -86,6 +86,7 @@
         "too-many-statements",
         "unsubscriptable-object"
     ]
+    enable = "useless-suppression"
 
 [tool.pylint.VARIABLES]
     init-import = "yes"

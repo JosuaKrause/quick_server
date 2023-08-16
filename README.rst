@@ -84,8 +84,10 @@ A ``POST`` request in ``JSON`` format:
 
 .. code:: python
 
+    from quick_server import QuickServerRequestHandler, ReqArgs
+
     @server.json_post("/json_request", 0)  # creates a request at http://localhost:8080/json_request -- 0 additional path segments are allowed
-    def json_request(req, args):
+    def json_request(req: QuickServerRequestHandler, args: ReqArgs) -> dict:
         return {
             "post": args["post"],
         }
@@ -95,17 +97,55 @@ A ``GET`` request as ``plain text``:
 .. code:: python
 
     @server.text_get("/text_request")  # creates a request at http://localhost:8080/text_request -- additional path segments are allowed
-    def text_request(req, args):
+    def text_request(req: QuickServerRequestHandler, args: ReqArgs) -> str:
         return "plain text"
 
 Other forms of requests are also supported, namely ``DELETE`` and ``PUT``.
 
 ``args`` is an object holding all request arguments.
-``args['query']`` contains URL query arguments.
-``args['fragment']`` contains the URL fragment part.
-``args['paths']`` contains the remaining path segments.
-``args['post']`` contains the posted content.
-``args['files']`` contains uploaded files.
+``args["query"]`` contains URL query arguments.
+``args["fragment"]`` contains the URL fragment part.
+``args["paths"]`` contains the remaining path segments.
+``args["post"]`` contains the posted content.
+``args["files"]`` contains uploaded files.
+``args["meta"]`` starts as empty dict but allows to add additional
+info to a request without conflicting with the other fields.
+
+Adding Middleware
+~~~~~~~~~~~~~~~~~
+
+Middleware can be added for common operations that apply for many endpoints
+such as, e.g., login token verification. The request and argument objects are
+passed through the middleware and can be modified by it.
+
+.. code:: python
+
+    from quick_server import PreventDefaultResponse, Response, ReqNext
+
+    def check_login(req: QuickServerRequestHandler, args: ReqArgs, okay: ReqNext) -> ReqNext | dict:
+        if is_valid(args["post"].get("token")):
+            args["meta"]["username"] = ...  # we can manipulate the args object
+            return okay  # proceed with the next middleware / main request
+        # Response allows to return non-default status codes.
+        # It can be used in normal request functions as well.
+        return Response("Authentication Required", 401)
+        # Alternatively we could just return a normal response with details here
+        return {
+            "success": False,
+            "msg": ...,
+        }
+        # If a non-control flow response is needed the PreventDefaultResponse
+        # exception allows to return non-default status codes from anywhere.
+        # This also works in normal request functions as well.
+        raise PreventDefaultResponse(401, "Authentication Required")
+
+    @server.json_post("/user_details")
+    @server.middleware(check_login)
+    def json_request(req: QuickServerRequestHandler, args: ReqArgs) -> dict:
+        return {
+            "success": True,
+            "username": args["meta"]["username"],
+        }
 
 Worker threads and caching
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -135,12 +175,14 @@ A worker request can be set up on the server side with
 
 .. code:: python
 
+    from quick_server import WorkerArgs
+
     @server.json_worker("/json_worker")
-    def json_worker(post):
+    def json_worker(post: WorkerArgs) -> dict:
         # post contains all post arguments
         # ...
         # long, slow computation
-        return myresult # myresult must be JSON convertible
+        return myresult  # myresult must be JSON convertible
 
 and accessed from the client. An instance of the ``Worker`` class is
 needed:
@@ -149,6 +191,7 @@ needed:
 
     var work = new quick_server.Worker();
     work.status((req) => {
+      ...
       // req contains the number of currently active requests (-1 indicates an error state)
       // it can be used to tell the user that something is happening
     });
@@ -160,9 +203,10 @@ Accessing the worker:
     // the first argument identifies worker jobs
     // jobs with the same name get replaced when a new one has been started
     // the second argument is the URL
-    work.post("worker_name", "json_worker", {
-      // this object will appear as args on the server side
+    work.post('worker_name', 'json_worker', {
+      ... // this object will appear as args on the server side
     }, (data) => {
+      ...
       // data is the result of the worker function of the server side
       // this function is only called if the request was successful
     });
@@ -171,7 +215,7 @@ A worker can be cancelled using its name:
 
 .. code:: javascript
 
-    work.cancel("worker_name");
+    work.cancel('worker_name');
 
 Note that all running workers are cancelled when the page is unloaded.
 
@@ -189,12 +233,12 @@ Then caching can be used for workers:
 .. code:: python
 
     @server.json_worker("/json_worker", cache_id=lambda args: {
-            # uniquely identify the task from its arguments (must be JSON convertible)
+            ...  # uniquely identify the task from its arguments (must be JSON convertible)
         })
-    def json_worker(post):
+    def json_worker(post: WorkerArgs) -> dict:
         # ...
         # long, slow computation
-        return myresult # myresult must be JSON convertible
+        return myresult  # myresult must be JSON convertible
 
 Note that caching can also be used for other types of requests.
 
@@ -254,20 +298,19 @@ For that the server must send the token-id to the client:
 
 .. code:: python
 
-    server.create_token() # creates a new token -- send this to the client
+    server.create_token()  # creates a new token -- send this to the client
 
 The server can now access (read / write) data associated with this token:
 
 .. code:: python
 
     @server.json_post("/json_request", 0)
-    def json_request(req, args):
+    def json_request(req: QuickServerRequestHandler, args: ReqArgs) -> ...:
         # assuming the token-id was sent via post
         # expire can be the expiration time in seconds of a token,
         # None for no expiration, or be omitted for the default expiration (1h)
         with server.get_token_obj(args["post"]["token"], expire=None) as obj:
-            # do stuff with obj
-            # ...
+            ...  # do stuff with obj
 
 CORS and proxying
 ~~~~~~~~~~~~~~~~~
@@ -297,7 +340,7 @@ available commands), ``restart`` (restart the server), and ``quit``
 .. code:: python
 
     @server.cmd()
-    def name(args):  # creates the command name
+    def name(args: list[str]) -> None:  # creates the command name
         if not args:
             msg("hello")
         else:
@@ -310,13 +353,13 @@ clear caches. This show-cases also auto-complete functionality:
 
 .. code:: python
 
-    def complete_cache_clear(args, text):  # args contains already completed arguments; text the currently started one
+    def complete_cache_clear(args: list[str], text: str) -> list[str]:  # args contains already completed arguments; text the currently started one
         if args:  # we only allow up to one argument
             return []
         return [ section for section in cache.list_sections() if section.startswith(text) ]  # cache is the quick_cache object
 
     @server.cmd(complete=complete_cache_clear)
-    def cache_clear(args):
+    def cache_clear(args: list[str]) -> None:
         if len(args) > 1: # we only allow up to one argument
           msg(f"too many extra arguments! expected one got {' '.join(args)}")
           return

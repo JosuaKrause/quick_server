@@ -3,7 +3,8 @@
 from time import monotonic
 from typing import TypedDict
 
-from quick_server import QuickServerRequestHandler, ReqArgs, create_server, msg
+from quick_server import create_server, msg, QuickServerRequestHandler, ReqArgs
+
 
 ResUptime = TypedDict('ResUptime', {
     "uptime": str,
@@ -44,13 +45,13 @@ def run() -> None:
     @server.json_get("/api/:version/a/b/c/d")
     def _version(_req: QuickServerRequestHandler, args: ReqArgs) -> ResVersion:
         return {
-            "version": args.get("segments", {}).get("version"),
+            "version": args["segments"].get("version"),
         }
 
     @server.json_get("/api/foo/:foo")
     def _foo(_req: QuickServerRequestHandler, args: ReqArgs) -> ResFoo:
         return {
-            "foo": args.get("segments", {}).get("foo"),
+            "foo": args["segments"].get("foo"),
         }
 
     def complete_requests(_args: list[str], text: str) -> list[str]:

@@ -2,6 +2,7 @@ import json
 import time
 from typing import Any, Dict
 
+
 try:
     import requests  # type: ignore
 except ImportError:

@@ -29,6 +29,7 @@ Please refer to the example folder for usage examples.
 
 from setuptools import setup  # type: ignore
 
+
 # NOTE! steps to distribute:
 # $ make publish
 

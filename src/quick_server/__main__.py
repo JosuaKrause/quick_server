@@ -3,6 +3,7 @@ import sys
 
 from .quick_server import __version__, create_server, msg, setup_restart
 
+
 if __name__ == "__main__":
     setup_restart()
 

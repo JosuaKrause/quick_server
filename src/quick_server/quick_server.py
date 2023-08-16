@@ -50,13 +50,25 @@ import uuid
 import zlib
 from http.server import SimpleHTTPRequestHandler
 from io import BytesIO, StringIO
-from typing import (Any, BinaryIO, Callable, ContextManager, Iterator, Set,
-                    TextIO, TypeVar, cast)
+from typing import (
+    Any,
+    BinaryIO,
+    Callable,
+    cast,
+    ContextManager,
+    Generic,
+    Iterator,
+    Protocol,
+    Set,
+    TextIO,
+    TypeVar,
+)
 from urllib import parse as urlparse
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from typing_extensions import Literal, TypedDict
+
 
 try:
     # NOTE: avoid pyarrow atexit error
@@ -64,12 +76,19 @@ try:
 except (ModuleNotFoundError, ImportError) as _:
     pass
 
+
 WorkerArgs = dict[str, Any]
 TokenObj = dict[str, Any]
 CacheIdObj = dict[str, Any]
 
-CmdF = TypeVar(  # pylint: disable=invalid-name
-    'CmdF', bound=Callable[[list[str]], None])
+
+class CmdF(Protocol):  # pylint: disable=too-few-public-methods
+    def __call__(self, args: list[str], /) -> None: ...
+
+
+class CmdCompleteF(Protocol):  # pylint: disable=too-few-public-methods
+    def __call__(self, args: list[str], text: str, /) -> list[str] | None: ...
+
 
 ReqArgs = TypedDict('ReqArgs', {
     "paths": list[str],
@@ -78,13 +97,42 @@ ReqArgs = TypedDict('ReqArgs', {
     "files": dict[str, BytesIO],
     "fragment": str,
     "segments": dict[str, str],
-}, total=False)
+    "meta": dict[str, Any],
+})
 
-ReqF = TypeVar(  # pylint: disable=invalid-name
-    'ReqF', bound=Callable[['QuickServerRequestHandler', ReqArgs], Any])
 
-WorkerF = TypeVar(  # pylint: disable=invalid-name
-    'WorkerF', bound=Callable[[WorkerArgs], Any])
+class ReqNext:  # pylint: disable=too-few-public-methods
+    pass
+
+
+A_co = TypeVar('A_co', covariant=True)
+B_co = TypeVar('B_co', covariant=True)
+R_co = TypeVar('R_co', covariant=True)
+
+
+class ReqF(Protocol, Generic[R_co]):  # pylint: disable=too-few-public-methods
+    def __call__(
+            self, req: 'QuickServerRequestHandler', args: ReqArgs, /) -> R_co:
+        ...
+
+
+class MiddlewareF(  # pylint: disable=too-few-public-methods
+        Protocol, Generic[R_co]):
+    def __call__(
+            self,
+            req: 'QuickServerRequestHandler',
+            args: ReqArgs,
+            okay: ReqNext,
+            /) -> R_co:
+        ...
+
+
+class WorkerF(  # pylint: disable=too-few-public-methods
+        Protocol, Generic[R_co]):
+    def __call__(
+            self, args: WorkerArgs, /) -> R_co:
+        ...
+
 
 PostFileLens = TypedDict('PostFileLens', {
     "clen": int,
@@ -111,26 +159,46 @@ MirrorObj = TypedDict('MirrorObj', {
     "lock": threading.RLock,
 })
 
-DispatchObj = TypedDict('DispatchObj', {
-    "map": dict[str, Any],
-    "fun": Callable[..., Any],
-    "value": Any,
-    "type": str,
-    "child": dict[str, Any],
-}, total=False)
-
-ActionObj = TypedDict('ActionObj', {
-    "queries": list[Any],
-    "type": str,
-    "value": Any,
-})
-
 CmdState = TypedDict('CmdState', {
     "suggestions": list[str],
     "clean_up_lock": threading.Lock,
     "clean": bool,
     "line": str,
 })
+
+ErrHandler = Callable[[str, str, list[str]], None]
+PrintF = Callable[[str], None]
+ThreadFactory = Callable[..., threading.Thread]
+WorkerThreadFactory = Callable[[], threading.Thread]
+
+
+class Response:
+    def __init__(
+            self,
+            response: str | bytes | StringIO | BytesIO | None,
+            code: int = 200,
+            ctype: str | None = None) -> None:
+        """Constructs a response."""
+        self.response = response
+        self.code = code
+        self._ctype = ctype
+
+    def __str__(self) -> str:
+        ctype = f" {self._ctype}" if self._ctype is not None else ""
+        return (
+            f"{self.__class__.__name__}"
+            f"[{self.code}{ctype}]"
+        )
+
+    def get_ctype(self, ctype: str) -> str:
+        """Returns the content type with the given default value."""
+        if self._ctype is not None:
+            return self._ctype
+        return ctype
+
+
+AnyStrResponse = TypeVar(
+    'AnyStrResponse', bound=bytes | str | Response | BytesIO | StringIO | None)
 
 
 def get_time() -> float:
@@ -289,11 +357,10 @@ ERR_SOURCE_RESTART = "err_restart"
 ERR_SOURCE_WORKER = "err_worker"
 
 
-ERR_HND: Callable[[str, str, list[str]], None] | None = None
+ERR_HND: ErrHandler | None = None
 
 
-def set_global_error_handler(
-        fun: Callable[[str, str, list[str]], None] | None) -> None:
+def set_global_error_handler(fun: ErrHandler | None) -> None:
     """Sets the error handler."""
     global ERR_HND
 
@@ -304,7 +371,7 @@ def global_handle_error(
         source: str,
         errmsg: str,
         tback: str,
-        mfun: Callable[[str], None]) -> None:
+        mfun: PrintF) -> None:
     """The default error handler."""
     if ERR_HND is None:
         mfun(f"ERROR in {source}: {errmsg}\n{tback}")
@@ -492,7 +559,7 @@ class WorkerDeath(Exception):
 def kill_thread(
         th: threading.Thread,
         cur_key: str,
-        msgout: Callable[[str], None],
+        msgout: PrintF,
         is_verbose_workers: Callable[[], bool]) -> None:
     """Kills a running thread."""
     # pylint: disable=protected-access
@@ -615,7 +682,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         args["fragment"] = (
             urlparse.unquote(fragment_split[1])
             if len(fragment_split) > 1 else
-            "")
+            ""
+        )
         return args
 
     def get_post_file(
@@ -801,8 +869,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
         path = self.path
         # interpreting the URL masks to find which method to call
-        method: Callable[
-            [QuickServerRequestHandler, ReqArgs], BytesIO | None] | None = None
+        method: ReqF[BytesIO | None] | None = None
         method_mask = None
         rem_path = ""
         segments: dict[str, str] = {}
@@ -840,8 +907,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             return is_m, cur_path, segs
 
         def execute(
-                method: Callable[
-                    [QuickServerRequestHandler, ReqArgs], BytesIO | None],
+                method: ReqF[BytesIO | None],
                 args: ReqArgs) -> None:
             f: BytesIO | None = None
             try:
@@ -866,7 +932,13 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         assert method_mask is not None
         files: dict[str, BytesIO] = {}
         args: ReqArgs = {
+            "paths": [],
+            "query": {},
+            "post": {},
+            "files": {},
+            "fragment": "",
             "segments": segments,
+            "meta": {},
         }
         try:
             # POST can accept forms encoded in JSON
@@ -882,8 +954,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     ctype = ctype[:splix].strip()
                 clen = int(_GETHEADER(self.headers, "content-length"))
                 if ctype == "multipart/form-data":
-                    args["post"] = {}
-                    args["files"] = {}
                     self.get_post_file(
                         hdr=crest,
                         f_in=self.rfile,
@@ -1604,14 +1674,14 @@ class BaseWorker:
     def __init__(
             self,
             mask: str,
-            fun: Callable[[WorkerArgs], str],
+            fun: WorkerF[str],
             *,
-            log: Callable[[str], None],
+            log: PrintF,
             cache_id: Callable[[CacheIdObj], Any] | None,
             cache: Any,
             cache_method: str,
             cache_section: str,
-            thread_factory: Callable[..., threading.Thread],
+            thread_factory: ThreadFactory,
             name_prefix: str,
             soft_worker_death: bool,
             get_max_chunk_size: Callable[[], int],
@@ -1676,7 +1746,7 @@ class BaseWorker:
     def add_task(
             self,
             cur_key: str,
-            get_thread: Callable[..., threading.Thread],
+            get_thread: ThreadFactory,
             soft_death: bool) -> None:
         """Marks a key as actually running. The thread executing the worker
            can be retrieved via `get_thread`. `soft_death` indicates whether
@@ -1706,7 +1776,7 @@ class BaseWorker:
             self,
             args: WorkerArgs,
             cur_key: str,
-            get_thread: Callable[[], threading.Thread]) -> None:
+            get_thread: WorkerThreadFactory) -> None:
         try:
             self.add_task(cur_key, get_thread, self._soft_worker_death)
             if self._cache_id is not None:
@@ -1980,7 +2050,7 @@ class DefaultWorker(BaseWorker):
     def add_task(
             self,
             cur_key: str,
-            get_thread: Callable[[], threading.Thread],
+            get_thread: WorkerThreadFactory,
             soft_death: bool) -> None:
         with self._lock:
             task: WorkerTask = {
@@ -2032,31 +2102,6 @@ class DefaultWorker(BaseWorker):
                 "thread": None,
             }
             return cur_key
-
-
-class Response:
-    def __init__(
-            self,
-            response: str | bytes | StringIO | BytesIO,
-            code: int = 200,
-            ctype: str | None = None) -> None:
-        """Constructs a response."""
-        self.response = response
-        self.code = code
-        self._ctype = ctype
-
-    def __str__(self) -> str:
-        ctype = f" {self._ctype}" if self._ctype is not None else ""
-        return (
-            f"{self.__class__.__name__}"
-            f"[{self.code}{ctype}]"
-        )
-
-    def get_ctype(self, ctype: str) -> str:
-        """Returns the content type with the given default value."""
-        if self._ctype is not None:
-            return self._ctype
-        return ctype
 
 
 def construct_multipart_response(
@@ -2118,7 +2163,7 @@ class QuickServer(http_server.HTTPServer):
             self,
             server_address: tuple[str, int],
             parallel: bool = True,
-            thread_factory: Callable[..., threading.Thread] | None = None,
+            thread_factory: ThreadFactory | None = None,
             token_handler: TokenHandler | None = None,
             worker_constructor: Callable[[], BaseWorker] | None = None,
             soft_worker_death: bool = False):
@@ -2251,15 +2296,13 @@ class QuickServer(http_server.HTTPServer):
         self._soft_worker_death = soft_worker_death
         self._folder_masks: list[tuple[str, str]] = []
         self._folder_proxys: list[tuple[str, str]] = []
-        self._f_mask: dict[str, list[tuple[str, Callable[
-            [QuickServerRequestHandler, ReqArgs], BytesIO | None]]]] = {}
+        self._f_mask: dict[str, list[tuple[str, ReqF[BytesIO | None]]]] = {}
         self._f_argc: dict[str, int | None] = {}
         self._pattern_black: list[str] = []
         self._pattern_white: list[str] = []
-        self._cmd_methods: dict[str, Callable[[list[str]], None]] = {}
+        self._cmd_methods: dict[str, CmdF] = {}
         self._cmd_argc: dict[str, int | None] = {}
-        self._cmd_complete: dict[str, Callable[
-            [list[str], str], list[str] | None] | None] = {}
+        self._cmd_complete: dict[str, CmdCompleteF | None] = {}
         self._cmd_lock = threading.Lock()
         self._cmd_start = False
         self._clean_up_call: Callable[[], None] | None = None
@@ -2272,7 +2315,6 @@ class QuickServer(http_server.HTTPServer):
             "files": [],
             "lock": threading.RLock(),
         }
-        self._object_dispatch: dict[str, DispatchObj] | None = None
         self._file_fallback_cb: Callable[[str], str] | None = None
 
     def __str__(self) -> str:
@@ -2287,7 +2329,6 @@ class QuickServer(http_server.HTTPServer):
             client_address: tuple[str, int]) -> None:
         """Actually processes the request."""
         try:
-            # FIXME
             self.finish_request(request, client_address)  # type: ignore
         except Exception:  # pylint: disable=broad-except
             self.handle_error(request, client_address)
@@ -2376,10 +2417,9 @@ class QuickServer(http_server.HTTPServer):
     def add_cmd_method(
             self,
             name: str,
-            method: Callable[[list[str]], None],
+            method: CmdF,
             argc: int | None = None,
-            complete: Callable[
-                [list[str], str], list[str] | None] | None = None) -> None:
+            complete: CmdCompleteF | None = None) -> None:
         """Adds a command to the command line interface loop.
 
         Parameters
@@ -2427,8 +2467,7 @@ class QuickServer(http_server.HTTPServer):
             self,
             start: str,
             method_str: str,
-            method: Callable[
-                [QuickServerRequestHandler, ReqArgs], BytesIO | None]) -> None:
+            method: ReqF[BytesIO | None]) -> None:
         """Adds a raw file mask for dynamic requests.
 
         Parameters
@@ -2461,9 +2500,7 @@ class QuickServer(http_server.HTTPServer):
             self,
             start: str,
             method_str: str,
-            json_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+            json_producer: ReqF) -> None:
         """Adds a handler that produces a JSON response.
 
         Parameters
@@ -2486,16 +2523,16 @@ class QuickServer(http_server.HTTPServer):
         """
 
         def send_json(
-                drh: QuickServerRequestHandler,
-                rem_path: ReqArgs) -> BytesIO | None:
-            obj = json_producer(drh, rem_path)
+                req: QuickServerRequestHandler,
+                args: ReqArgs) -> BytesIO | None:
+            obj = json_producer(req, args)
             if not isinstance(obj, Response):
                 obj = Response(obj)
             ctype = obj.get_ctype("application/json")
             code = obj.code
             obj = obj.response
             if obj is None:
-                drh.send_error(404, "File not found")
+                req.send_error(404, "File not found")
                 return None
             f = BytesIO()
             json_str = json_dumps(obj)
@@ -2510,31 +2547,28 @@ class QuickServer(http_server.HTTPServer):
             size = f.tell()
             f.seek(0)
             # handle ETag caching
-            if drh.request_version >= "HTTP/1.1":
+            if req.request_version >= "HTTP/1.1":
                 e_tag = f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"
                 f.seek(0)
-                match = _GETHEADER(drh.headers, "if-none-match")
+                match = _GETHEADER(req.headers, "if-none-match")
                 if match is not None:
-                    if drh.check_cache(e_tag, match):
+                    if req.check_cache(e_tag, match):
                         f.close()
                         return None
-                drh.send_header("ETag", e_tag, end_header=True)
-                drh.send_header(
+                req.send_header("ETag", e_tag, end_header=True)
+                req.send_header(
                     "Cache-Control",
                     f"max-age={self.max_age}",
                     end_header=True)
-            drh.send_response(code)
-            drh.send_header("Content-Type", ctype)
-            drh.send_header("Content-Length", size)
-            drh.end_headers()
+            req.send_response(code)
+            req.send_header("Content-Type", ctype)
+            req.send_header("Content-Length", size)
+            req.end_headers()
             return f
 
         self._add_file_mask(start, method_str, send_json)
 
-    def add_json_get_mask(
-            self, start: str, json_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+    def add_json_get_mask(self, start: str, json_producer: ReqF) -> None:
         """Adds a GET handler that produces a JSON response.
 
         Parameters
@@ -2553,10 +2587,7 @@ class QuickServer(http_server.HTTPServer):
         """
         self.add_json_mask(start, "GET", json_producer)
 
-    def add_json_put_mask(
-            self, start: str, json_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+    def add_json_put_mask(self, start: str, json_producer: ReqF) -> None:
         """Adds a PUT handler that produces a JSON response.
 
         Parameters
@@ -2575,10 +2606,7 @@ class QuickServer(http_server.HTTPServer):
         """
         self.add_json_mask(start, "PUT", json_producer)
 
-    def add_json_delete_mask(
-            self, start: str, json_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+    def add_json_delete_mask(self, start: str, json_producer: ReqF) -> None:
         """Adds a DELETE handler that produces a JSON response.
 
         Parameters
@@ -2597,10 +2625,7 @@ class QuickServer(http_server.HTTPServer):
         """
         self.add_json_mask(start, "DELETE", json_producer)
 
-    def add_json_post_mask(
-            self, start: str, json_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+    def add_json_post_mask(self, start: str, json_producer: ReqF) -> None:
         """Adds a POST handler that produces a JSON response.
 
         Parameters
@@ -2620,9 +2645,10 @@ class QuickServer(http_server.HTTPServer):
         self.add_json_mask(start, "POST", json_producer)
 
     def add_text_mask(
-            self, start: str, method_str: str, text_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+            self,
+            start: str,
+            method_str: str,
+            text_producer: ReqF[AnyStrResponse]) -> None:
         """Adds a handler that produces a plain text response.
 
         Parameters
@@ -2644,66 +2670,67 @@ class QuickServer(http_server.HTTPServer):
         """
 
         def send_text(
-                drh: QuickServerRequestHandler,
-                rem_path: ReqArgs) -> BytesIO | None:
-            text = text_producer(drh, rem_path)
-            if not isinstance(text, Response):
-                text = Response(text)
-            ctype = text.get_ctype("text/plain")
-            code = text.code
-            text = text.response
-            if text is None:
-                drh.send_error(404, "File not found")
+                req: QuickServerRequestHandler,
+                args: ReqArgs) -> BytesIO | None:
+            text = text_producer(req, args)
+            if isinstance(text, Response):
+                resp = text
+            else:
+                resp = Response(
+                    cast(str | bytes | StringIO | BytesIO | None, text))
+            ctype = resp.get_ctype("text/plain")
+            code = resp.code
+            val = resp.response
+            if val is None:
+                req.send_error(404, "File not found")
                 return None
-            if hasattr(text, "read"):
-                if hasattr(text, "seek"):
-                    f = text
+            if hasattr(val, "read"):
+                if hasattr(val, "seek"):
+                    f = val
                     size = f.seek(0, os.SEEK_END)  # type: ignore
                     f.seek(0)  # type: ignore
                 else:
                     f = BytesIO()
-                    shutil.copyfileobj(text, f, length=16*1024)  # type: ignore
+                    shutil.copyfileobj(val, f, length=16*1024)  # type: ignore
                     size = f.tell()
                     f.seek(0)
             else:
                 f = BytesIO()
-                if isinstance(text, (str, bytes)):
+                if isinstance(val, (str, bytes)):
                     try:
-                        text = text.decode("utf-8")  # type: ignore
+                        val = val.decode("utf-8")  # type: ignore
                     except AttributeError:
                         pass
-                    text = text.encode("utf-8")  # type: ignore
-                f.write(text)  # type: ignore
+                    val = val.encode("utf-8")  # type: ignore
+                f.write(val)  # type: ignore
                 f.flush()
                 size = f.tell()
                 f.seek(0)
             # handle ETag caching
-            if drh.request_version >= "HTTP/1.1" and hasattr(f, "seek"):
+            if req.request_version >= "HTTP/1.1" and hasattr(f, "seek"):
                 e_tag = \
                     f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"  # type: ignore
                 f.seek(0)  # type: ignore
-                match = _GETHEADER(drh.headers, "if-none-match")
+                match = _GETHEADER(req.headers, "if-none-match")
                 if match is not None:
-                    if drh.check_cache(e_tag, match):
+                    if req.check_cache(e_tag, match):
                         f.close()  # type: ignore
                         return None
-                drh.send_header("ETag", e_tag, end_header=True)
-                drh.send_header(
+                req.send_header("ETag", e_tag, end_header=True)
+                req.send_header(
                     "Cache-Control",
                     f"max-age={self.max_age}",
                     end_header=True)
-            drh.send_response(code)
-            drh.send_header("Content-Type", ctype)
-            drh.send_header("Content-Length", size)
-            drh.end_headers()
+            req.send_response(code)
+            req.send_header("Content-Type", ctype)
+            req.send_header("Content-Length", size)
+            req.end_headers()
             return f  # type: ignore
 
         self._add_file_mask(start, method_str, send_text)
 
     def add_text_get_mask(
-            self, start: str, text_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+            self, start: str, text_producer: ReqF[AnyStrResponse]) -> None:
         """Adds a GET handler that produces a plain text response.
 
         Parameters
@@ -2722,9 +2749,7 @@ class QuickServer(http_server.HTTPServer):
         self.add_text_mask(start, "GET", text_producer)
 
     def add_text_put_mask(
-            self, start: str, text_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+            self, start: str, text_producer: ReqF[AnyStrResponse]) -> None:
         """Adds a PUT handler that produces a plain text response.
 
         Parameters
@@ -2743,9 +2768,7 @@ class QuickServer(http_server.HTTPServer):
         self.add_text_mask(start, "PUT", text_producer)
 
     def add_text_delete_mask(
-            self, start: str, text_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+            self, start: str, text_producer: ReqF[AnyStrResponse]) -> None:
         """Adds a DELETE handler that produces a plain text response.
 
         Parameters
@@ -2764,9 +2787,7 @@ class QuickServer(http_server.HTTPServer):
         self.add_text_mask(start, "DELETE", text_producer)
 
     def add_text_post_mask(
-            self, start: str, text_producer: Callable[
-                [QuickServerRequestHandler, ReqArgs], Any,
-            ]) -> None:
+            self, start: str, text_producer: ReqF[AnyStrResponse]) -> None:
         """Adds a POST handler that produces a plain text response.
 
         Parameters
@@ -2790,11 +2811,11 @@ class QuickServer(http_server.HTTPServer):
     def cmd(
             self,
             argc: int | None = None,
-            complete: Callable[[list[str], str], list[str]] | None = None,
+            complete: CmdCompleteF | None = None,
             no_replace: bool = False) -> Callable[[CmdF], CmdF]:
 
         def wrapper(fun: CmdF) -> CmdF:
-            name = fun.__name__
+            name = getattr(fun, "__name__")
             if not no_replace or name not in self._cmd_methods:
                 self.add_cmd_method(name, fun, argc, complete)
             return fun
@@ -2804,9 +2825,9 @@ class QuickServer(http_server.HTTPServer):
     def json_get(
             self,
             mask: str,
-            argc: int | None = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF[R_co]], ReqF[R_co]]:
 
-        def wrapper(fun: ReqF) -> ReqF:
+        def wrapper(fun: ReqF[R_co]) -> ReqF[R_co]:
             self.add_json_get_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
@@ -2816,9 +2837,9 @@ class QuickServer(http_server.HTTPServer):
     def json_put(
             self,
             mask: str,
-            argc: int | None = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF[R_co]], ReqF[R_co]]:
 
-        def wrapper(fun: ReqF) -> ReqF:
+        def wrapper(fun: ReqF[R_co]) -> ReqF[R_co]:
             self.add_json_put_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
@@ -2828,9 +2849,9 @@ class QuickServer(http_server.HTTPServer):
     def json_delete(
             self,
             mask: str,
-            argc: int | None = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF[R_co]], ReqF[R_co]]:
 
-        def wrapper(fun: ReqF) -> ReqF:
+        def wrapper(fun: ReqF[R_co]) -> ReqF[R_co]:
             self.add_json_delete_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
@@ -2840,9 +2861,9 @@ class QuickServer(http_server.HTTPServer):
     def json_post(
             self,
             mask: str,
-            argc: int | None = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None) -> Callable[[ReqF[R_co]], ReqF[R_co]]:
 
-        def wrapper(fun: ReqF) -> ReqF:
+        def wrapper(fun: ReqF[R_co]) -> ReqF[R_co]:
             self.add_json_post_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
@@ -2852,9 +2873,10 @@ class QuickServer(http_server.HTTPServer):
     def text_get(
             self,
             mask: str,
-            argc: int | None = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None,
+            ) -> Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]:
 
-        def wrapper(fun: ReqF) -> ReqF:
+        def wrapper(fun: ReqF[AnyStrResponse]) -> ReqF[AnyStrResponse]:
             self.add_text_get_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
@@ -2864,9 +2886,10 @@ class QuickServer(http_server.HTTPServer):
     def text_put(
             self,
             mask: str,
-            argc: int | None = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None,
+            ) -> Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]:
 
-        def wrapper(fun: ReqF) -> ReqF:
+        def wrapper(fun: ReqF[AnyStrResponse]) -> ReqF[AnyStrResponse]:
             self.add_text_put_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
@@ -2876,9 +2899,10 @@ class QuickServer(http_server.HTTPServer):
     def text_delete(
             self,
             mask: str,
-            argc: int | None = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None,
+            ) -> Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]:
 
-        def wrapper(fun: ReqF) -> ReqF:
+        def wrapper(fun: ReqF[AnyStrResponse]) -> ReqF[AnyStrResponse]:
             self.add_text_delete_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
@@ -2888,12 +2912,31 @@ class QuickServer(http_server.HTTPServer):
     def text_post(
             self,
             mask: str,
-            argc: int | None = None) -> Callable[[ReqF], ReqF]:
+            argc: int | None = None,
+            ) -> Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]:
 
-        def wrapper(fun: ReqF) -> ReqF:
+        def wrapper(fun: ReqF[AnyStrResponse]) -> ReqF[AnyStrResponse]:
             self.add_text_post_mask(mask, fun)
             self.set_file_argc(mask, argc)
             return fun
+
+        return wrapper
+
+    def middleware(
+            self,
+            mwfun: MiddlewareF[A_co],
+            ) -> Callable[[ReqF[B_co]], ReqF[A_co | B_co]]:
+
+        def wrapper(fun: ReqF[B_co]) -> ReqF[A_co | B_co]:
+
+            def compute(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
+                next_token = ReqNext()
+                intermediate = mwfun(req, args, next_token)
+                if intermediate is next_token:
+                    return fun(req, args)
+                return intermediate
+
+            return compute
 
         return wrapper
 
@@ -3097,7 +3140,7 @@ class QuickServer(http_server.HTTPServer):
             cache_id: Callable[[CacheIdObj], Any] | None = None,
             cache_method: str = "string",
             cache_section: str = "www",
-            ) -> Callable[[WorkerF], WorkerF]:
+            ) -> Callable[[WorkerF[R_co]], WorkerF[R_co]]:
         """A function annotation that adds a worker request. A worker request
            is a POST request that is computed asynchronously. That is, the
            actual task is performed in a different thread and the network
@@ -3149,7 +3192,7 @@ class QuickServer(http_server.HTTPServer):
             def run_worker(
                     req: QuickServerRequestHandler,
                     args: ReqArgs) -> WorkerResponse:
-                post = args.get("post", {})
+                post = args["post"]
                 # NOTE: path segment variables overwrite sent arguments
                 payload = post.get("payload", {})
                 for (key, value) in args.get("segments", {}).items():
@@ -3247,121 +3290,6 @@ class QuickServer(http_server.HTTPServer):
                 return ttl
             return max(ttl, 0)
 
-    # objects #
-
-    def _init_object_dispatch(self) -> None:
-        if self._object_dispatch is not None:
-            return
-        self._object_dispatch = {}
-
-        def do_dispatch(
-                query_obj: dict[str, ActionObj],
-                odisp: dict[str, DispatchObj],
-                parent: DispatchObj | None) -> Any:
-            res: dict[str, DispatchObj] = {}
-            for (curq, action) in query_obj.items():
-                if curq not in odisp:
-                    raise ValueError(f"unknown object name: \"{curq}\"")
-                atype = action["type"]
-                obj = odisp[curq]
-                otype = obj.get("type")
-                if otype == "value":
-                    if atype == "set":
-                        obj["value"] = action["value"]
-                    elif atype != "get":
-                        raise ValueError(f"invalid action: \"{atype}\"")
-                    res[curq] = {
-                        "value": obj.get("value"),
-                    }
-                elif otype == "lazy_value":
-                    fun = obj.get("fun")
-                    if fun is None:
-                        raise ValueError(f"invalid action: \"{atype}\"")
-                    if atype == "set":
-                        res[curq] = {
-                            "value": fun(
-                                parent, set_value=True, value=action["value"]),
-                        }
-                    elif atype == "get":
-                        res[curq] = {
-                            "value": fun(parent),
-                        }
-                    else:
-                        raise ValueError(f"invalid action: \"{atype}\"")
-                elif otype == "lazy_map":
-                    fun = obj.get("fun")
-                    if fun is None:
-                        raise ValueError(f"invalid action: \"{atype}\"")
-                    if atype != "get":
-                        raise ValueError(f"invalid action: \"{atype}\"")
-                    cur_res = {}
-                    for (name, query) in action["queries"]:
-                        next_level = fun(parent, name)
-                        cur_res[name] = do_dispatch(
-                            query, obj.get("child", {}), next_level)
-                    res[curq] = {
-                        "map": cur_res,
-                    }
-                else:
-                    raise ValueError(f"invalid object type: \"{otype}\"")
-            return res
-
-        def dispatch(args: WorkerArgs) -> Any:
-            query_obj = args["query"]
-            assert self._object_dispatch is not None
-            odisp = self._object_dispatch
-            return do_dispatch(query_obj, odisp, {})
-
-        self.json_worker(self.object_path)(dispatch)
-
-    def _add_object_dispatch(
-            self,
-            path: list[str],
-            otype: str,
-            fun: Callable[..., Any] | None = None,
-            value: Any = None) -> None:
-        self._init_object_dispatch()
-        assert self._object_dispatch is not None
-        odisp = self._object_dispatch
-        cur_p = []
-        while len(path):
-            p = path.pop(0)
-            cur_p.append(p)
-            if p not in odisp:
-                if path:
-                    raise ValueError(f"path prefix must exist: {cur_p}")
-                new_od: DispatchObj = {
-                    "type": otype,
-                }
-                if otype == "value":
-                    new_od["value"] = value
-                elif otype == "lazy_value":
-                    if fun is None:
-                        raise ValueError("must set function")
-                    new_od["fun"] = fun
-                elif otype == "lazy_map":
-                    if fun is None:
-                        raise ValueError("must set function")
-                    new_od["fun"] = fun
-                    new_od["child"] = {}
-                else:
-                    raise ValueError(f"invalid object type: \"{otype}\"")
-                odisp[p] = new_od
-            else:
-                odisp = odisp[p].get("child", {})
-
-    def add_value_object(
-            self, path: list[str], default_value: Any = None) -> None:
-        self._add_object_dispatch(path, "value", value=default_value)
-
-    def add_lazy_value_object(
-            self, path: list[str], fun: Callable[..., Any]) -> None:
-        self._add_object_dispatch(path, "lazy_value", fun=fun)
-
-    def add_lazy_map_object(
-            self, path: list[str], fun: Callable[..., Any]) -> None:
-        self._add_object_dispatch(path, "lazy_map", fun=fun)
-
     # miscellaneous #
 
     def handle_cmd(self, cmd: str) -> None:
@@ -3445,6 +3373,7 @@ class QuickServer(http_server.HTTPServer):
         @self.cmd(argc=0, no_replace=True)
         def restart(_args: list[str]) -> None:
             global _DO_RESTART
+
             _DO_RESTART = True
             self.done = True
 
@@ -3699,7 +3628,7 @@ def create_server(
         server_address: tuple[str, int],
         *,
         parallel: bool = True,
-        thread_factory: Callable[..., threading.Thread] | None = None,
+        thread_factory: ThreadFactory | None = None,
         token_handler: TokenHandler | None = None,
         worker_constructor: Callable[..., BaseWorker] | None = None,
         soft_worker_death: bool = False) -> QuickServer:

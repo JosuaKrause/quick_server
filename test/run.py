@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from urllib.response import addinfourl
 
+
 NL = "\n"
 
 
@@ -835,6 +836,16 @@ def run(*, python: list[str], skip: int) -> None:
                     ("api/foo/foo?include=me", 200, {"foo": "foo?include=me"}),
                 ]):
             sys.exit(11)  # pragma: no cover
+    if skip < 12:
+        note("middleware")
+        if not url_response_run([
+                    ("api/user_details", 401, None),
+                    ("api/user_details?token=wrong", 401, None),
+                    ("api/user_details?token=secret", 200, {"name": "user"}),
+                    ("api/user_details?token=default", 200, {"name": "other"}),
+                    ("api/user_details?token=except", 403, None),
+                ], script="example2.py"):
+            sys.exit(12)  # pragma: no cover
 
     note("all tests successful!")
     sys.exit(0)

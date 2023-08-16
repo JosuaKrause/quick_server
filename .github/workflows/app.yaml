@@ -38,7 +38,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ${{ env.pythonLocation }}
-        key: v1-${{ env.pythonLocation }}-${{ hashFiles('Makefile') }}-${{ hashFiles('MANIFEST.in') }}-${{ hashFiles('setup.cfg') }}
+        key: v1-${{ env.pythonLocation }}-${{ hashFiles('Makefile') }}-${{ hashFiles('MANIFEST.in') }}-${{ hashFiles('setup.cfg') }}-${{ hashFiles('pyproject.toml') }}
 
     - name: Install dependencies
       run: |

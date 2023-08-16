@@ -3,8 +3,18 @@
 from time import monotonic, sleep
 from typing import Any, TypedDict
 
-from quick_server import (QuickServerRequestHandler, ReqArgs, WorkerArgs,
-                          create_server, msg, setup_restart)
+from quick_server import (
+    create_server,
+    msg,
+    PreventDefaultResponse,
+    QuickServerRequestHandler,
+    ReqArgs,
+    ReqNext,
+    Response,
+    setup_restart,
+    WorkerArgs,
+)
+
 
 ResUptime = TypedDict('ResUptime', {
     "uptime": Any,
@@ -34,7 +44,7 @@ def run() -> None:
         nonlocal count_uptime
 
         # request has one mandatory additional path segment
-        sleep(int(args.get("paths", [])[0]))
+        sleep(int(args["paths"][0]))
         count_uptime += 1
         res: dict[str, Any] = {
             "uptime": req.log_elapsed_time_string(
@@ -58,11 +68,10 @@ def run() -> None:
             _req: QuickServerRequestHandler, args: ReqArgs) -> dict[int, str]:
         ix = 0
         res = {}
-        for (k, v) in sorted(args.get("post", {}).items(), key=lambda e: e[0]):
+        for (k, v) in sorted(args["post"].items(), key=lambda e: e[0]):
             res[ix] = f"{k} is {v}"
             ix += 1
-        for (name, f) in sorted(
-                args.get("files", {}).items(), key=lambda e: e[0]):
+        for (name, f) in sorted(args["files"].items(), key=lambda e: e[0]):
             bfcontent = f.read()
             size = len(bfcontent)
             try:
@@ -95,6 +104,30 @@ def run() -> None:
             server.max_chunk_size = mcs
         sleep(2)
         return "1234567890 the quick brown fox jumps over the lazy dog"
+
+    def check_login(
+            _req: QuickServerRequestHandler,
+            args: ReqArgs,
+            okay: ReqNext) -> ReqNext | dict[str, str]:
+        token = args["query"].get("token")
+        if token == "secret":
+            args["meta"]["username"] = "user"
+            return okay
+        if token == "default":
+            return {
+                "name": "other",
+            }
+        if token == "except":
+            raise PreventDefaultResponse(403, "Forbidden")
+        return Response("Authentication Required", 401)
+
+    @server.json_get("/api/user_details")
+    @server.middleware(check_login)
+    def _user_details(
+            _req: QuickServerRequestHandler, args: ReqArgs) -> dict[str, str]:
+        return {
+            "name": args["meta"]["username"],
+        }
 
     def complete_requests(_args: list[str], text: str) -> list[str]:
         return ["uptime"] if "uptime".startswith(text) else []
