@@ -51,3 +51,7 @@ jobs:
     - name: Tests
       run: |
         PYTHON=${{ env.PYTHON }} make run-test
+
+    - name: Lint Code (pylint)
+      run: |
+        PYTHON=${{ env.PYTHON }} make lint-pylint
