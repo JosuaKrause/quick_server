@@ -39,7 +39,7 @@ git-check:
 
 pack:
 	$(PYTHON) -m pip install --progress-bar off --upgrade setuptools twine wheel
-	rm -r dist build quick_server.egg-info || echo "no files to delete"
+	rm -r dist build src/quick_server.egg-info || echo "no files to delete"
 	$(PYTHON) setup.py sdist bdist_wheel
 
 publish: git-check pack
