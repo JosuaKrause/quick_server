@@ -446,7 +446,7 @@ def _on_exit() -> None:  # pragma: no cover
     if _DO_RESTART:
         # avoid potential infinite loop when running atexit handlers
         _DO_RESTART = False
-        exit_code = os.environ.get("QUICK_SERVER_RESTART", None)
+        exit_code = os.environ.get("QUICK_SERVER_RESTART")
         # restart the executable
         _start_restart_loop(exit_code, in_atexit=True)
 
@@ -461,7 +461,7 @@ def _start_restart_loop(exit_code: str | None, in_atexit: bool) -> None:
 
         if in_atexit:
             try:
-                if not os.environ.get("RUN_ATEXIT", None):
+                if not os.environ.get("RUN_ATEXIT"):
                     atexit._run_exitfuncs()
             finally:
                 os._exit(child_code)
@@ -511,7 +511,7 @@ def setup_restart() -> None:
        using restart functionality but avoids potential errors originating from
        rogue threads.
     """
-    exit_code = os.environ.get("QUICK_SERVER_RESTART", None)
+    exit_code = os.environ.get("QUICK_SERVER_RESTART")
     if exit_code is None:
         atexit.unregister(_on_exit)
         _start_restart_loop(None, in_atexit=False)
@@ -3195,7 +3195,7 @@ class QuickServer(http_server.HTTPServer):
                 post = args["post"]
                 # NOTE: path segment variables overwrite sent arguments
                 payload = post.get("payload", {})
-                for (key, value) in args.get("segments", {}).items():
+                for (key, value) in args["segments"].items():
                     payload[key] = value
                 post["payload"] = payload
                 try:
@@ -3410,7 +3410,7 @@ class QuickServer(http_server.HTTPServer):
                 args: list[str] = []
                 while rest_cmd:
                     cur_cmd = "_".join(rest_cmd)
-                    compl = self._cmd_complete.get(cur_cmd, None)
+                    compl = self._cmd_complete.get(cur_cmd)
                     if compl is not None:
                         ccan = compl(args, text)
                         if ccan is not None:

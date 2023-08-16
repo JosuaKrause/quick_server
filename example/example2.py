@@ -57,7 +57,7 @@ def run() -> None:
             except ValueError:
                 return value
 
-        for (key, value) in args.get("query", {}).items():
+        for (key, value) in args["query"].items():
             res[key] = [
                 convert(v) for v in f"{value}".split(",")
             ] if "," in f"{value}" else convert(value)
