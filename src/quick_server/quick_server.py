@@ -612,7 +612,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         -- note however that this the default server uses this
         to copy binary data as well.
         """
-        shutil.copyfileobj(source, outputfile)
+        shutil.copyfileobj(source, outputfile)  # type: ignore
 
     server_version = f"QuickServer/{__version__}"
 
