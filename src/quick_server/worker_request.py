@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Any, Dict
+from typing import Any
 
 
 try:
@@ -25,7 +25,7 @@ class WorkerError(ValueError):
         return self._status_code
 
 
-def _single_request(url: str, data: Dict[str, Any]) -> Dict[str, Any]:
+def _single_request(url: str, data: dict[str, Any]) -> dict[str, Any]:
     assert requests
     req = requests.post(url, json=data, timeout=10)
     if req.status_code == 200:
@@ -35,25 +35,25 @@ def _single_request(url: str, data: Dict[str, Any]) -> Dict[str, Any]:
         req.status_code)
 
 
-def worker_request(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+def worker_request(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Issues a worker request to the given url. This call blocks until the
        request finishes.
 
-    Parameters
-    ----------
+    Args:
     url : string
         The URL.
 
     payload : dict
         The arguments to the worker request call.
 
-    Returns
-    -------
-        The response of the worker request.
+    Raises:
+        RuntimeError: If the requests library is not installed.
+        ValueError: If the request has timed out.
+        WorkerError: Raises a WorkerError if the request's statu
+            code is not 200.
 
-    Exceptions
-    ----------
-        Raises a WorkerError if the request's status code is not 200.
+    Returns:
+        The response of the worker request.
     """
     try:
         assert requests
@@ -82,7 +82,7 @@ def worker_request(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if res["continue"]:
             cargo_tokens = res["result"]
 
-            def check(ctoken: str, response: Dict[str, Any]) -> str:
+            def check(ctoken: str, response: dict[str, Any]) -> str:
                 if response["token"] != ctoken:
                     raise ValueError(
                         f"token mismatch {response['token']} != {ctoken}")

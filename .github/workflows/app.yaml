@@ -34,11 +34,16 @@ jobs:
       with:
         python-version: ${{ matrix.python }}
 
-    - name: Cache python modules
-      uses: actions/cache@v2
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v4
       with:
-        path: ${{ env.pythonLocation }}
-        key: v1-${{ env.pythonLocation }}-${{ hashFiles('Makefile') }}-${{ hashFiles('MANIFEST.in') }}-${{ hashFiles('setup.cfg') }}-${{ hashFiles('pyproject.toml') }}
+        python-version: ${{ matrix.python }}
+        cache: 'pip'
+        cache-dependency-path: |
+          Makefile
+          MANIFEST.in
+          setup.cfg
+          pyproject.toml
 
     - name: Install dependencies
       run: |

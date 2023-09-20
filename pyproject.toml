@@ -55,7 +55,14 @@
     enable_disabled = "DAR104"
     strictness = "short"
 
-[tool.pylint.BASIC]
+[tool.pylint.main]
+    load-plugins = [
+        "pylint.extensions.typing",
+        "pylint.extensions.docparams",
+        "pylint.extensions.docstyle",
+    ]
+
+[tool.pylint.basic]
     good-names = [
         "_",
         "a",
@@ -113,8 +120,9 @@
         "j",
     ]
 
-[tool.pylint."MESSAGES CONTROL"]
+[tool.pylint.messages_control]
     disable = [
+        "docstring-first-line-empty",
         "duplicate-code",
         "fixme",
         "global-statement",
@@ -131,22 +139,18 @@
         "too-many-public-methods",
         "too-many-return-statements",
         "too-many-statements",
-        "unsubscriptable-object"
+        "unsubscriptable-object",
     ]
-    enable = "useless-suppression"
+    const-rgx = '^[_A-Z]'
 
-[tool.pylint.VARIABLES]
+[tool.pylint.variables]
     init-import = "yes"
 
-[tool.pylint.IMPORTS]
+[tool.pylint.imports]
     allow-wildcard-with-all = "yes"
 
-[tool.pylint.TYPECHECK]
+[tool.pylint.typecheck]
     generated-members = []
-    ignored-modules = []
-
-[tool.pylint]
-    init-hook = "import sys; sys.path.append('.')"
 
 [tool.pytest.ini_options]
     filterwarnings = [
@@ -172,3 +176,14 @@
 
 [tool.coverage.html]
     directory = "coverage/html_report"
+
+[tool.mypy]
+    ignore_missing_imports = false
+    check_untyped_defs = true
+    disallow_incomplete_defs = true
+    disallow_untyped_defs = true
+    plugins = []
+    warn_no_return = true
+    warn_unused_ignores = true
+    follow_imports = "normal"
+    exclude = []

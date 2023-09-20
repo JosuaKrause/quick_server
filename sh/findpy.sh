@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/../" &> /dev/null
+set -ex
+
+cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}" )/../" &> /dev/null
 
 find . -type d \( \
         -path './dist' -o \

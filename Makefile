@@ -22,7 +22,7 @@ install:
 	$(PYTHON) -m pip install --progress-bar off --upgrade -e .
 
 lint-type-check:
-	$(PYTHON) -m mypy --config-file mypy.ini .
+	$(PYTHON) -m mypy src/
 
 lint-pylint:
 	sh/findpy.sh | sort

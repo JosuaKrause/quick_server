@@ -48,22 +48,11 @@ import time
 import traceback
 import uuid
 import zlib
+from collections.abc import Callable, Iterator
 from http.server import SimpleHTTPRequestHandler
 from importlib.metadata import version
 from io import BytesIO, StringIO
-from typing import (
-    Any,
-    BinaryIO,
-    Callable,
-    cast,
-    ContextManager,
-    Generic,
-    Iterator,
-    Protocol,
-    Set,
-    TextIO,
-    TypeVar,
-)
+from typing import Any, BinaryIO, cast, Generic, Protocol, TextIO, TypeVar
 from urllib import parse as urlparse
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -292,8 +281,8 @@ def _caller_trace(frame: Any) -> tuple[str, int]:
 
 def caller_trace() -> tuple[str, int]:  # pragma: no cover
     """Gets the stack trace of the calling function."""
-    try:
-        raise Exception()
+    try:  # pylint: disable=unknown-option-value
+        raise Exception()  # pylint: disable=broad-exception-raised
     except:  # nopep8  # pylint: disable=bare-except
         frames: list[Any] | None = None
         try:
@@ -993,8 +982,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if not self.server.directory_listing:
             self.send_error(404, "No permission to list directory")
             return None
-        return SimpleHTTPRequestHandler.list_directory(  # type: ignore
-            self, path)
+        return SimpleHTTPRequestHandler.list_directory(self, path)
 
     def translate_path(self, path: str) -> str:
         """Translates a path for a static file request. The server base path
@@ -1532,7 +1520,7 @@ class TokenHandler:
     def __str__(self) -> str:
         return f"{self.__class__.__name__}"
 
-    def lock(self, key: str | None) -> ContextManager:
+    def lock(self, key: str | None) -> contextlib.AbstractContextManager:
         """The lock for token handler operations."""
         raise NotImplementedError()
 
@@ -1581,7 +1569,7 @@ class DefaultTokenHandler(TokenHandler):
         self._token_timings: list[str] = []
         self._token_lock = threading.Lock()
 
-    def lock(self, key: str | None) -> ContextManager:
+    def lock(self, key: str | None) -> contextlib.AbstractContextManager:
         return self._token_lock
 
     def ttl(self, key: str) -> float | None:
@@ -1608,7 +1596,7 @@ class DefaultTokenHandler(TokenHandler):
             self._token_timings = []
         else:
             for k in self._token_timings[:first_valid]:
-                del self._token_map[k]
+                self._token_map.pop(k, None)
             self._token_timings = self._token_timings[first_valid:]
 
     def add_token(self, key: str, expire: float | None) -> TokenObj:
@@ -1637,7 +1625,7 @@ class DefaultTokenHandler(TokenHandler):
             self._token_timings = [
                 k for k in self._token_timings if k != key
             ]
-            del self._token_map[key]
+            self._token_map.pop(key, None)
 
     def get_tokens(self) -> list[str]:
         # NOTE: has _token_lock
@@ -1808,7 +1796,7 @@ class BaseWorker:
         # make sure the result does not get stored forever
         try:
             # remove 2 minutes after not reading the result
-            time.sleep(120)
+            time.sleep(120.0)
         finally:
             _result, err = self.remove_worker(cur_key)
             if err is not None:
@@ -1921,7 +1909,7 @@ class DefaultWorker(BaseWorker):
         self._tasks: dict[str, WorkerTask] = {}
         self._cargo: dict[str, tuple[float, str]] = {}
         self._cargo_cleaner: threading.Thread | None = None
-        self._cancelled: Set[str] = set()
+        self._cancelled: set[str] = set()
 
     def remove_from_cancelled(self, cur_key: str) -> None:
         with self._lock:
@@ -2285,6 +2273,7 @@ class QuickServer(http_server.HTTPServer):
         if thread_factory is None:
             def _thread_factory_impl(
                     *args: Any, **kwargs: Any) -> threading.Thread:
+                # pylint: disable=bad-thread-instantiation
                 return threading.Thread(*args, **kwargs)
 
             self._thread_factory = _thread_factory_impl
@@ -2443,6 +2432,9 @@ class QuickServer(http_server.HTTPServer):
             incomplete argument (args). text contains the to be completed
             argument. The function must returns a list of suggestions or None
             if text is valid already and there are no further suggestions.
+
+        Raises:
+            ValueError: If the name is invalid.
         """
         if " " in name:
             raise ValueError(f"\" \" cannot be in command name {name}")
@@ -2688,11 +2680,11 @@ class QuickServer(http_server.HTTPServer):
             if hasattr(val, "read"):
                 if hasattr(val, "seek"):
                     f = val
-                    size = f.seek(0, os.SEEK_END)  # type: ignore
-                    f.seek(0)  # type: ignore
+                    size = f.seek(0, os.SEEK_END)
+                    f.seek(0)
                 else:
                     f = BytesIO()
-                    shutil.copyfileobj(val, f, length=16*1024)  # type: ignore
+                    shutil.copyfileobj(val, f, length=16*1024)
                     size = f.tell()
                     f.seek(0)
             else:
@@ -2703,7 +2695,7 @@ class QuickServer(http_server.HTTPServer):
                     except AttributeError:
                         pass
                     val = val.encode("utf-8")  # type: ignore
-                f.write(val)  # type: ignore
+                f.write(val)
                 f.flush()
                 size = f.tell()
                 f.seek(0)
@@ -2711,7 +2703,7 @@ class QuickServer(http_server.HTTPServer):
             if req.request_version >= "HTTP/1.1" and hasattr(f, "seek"):
                 e_tag = \
                     f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"  # type: ignore
-                f.seek(0)  # type: ignore
+                f.seek(0)
                 match = _GETHEADER(req.headers, "if-none-match")
                 if match is not None:
                     if req.check_cache(e_tag, match):
@@ -2999,6 +2991,9 @@ class QuickServer(http_server.HTTPServer):
         from_quick_server : bool
             If set the origin path is relative to *this* script otherwise it is
             relative to the process.
+
+        Raises:
+            ValueError: If the mirror implementation is invalid.
         """
         full_path = path_from if not from_quick_server else os.path.join(
             os.path.dirname(__file__), path_from)
@@ -3149,6 +3144,11 @@ class QuickServer(http_server.HTTPServer):
            the result and can also cancel the task. The worker javascript
            client side must be linked and used for accessing the request.
 
+        fun : function(args); (The annotated function)
+            A function returning a (JSON-able) object. The function takes one
+            argument which is the dictionary containing the payload from the
+            client side. If the result is None a 404 error is sent.
+
         Parameters
         ----------
         mask : string
@@ -3168,11 +3168,6 @@ class QuickServer(http_server.HTTPServer):
         cache_section : string or None
             Optional cache section string. Gets passed to get_hnd() of the
             cache. Defaults to "www".
-
-        fun : function(args); (The annotated function)
-            A function returning a (JSON-able) object. The function takes one
-            argument which is the dictionary containing the payload from the
-            client side. If the result is None a 404 error is sent.
         """
 
         def wrapper(fun: WorkerF) -> WorkerF:
