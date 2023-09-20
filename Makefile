@@ -14,7 +14,7 @@ export LC_ALL=C
 export LANG=C
 
 PYTHON=python
-VERSION=`echo "import quick_server;print(quick_server.__version__)" | python3 2>/dev/null`
+VERSION=`echo "import importlib;importlib.metadata.version("quick_server")" | python 2>/dev/null`
 
 install:
 	$(PYTHON) -m pip install --progress-bar off --upgrade pip
