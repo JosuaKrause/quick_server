@@ -1,3 +1,45 @@
+[project]
+    name = "quick_server"
+    description = "QuickServer is a quick to use and easy to set up server implementation."
+    readme = "README.rst"
+    version = "0.8.1"
+    authors = [
+        {name = "Josua Krause", email = "josua.krause@gmail.com"},
+    ]
+    keywords = [
+        "server",
+        "REST",
+        "file",
+        "quick",
+        "easy",
+    ]
+    license = {file = "LICENSE"}
+    requires-python = ">=3.10"
+    classifiers = [
+        "Development Status :: 4 - Beta",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+    ]
+
+[project.urls]
+    repository = "https://github.com/JosuaKrause/quick_server"
+
+[build-system]
+    requires = ["setuptools>=61.2"]
+    build-backend = "setuptools.build_meta"
+    include_package_data = true
+    package_dir = [
+        "=src",
+    ]
+    packages = {find = ""}
+    install_requires = "pyreadline; platform_system==\"Windows\""
+
+[tool.setuptools.packages.find]
+    where = ["src"]
+
 [tool.isort]
     extend_skip = [".json", ".md"]
     profile = "black"
@@ -7,6 +49,11 @@
     skip_glob = []
     multi_line_output = 3
     lines_after_imports = 2
+
+[tool.darglint]
+    docstring_style = "google"
+    enable_disabled = "DAR104"
+    strictness = "short"
 
 [tool.pylint.BASIC]
     good-names = [

@@ -18,7 +18,7 @@ VERSION=`echo "import quick_server;print(quick_server.__version__)" | python3 2>
 
 install:
 	$(PYTHON) -m pip install --progress-bar off --upgrade pip
-	$(PYTHON) -m pip install --progress-bar off --upgrade mypy==0.991 pylint==2.15.10 pre-commit==3.0.3
+	$(PYTHON) -m pip install --progress-bar off --upgrade mypy pylint pre-commit
 	$(PYTHON) -m pip install --progress-bar off --upgrade -e .
 
 lint-type-check:

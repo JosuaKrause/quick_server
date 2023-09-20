@@ -49,6 +49,7 @@ import traceback
 import uuid
 import zlib
 from http.server import SimpleHTTPRequestHandler
+from importlib.metadata import version
 from io import BytesIO, StringIO
 from typing import (
     Any,
@@ -206,7 +207,7 @@ def get_time() -> float:
     return time.monotonic()
 
 
-__version__ = "0.8.0"
+__version__ = version(__package__)
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:

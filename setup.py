@@ -33,4 +33,5 @@ from setuptools import setup  # type: ignore
 # NOTE! steps to distribute:
 # $ make publish
 
-setup()
+if __name__ == "__main__":
+    setup()
