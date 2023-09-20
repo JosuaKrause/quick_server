@@ -14,7 +14,7 @@ export LC_ALL=C
 export LANG=C
 
 PYTHON=python
-VERSION=`echo "import tomllib;tomllib.load(open('pyproject.toml', 'rb'))['project']['version']" | python 2>/dev/null`
+VERSION=`echo "import tomllib;print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])" | python 2>/dev/null`
 
 install:
 	$(PYTHON) -m pip install --progress-bar off --upgrade pip
