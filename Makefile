@@ -46,7 +46,7 @@ publish: git-check pack
 	$(PYTHON) -m twine upload dist/quick_server-$(VERSION)-py3-none-any.whl dist/quick_server-$(VERSION).tar.gz
 	git tag "v$(VERSION)"
 	git push origin "v$(VERSION)"
-	@echo "succesfully deployed $(VERSION)"
+	@echo "successfully deployed $(VERSION)"
 
 run-test:
 	$(PYTHON) test/run.py $(SKIP)
