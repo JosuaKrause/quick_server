@@ -18,7 +18,7 @@ VERSION=`echo "import tomllib;print(tomllib.load(open('pyproject.toml', 'rb'))['
 
 install:
 	$(PYTHON) -m pip install --progress-bar off --upgrade pip
-	$(PYTHON) -m pip install --progress-bar off --upgrade mypy pylint pre-commit importlib
+	$(PYTHON) -m pip install --progress-bar off --upgrade mypy pylint pre-commit importlib types-requests
 	$(PYTHON) -m pip install --progress-bar off --upgrade -e .
 
 lint-type-check:
