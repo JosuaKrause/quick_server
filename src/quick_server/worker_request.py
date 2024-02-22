@@ -4,7 +4,7 @@ from typing import Any
 
 
 try:
-    import requests  # type: ignore
+    import requests
 except ImportError:
     pass
 
@@ -59,7 +59,7 @@ def worker_request(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         assert requests
     except (NameError, AssertionError) as e:
         raise RuntimeError(
-            "this function requires the package 'requests' to be installed!"
+            "this function requires the package 'requests' to be installed!",
             ) from e
     done = False
     token = None

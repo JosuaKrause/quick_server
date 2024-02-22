@@ -62,8 +62,8 @@ from typing_extensions import Literal, TypedDict
 
 try:
     # NOTE: avoid pyarrow atexit error
-    import pyarrow  # type: ignore  # pylint: disable=unused-import
-except (ModuleNotFoundError, ImportError) as _:
+    import pyarrow  # type: ignore  # pylint: disable=unused-import  # noqa: F401,E501
+except (ModuleNotFoundError, ImportError) as _:  # noqa: F841
     pass
 
 
@@ -283,7 +283,7 @@ def caller_trace() -> tuple[str, int]:  # pragma: no cover
     """Gets the stack trace of the calling function."""
     try:  # pylint: disable=unknown-option-value
         raise Exception()  # pylint: disable=broad-exception-raised
-    except:  # nopep8  # pylint: disable=bare-except
+    except:  # nopep8  # pylint: disable=bare-except  # noqa: E722
         frames: list[Any] | None = None
         try:
             frames = [sys.exc_info()[2].tb_frame]  # type: ignore
@@ -301,7 +301,7 @@ if hasattr(sys, "_getframe"):
         # pylint: disable=protected-access
         return _caller_trace(sys._getframe(2))
 
-    caller_trace = _caller_trace_gf
+    caller_trace = _caller_trace_gf  # noqa: F811
 
 
 LONG_MSG = True
@@ -483,7 +483,7 @@ def _start_restart_loop(exit_code: str | None, in_atexit: bool) -> None:
                         child_code = proc.wait()
                 except KeyboardInterrupt:
                     child_code = _ERROR_EXIT_CODE
-    except:  # nopep8  # pylint: disable=bare-except
+    except:  # nopep8  # pylint: disable=bare-except  # noqa: E722
         global_handle_error(
             ERR_SOURCE_RESTART,
             "error during restart:", traceback.format_exc(), msg)
@@ -628,9 +628,15 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         to True.
         """
         res: dict[str, str | bool | int | float] = {}
-        if isinstance(query, bytes):
-            query = query.decode("utf-8")
-        for section in query.split("&"):
+        if isinstance(query, memoryview):
+            query_str: str = query.tobytes().decode("utf-8")
+        elif isinstance(query, bytearray):
+            query_str = query.decode("utf-8")
+        elif isinstance(query, bytes):
+            query_str = query.decode("utf-8")
+        else:
+            query_str = query
+        for section in query_str.split("&"):
             eqs = section.split("=", 1)
             name = urlparse.unquote(eqs[0])
             if len(eqs) > 1:
@@ -831,16 +837,23 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         report_slow_requests = self.server.report_slow_requests
         if report_slow_requests:
             path = self.path
+            request_time = get_time()
 
             def do_report() -> None:
                 if not ongoing:
                     return
+                duration = get_time() - request_time
                 if callable(report_slow_requests):
-                    report_slow_requests(method_str, path)
+                    try:
+                        report_slow_requests(
+                            method_str, path, duration)  # type: ignore
+                    except TypeError:
+                        report_slow_requests(  # type: ignore
+                            method_str, path)
                 else:
                     msg(
                         "request takes longer than expected: "
-                        f"\"{method_str} {path}\"")
+                        f"\"{method_str} {path}\" ({duration}s)")
 
             alarm_init = threading.Timer(5.0, do_report)
             alarm_init.start()
@@ -1216,7 +1229,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 traceback.format_exc(), msg)
             try:
                 self.send_error(500, "Internal Error")
-            except:  # nopep8  # pylint: disable=bare-except
+            except:  # nopep8  # pylint: disable=bare-except  # noqa: E722
                 if self.server.can_ignore_error(self):
                     return
                 global_handle_error(
@@ -2263,7 +2276,10 @@ class QuickServer(http_server.HTTPServer):
         self.max_chunk_size = 10 * 1024 * 1024
         self.cross_origin = False
         self.suppress_noise = False
-        self.report_slow_requests: bool | Callable[[str, str], None] = False
+        self.report_slow_requests: \
+            bool | \
+            Callable[[str, str], None] | \
+            Callable[[str, str, float], None] = False
         self.verbose_workers = False
         self.no_command_loop = False
         self.cache: Any | None = None
@@ -2679,7 +2695,7 @@ class QuickServer(http_server.HTTPServer):
                 return None
             if hasattr(val, "read"):
                 if hasattr(val, "seek"):
-                    f = val
+                    f: BytesIO = val  # type: ignore
                     size = f.seek(0, os.SEEK_END)
                     f.seek(0)
                 else:
@@ -2701,13 +2717,12 @@ class QuickServer(http_server.HTTPServer):
                 f.seek(0)
             # handle ETag caching
             if req.request_version >= "HTTP/1.1" and hasattr(f, "seek"):
-                e_tag = \
-                    f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"  # type: ignore
+                e_tag = f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"
                 f.seek(0)
                 match = _GETHEADER(req.headers, "if-none-match")
                 if match is not None:
                     if req.check_cache(e_tag, match):
-                        f.close()  # type: ignore
+                        f.close()
                         return None
                 req.send_header("ETag", e_tag, end_header=True)
                 req.send_header(
@@ -2718,7 +2733,7 @@ class QuickServer(http_server.HTTPServer):
             req.send_header("Content-Type", ctype)
             req.send_header("Content-Length", size)
             req.end_headers()
-            return f  # type: ignore
+            return f
 
         self._add_file_mask(start, method_str, send_text)
 
@@ -3196,7 +3211,7 @@ class QuickServer(http_server.HTTPServer):
                 post["payload"] = payload
                 try:
                     return worker.compute_worker(req, post)
-                except:  # nopep8
+                except:  # nopep8  # noqa: E722
                     worker.on_error(post)
                     raise
 

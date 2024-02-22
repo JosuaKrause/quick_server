@@ -34,13 +34,18 @@ def run(*, python: list[str], skip: int) -> None:
         return repr(bdata).lstrip("b").strip("'\"").replace("\\", "\\\\")
 
     def to_str(msg: str | bytes) -> str:
-        if isinstance(msg, bytes):
-            bmsg: bytes = msg
-            try:
-                return bmsg.decode("utf-8")
-            except UnicodeDecodeError:
-                return "\n".join([repr(m) for m in bmsg.split(b"\n")])
-        return msg
+        if isinstance(msg, memoryview):
+            bmsg = msg.tobytes()
+        elif isinstance(msg, bytearray):
+            bmsg = msg
+        elif isinstance(msg, bytes):
+            bmsg = msg
+        else:
+            return msg
+        try:
+            return bmsg.decode("utf-8")
+        except UnicodeDecodeError:
+            return "\n".join([repr(m) for m in bmsg.split(b"\n")])
 
     def print_msg(prefix: str, msg: str) -> None:
         for line in msg.split("\n"):
@@ -796,21 +801,21 @@ def run(*, python: list[str], skip: int) -> None:
                         "api/message", {"split": False},
                         [
                             "1234567890 the quick brown fox "
-                            "jumps over the lazy dog"
+                            "jumps over the lazy dog",
                         ],
                         -1, None, "normal",
                     ], [
                         "api/message", {"split": True},
                         [
                             "1234567890 the quick brown fox "
-                            "jumps over the lazy dog"
+                            "jumps over the lazy dog",
                         ],
                         -1, None, "normal",
                     ], [
                         "api/message", {"split": False},
                         [
                             "1234567890 the quick brown fox "
-                            "jumps over the lazy dog"
+                            "jumps over the lazy dog",
                         ],
                         -1, None, "normal",
                     ],
