@@ -1229,8 +1229,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 ERR_SOURCE_REQUEST,
                 "ERROR: Error while processing request:",
                 traceback.format_exc(), msg)
+            exc_value = sys.exc_info()[1]
             try:
-                self.send_error(500, "Internal Error")
+                self.send_error(500, f"{exc_value}")
             except:  # nopep8  # pylint: disable=bare-except  # noqa: E722
                 if self.server.can_ignore_error(self):
                     return
@@ -2714,7 +2715,8 @@ class QuickServer(http_server.HTTPServer):
                     except AttributeError:
                         pass
                     val = val.encode("utf-8")  # type: ignore
-                f.write(val)
+                val_bytes: bytes = cast(bytes, val)
+                f.write(val_bytes)
                 f.flush()
                 size = f.tell()
                 f.seek(0)

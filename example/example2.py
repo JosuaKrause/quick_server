@@ -93,7 +93,7 @@ def run() -> None:
         sleep(int(args["time"]))
         count_uptime += 1
         return {
-            "uptime": (monotonic() - start) * 1000.0
+            "uptime": (monotonic() - start) * 1000.0,
         }
 
     @server.json_worker("/api/message")
