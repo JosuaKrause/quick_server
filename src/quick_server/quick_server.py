@@ -1230,8 +1230,21 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 "ERROR: Error while processing request:",
                 traceback.format_exc(), msg)
             exc_value = sys.exc_info()[1]
+            exc_msg = f"{exc_value}"
+            exc_short_msg = exc_msg[:66]
+            line_break_n = exc_short_msg.find('\n')
+            if line_break_n >= 0:
+                exc_short_msg = exc_short_msg[:line_break_n]
+            line_break_r = exc_short_msg.find('\r')
+            if line_break_r >= 0:
+                exc_short_msg = exc_short_msg[:line_break_r]
+            last_space = exc_short_msg.rfind(' ')
+            if last_space >= 0:
+                exc_short_msg = exc_short_msg[:last_space]
+            if not exc_short_msg:
+                exc_short_msg = f"{type(exc_value)}"
             try:
-                self.send_error(500, f"{exc_value}")
+                self.send_error(500, exc_short_msg, exc_msg)
             except:  # nopep8  # pylint: disable=bare-except  # noqa: E722
                 if self.server.can_ignore_error(self):
                     return
