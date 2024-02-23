@@ -1232,15 +1232,16 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             exc_value = sys.exc_info()[1]
             exc_msg = f"{type(exc_value).__name__}: {exc_value}"
             exc_short_msg = exc_msg[:66]
+            if len(exc_short_msg) < len(exc_msg):
+                last_space = exc_short_msg.rfind(" ")
+                if last_space >= 0:
+                    exc_short_msg = exc_short_msg[:last_space]
             line_break_n = exc_short_msg.find("\n")
             if line_break_n >= 0:
                 exc_short_msg = exc_short_msg[:line_break_n]
             line_break_r = exc_short_msg.find("\r")
             if line_break_r >= 0:
                 exc_short_msg = exc_short_msg[:line_break_r]
-            last_space = exc_short_msg.rfind(" ")
-            if last_space >= 0:
-                exc_short_msg = exc_short_msg[:last_space]
             if not exc_short_msg:
                 exc_short_msg = f"{type(exc_value).__name__}"
             try:
