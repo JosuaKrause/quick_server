@@ -52,7 +52,7 @@ from collections.abc import Callable, Iterator
 from http.server import SimpleHTTPRequestHandler
 from importlib.metadata import version
 from io import BytesIO, StringIO
-from typing import Any, BinaryIO, cast, Generic, Protocol, TextIO, TypeVar
+from typing import Any, BinaryIO, cast, Generic, IO, Protocol, TextIO, TypeVar
 from urllib import parse as urlparse
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -847,7 +847,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     try:
                         report_slow_requests(
                             method_str, path, duration)  # type: ignore
-                    except TypeError:
+                    except TypeError as outer_te:
+                        if "arguments but 3 were given" not in f"{outer_te}":
+                            raise outer_te
                         report_slow_requests(  # type: ignore
                             method_str, path)
                 else:
@@ -2700,7 +2702,8 @@ class QuickServer(http_server.HTTPServer):
                     f.seek(0)
                 else:
                     f = BytesIO()
-                    shutil.copyfileobj(val, f, length=16*1024)
+                    v: IO = val  # type: ignore
+                    shutil.copyfileobj(v, f, length=16*1024)
                     size = f.tell()
                     f.seek(0)
             else:
