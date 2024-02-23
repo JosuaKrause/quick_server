@@ -1508,10 +1508,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if clock_start is not None
             else ""
         )
+        txt = f"{format % args}" if args else f"{format}"
         msg(
             f"{timing + ' ' if len(timing) > 0 else ''}"
-            f"[{self.log_date_time_string()}] "
-            f"{format % args}")
+            f"[{self.log_date_time_string()}] {txt}")
 
     def log_request(
             self,
