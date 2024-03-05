@@ -2347,11 +2347,11 @@ class QuickServer(http_server.HTTPServer):
 
     def update_version_string(self, version_str: str) -> None:
         if self.base_version_str is None:
-            self.base_version_str = self.RequestHandlerClass.server_version
+            self.base_version_str = QuickServerRequestHandler.server_version
         version_str = version_str.strip()
         if version_str:
             version_str = f"{version_str} "
-        self.RequestHandlerClass.server_version = (
+        QuickServerRequestHandler.server_version = (
             f"{version_str}{self.base_version_str}")
 
     # request processing #
