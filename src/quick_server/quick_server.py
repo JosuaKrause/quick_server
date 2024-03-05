@@ -2281,6 +2281,7 @@ class QuickServer(http_server.HTTPServer):
         """
         super().__init__(server_address, QuickServerRequestHandler)
         self.init = False
+        self.base_version_str: str | None = None
         self.base_path = os.path.abspath(".")
         self.directory_listing = False
         self.shutdown_latency = 0.1
@@ -2343,6 +2344,15 @@ class QuickServer(http_server.HTTPServer):
     def __str__(self) -> str:
         parallel = " parallel" if self._parallel else ""
         return f"{self.__class__.__name__}[{self.server_address}{parallel}]"
+
+    def update_version_string(self, version_str: str) -> None:
+        if self.base_version_str is None:
+            self.base_version_str = self.RequestHandlerClass.server_version
+        version_str = version_str.strip()
+        if version_str:
+            version_str = f"{version_str} "
+        self.RequestHandlerClass.server_version = (
+            f"{version_str}{self.base_version_str}")
 
     # request processing #
 
