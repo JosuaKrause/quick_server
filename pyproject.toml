@@ -2,7 +2,7 @@
     name = "quick_server"
     description = "QuickServer is a quick to use and easy to set up server implementation."
     readme = "README.rst"
-    version = "0.8.9"
+    version = "0.8.10"
     authors = [
         {name = "Josua Krause", email = "josua.krause@gmail.com"},
     ]
@@ -122,15 +122,11 @@
 
 [tool.pylint.messages_control]
     disable = [
-        "docstring-first-line-empty",
+        "bad-docstring-quotes",
         "duplicate-code",
+        "docstring-first-line-empty",
         "fixme",
         "global-statement",
-        "import-outside-toplevel",
-        "invalid-unary-operand-type",
-        "missing-docstring",
-        "not-an-iterable",
-        "not-callable",
         "too-many-arguments",
         "too-many-branches",
         "too-many-instance-attributes",
@@ -139,7 +135,7 @@
         "too-many-public-methods",
         "too-many-return-statements",
         "too-many-statements",
-        "unsubscriptable-object",
+        "unnecessary-ellipsis",
     ]
     const-rgx = '^[_A-Z]'
 

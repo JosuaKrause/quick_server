@@ -48,7 +48,7 @@ import time
 import traceback
 import uuid
 import zlib
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from http.server import SimpleHTTPRequestHandler
 from importlib.metadata import version
 from io import BytesIO, StringIO
@@ -73,11 +73,31 @@ CacheIdObj = dict[str, Any]
 
 
 class CmdF(Protocol):  # pylint: disable=too-few-public-methods
-    def __call__(self, args: list[str], /) -> None: ...
+    """A function executing an interactive command."""
+    def __call__(self, args: list[str], /) -> None:
+        """
+        Executes an interactive command.
+
+        Args:
+            args (list[str]): The arguments to the command.
+        """
+        ...
 
 
 class CmdCompleteF(Protocol):  # pylint: disable=too-few-public-methods
-    def __call__(self, args: list[str], text: str, /) -> list[str] | None: ...
+    """A function argument completer. Returns command candidates."""
+    def __call__(self, args: list[str], text: str, /) -> list[str] | None:
+        """
+        Completes a partial command.
+
+        Args:
+            args (list[str]): The arguments so far.
+            text (str): The full command line.
+
+        Returns:
+            list[str] | None: A list of suggestions.
+        """
+        ...
 
 
 ReqArgs = TypedDict('ReqArgs', {
@@ -91,8 +111,22 @@ ReqArgs = TypedDict('ReqArgs', {
 })
 
 
-class ReqNext:  # pylint: disable=too-few-public-methods
-    pass
+class ReqNext:
+    """Marker to indicate to a middleware to proceed processing."""
+    def __init__(self, fname: str) -> None:
+        """
+        Creates a marker for a given function.
+
+        Args:
+            fname (str): The qualified function name.
+        """
+        self._fname = fname
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}[{self._fname}]"
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 A_co = TypeVar('A_co', covariant=True)
@@ -101,26 +135,60 @@ R_co = TypeVar('R_co', covariant=True)
 
 
 class ReqF(Protocol, Generic[R_co]):  # pylint: disable=too-few-public-methods
+    """Processes an endpoint request."""
     def __call__(
             self, req: 'QuickServerRequestHandler', args: ReqArgs, /) -> R_co:
+        """
+        Processes an endpoint request.
+
+        Args:
+            req (QuickServerRequestHandler): The raw request.
+            args (ReqArgs): The arguments of the request.
+
+        Returns:
+            R_co: The response of the request.
+        """
         ...
 
 
 class MiddlewareF(  # pylint: disable=too-few-public-methods
-        Protocol, Generic[R_co]):
+        Protocol, Generic[A_co]):
+    """Processe a request middleware."""
     def __call__(
             self,
             req: 'QuickServerRequestHandler',
             args: ReqArgs,
             okay: ReqNext,
-            /) -> R_co:
+            /) -> ReqNext | A_co:
+        """
+        Processes a request middleware.
+
+        Args:
+            req (QuickServerRequestHandler): The raw request.
+            args (ReqArgs): The arguments to the request.
+            okay (ReqNext): The maker object to indicate proceeding.
+
+        Returns:
+            ReqNext | Response: Return `okay` to proceed otherwise the request
+                ends and returns the given response.
+        """
         ...
 
 
 class WorkerF(  # pylint: disable=too-few-public-methods
         Protocol, Generic[R_co]):
+    """Processes a worker request."""
     def __call__(
             self, args: WorkerArgs, /) -> R_co:
+        """
+        Processes a worker request.
+
+        Args:
+            args (WorkerArgs): The arguments to the worker.
+
+        Returns:
+            R_co: The response.
+        """
         ...
 
 
@@ -163,6 +231,7 @@ WorkerThreadFactory = Callable[[], threading.Thread]
 
 
 class Response:
+    """A response to a request."""
     def __init__(
             self,
             response: str | bytes | StringIO | BytesIO | None,
@@ -603,9 +672,11 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """
         shutil.copyfileobj(source, outputfile)  # type: ignore
 
-    server_version = f"QuickServer/{__version__}"
+    server_version: str = f"QuickServer/{__version__}"
 
-    protocol_version = "HTTP/1.1"
+    protocol_version: str = "HTTP/1.1"
+
+    common_invalid_paths: set[str] = set()
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self.command} {self.path}]"
@@ -1077,7 +1148,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                         reala[5],  # fragment
                     ))
                     self.send_to_proxy(pxya)  # raises PreventDefaultResponse
-                msg(f"no matching folder alias: {orig_path}")
+                if orig_path not in self.common_invalid_paths:
+                    msg(f"no matching folder alias: {orig_path}")
+                else:
+                    thread_local.no_log = True
                 raise PreventDefaultResponse(404, "File not found")
             path: str = mpath
             if os.path.isdir(path):
@@ -1176,6 +1250,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         return True
 
     def send_to_proxy(self, proxy_url: str) -> None:
+        """
+        Forward the request to the given proxy.
+
+        Args:
+            proxy_url (str): The proxy URL.
+        """
         clen = _GETHEADER(self.headers, "content-length")
         clen = int(clen) if clen is not None else 0
         if clen > 0:
@@ -1255,6 +1335,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     traceback.format_exc(), msg)
 
     def is_cross_origin(self) -> bool:
+        """
+        Whether cross origin requests are allowed.
+
+        Returns:
+            bool: True, if cross origin requests are allowed.
+        """
         return self.server.cross_origin
 
     def cross_origin_headers(self) -> bool:
@@ -1516,6 +1602,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """
         # pylint: disable=redefined-builtin
 
+        no_log = getattr(thread_local, "no_log", False)
+        if no_log:
+            thread_local.no_log = False
+            return
         clock_start = getattr(thread_local, "clock_start", None)
         thread_local.clock_start = None
         timing = (
@@ -1540,13 +1630,20 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             size_str = f"{self.log_size_string(print_size)} "
         else:
             size_str = ""
-        if not self.server.suppress_noise or code not in (200, 304):
+        testline = self.requestline
+        if testline and testline[0] != "/":
+            testline = f"/{testline}"
+        valid_log_path = testline not in self.common_invalid_paths
+        valid_log_code = code not in (200, 304)
+        log_all = not self.server.suppress_noise
+        if (log_all or valid_log_code) and valid_log_path:
             self.log_message(f"{size_str}\"{self.requestline}\" {code}")
         if print_size >= 0:
             thread_local.size = -1
 
 
 class TokenHandler:
+    """Manages handling of tokens for the server."""
     def __str__(self) -> str:
         return f"{self.__class__.__name__}"
 
@@ -1593,6 +1690,10 @@ class TokenHandler:
 
 
 class DefaultTokenHandler(TokenHandler):
+    """The default token handler. This only works with a single server instance
+       If multiple instances are running consider using redis to manage the
+       access to tokens across servers.
+    """
     def __init__(self) -> None:
         # _token_timings is keys sorted by time
         self._token_map: dict[str, tuple[float | None, TokenObj]] = {}
@@ -1690,6 +1791,7 @@ def is_worker_alive() -> bool:
 
 
 class BaseWorker:
+    """The base worker class."""
     def __init__(
             self,
             mask: str,
@@ -1796,6 +1898,15 @@ class BaseWorker:
             args: WorkerArgs,
             cur_key: str,
             get_thread: WorkerThreadFactory) -> None:
+        """
+        Starts the worker.
+
+        Args:
+            args (WorkerArgs): The arguments for the worker.
+            cur_key (str): The task key.
+            get_thread (WorkerThreadFactory): Thread factory to create the
+                worker thread.
+        """
         try:
             self.add_task(cur_key, get_thread, self._soft_worker_death)
             if self._cache_id is not None:
@@ -1843,6 +1954,15 @@ class BaseWorker:
             self,
             _req: QuickServerRequestHandler,
             post: WorkerArgs) -> WorkerResponse:
+        """
+        Process a worker action.
+
+        Args:
+            post (WorkerArgs): The worker arguments.
+
+        Returns:
+            WorkerResponse: The worker response.
+        """
         action = post["action"]
         cur_key = None
         if action == "stop":
@@ -1929,10 +2049,17 @@ class BaseWorker:
         }
 
     def on_error(self, post: WorkerArgs) -> None:
+        """
+        Handles errors in the worker.
+
+        Args:
+            post (WorkerArgs): The worker arguments.
+        """
         self._msg(f"Error processing worker command: {post}")
 
 
 class DefaultWorker(BaseWorker):
+    """The default implementation of workers."""
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         BaseWorker.__init__(self, *args, **kwargs)
         self._lock = threading.RLock()
@@ -1947,10 +2074,22 @@ class DefaultWorker(BaseWorker):
                 self._cancelled.remove(cur_key)
 
     def is_cancelled(self, cur_key: str) -> bool:
+        """
+        Whether the given task has been cancelled.
+
+        Args:
+            cur_key (str): The task key.
+
+        Returns:
+            bool: _description_
+        """
         with self._lock:
             return cur_key in self._cancelled
 
     def start_cargo_cleaner(self) -> None:
+        """
+        Starts the cargo cleaner.
+        """
 
         def clean() -> None:
             while True:
@@ -1975,6 +2114,12 @@ class DefaultWorker(BaseWorker):
             cleaner.start()
 
     def get_next_cargo(self) -> float | None:
+        """
+        Retrieves the closest to expire cargo available.
+
+        Returns:
+            float | None: The nearest expiration time.
+        """
         with self._lock:
             next_ttl = None
             for value in self._cargo.values():
@@ -1984,6 +2129,13 @@ class DefaultWorker(BaseWorker):
             return next_ttl
 
     def clean_for(self, timestamp: float) -> None:
+        """
+        Clean cargo for a given timestamp.
+
+        Args:
+            timestamp (float): Every cargo with TTL on or before this timestamp
+                gets removed.
+        """
         with self._lock:
             keys = []
             for (key, value) in self._cargo.items():
@@ -1996,6 +2148,12 @@ class DefaultWorker(BaseWorker):
                 self._msg(f"purged cargo that was never read ({k})")
 
     def remove_cleaner(self) -> bool:
+        """
+        Remove the cargo cleaner if no cargo is left.
+
+        Returns:
+            bool: True, if the cargo cleaner got removed.
+        """
         with self._lock:
             if self.get_next_cargo() is not None:
                 return False
@@ -2125,6 +2283,16 @@ class DefaultWorker(BaseWorker):
 
 def construct_multipart_response(
         obj: dict[str | bytes, Any]) -> tuple[BytesIO, str]:
+    """
+    Constructs a multipart response from a given dictionary.
+
+    Args:
+        obj (dict[str | bytes, Any]): The dictionary.
+
+    Returns:
+        tuple[BytesIO, str]: A tuple of the response (as IO object) and the
+            content-type header (including the boundary information).
+    """
     boundary = f"qsboundary{uuid.uuid4().hex}"
 
     def binary(text: str | bytes) -> bytes:
@@ -2169,7 +2337,14 @@ def construct_multipart_response(
 
 
 class MultipartResponse(Response):  # pylint: disable=too-few-public-methods
-    def __init__(self, obj: Any) -> None:
+    """A multipart response using 'multipart/form-data'."""
+    def __init__(self, obj: dict[str | bytes, Any]) -> None:
+        """
+        Creates a multipart response.
+
+        Args:
+            obj (dict[str | bytes, Any]): The response dictionary.
+        """
         response, ctype = construct_multipart_response(obj)
         Response.__init__(self, response=response, code=200, ctype=ctype)
 
@@ -2178,6 +2353,30 @@ _token_default: Literal["DEFAULT"] = "DEFAULT"
 
 
 class QuickServer(http_server.HTTPServer):
+    """
+    QuickServer is a quick to use and easy to set up server implementation. It
+    has the following goals / features and is primarily meant to speed up back
+    end implementation / iteration:
+
+    * serve local files as is with basic black-listing
+    * provide functionality for dynamic requests
+    * provide a basic command interpret loop for server commands
+
+    The best way to start QuickServer is the `serve_forever` method.
+    Dynamic requests can be added via the `TYPE_METHOD` annotations where
+    TYPE is the result type of the request (i.e., text, json) and METHOD is the
+    HTTP method (e.g., GET, POST). POST requests can contain JSON encoded form
+    data. You can bind static paths with the `bind_path` method.
+
+    Commands can be added via the `cmd` annotation where the function name is
+    the command. "help", "restart", and "quit" are built-in commands ready to
+    use.
+
+    Note: The server is thread based so all callback functions should be
+    thread-safe.
+
+    Please refer to the example folder for usage examples.
+    """
     def __init__(
             self,
             server_address: tuple[str, int],
@@ -2320,6 +2519,7 @@ class QuickServer(http_server.HTTPServer):
         self._soft_worker_death = soft_worker_death
         self._folder_masks: list[tuple[str, str]] = []
         self._folder_proxys: list[tuple[str, str]] = []
+        self._global_middleware: list[MiddlewareF] = []
         self._f_mask: dict[str, list[tuple[str, ReqF[BytesIO | None]]]] = {}
         self._f_argc: dict[str, int | None] = {}
         self._pattern_black: list[str] = []
@@ -2333,7 +2533,7 @@ class QuickServer(http_server.HTTPServer):
         if token_handler is None:
             token_handler = DefaultTokenHandler()
         self._token_handler = token_handler
-        self._token_expire = 3600
+        self._token_expire: float = 3600.0
         self._mirror: MirrorObj = {
             "impl": "none",
             "files": [],
@@ -2346,6 +2546,14 @@ class QuickServer(http_server.HTTPServer):
         return f"{self.__class__.__name__}[{self.server_address}{parallel}]"
 
     def update_version_string(self, version_str: str) -> None:
+        """
+        Updates the app part of the server version string that is included in
+        every request.
+
+        Args:
+            version_str (str): The app version string. Format typically is
+                `appname/1.2.3`
+        """
         if self.base_version_str is None:
             self.base_version_str = QuickServerRequestHandler.server_version
         version_str = version_str.strip()
@@ -2353,6 +2561,16 @@ class QuickServer(http_server.HTTPServer):
             version_str = f"{version_str} "
         QuickServerRequestHandler.server_version = (
             f"{version_str}{self.base_version_str}")
+
+    def set_common_invalid_paths(self, invalid_paths: Iterable[str]) -> None:
+        """
+        Sets common invalid paths that get ignored when logging. All paths
+        start with '/'.
+
+        Args:
+            invalid_paths (Iterable[str]): The new set of paths.
+        """
+        QuickServerRequestHandler.common_invalid_paths = set(invalid_paths)
 
     # request processing #
 
@@ -2536,7 +2754,7 @@ class QuickServer(http_server.HTTPServer):
             self,
             start: str,
             method_str: str,
-            json_producer: ReqF) -> None:
+            json_producer: ReqF[B_co]) -> None:
         """Adds a handler that produces a JSON response.
 
         Parameters
@@ -2558,12 +2776,27 @@ class QuickServer(http_server.HTTPServer):
             `None` a 404 error is sent.
         """
 
+        def fmethod(
+                req: QuickServerRequestHandler,
+                args: ReqArgs) -> B_co:
+            for mwfun in self._global_middleware:
+                next_token = ReqNext(mwfun.__qualname__)
+                intermediate = mwfun(req, args, next_token)
+                if intermediate is next_token:
+                    continue
+                if isinstance(intermediate, ReqNext):
+                    raise ValueError(
+                        "middleware returned 'next' from a different "
+                        f"middleware: {intermediate}")
+                return intermediate
+            return json_producer(req, args)
+
         def send_json(
                 req: QuickServerRequestHandler,
                 args: ReqArgs) -> BytesIO | None:
-            obj = json_producer(req, args)
+            obj = fmethod(req, args)
             if not isinstance(obj, Response):
-                obj = Response(obj)
+                obj = Response(obj)  # type: ignore
             ctype = obj.get_ctype("application/json")
             code = obj.code
             obj = obj.response
@@ -2705,10 +2938,25 @@ class QuickServer(http_server.HTTPServer):
             result is `None` a 404 error is sent.
         """
 
+        def fmethod(
+                req: QuickServerRequestHandler,
+                args: ReqArgs) -> AnyStrResponse:
+            for mwfun in self._global_middleware:
+                next_token = ReqNext(mwfun.__qualname__)
+                intermediate = mwfun(req, args, next_token)
+                if intermediate is next_token:
+                    continue
+                if isinstance(intermediate, ReqNext):
+                    raise ValueError(
+                        "middleware returned 'next' from a different "
+                        f"middleware: {intermediate}")
+                return intermediate
+            return text_producer(req, args)
+
         def send_text(
                 req: QuickServerRequestHandler,
                 args: ReqArgs) -> BytesIO | None:
-            text = text_producer(req, args)
+            text = fmethod(req, args)
             if isinstance(text, Response):
                 resp = text
             else:
@@ -2850,6 +3098,24 @@ class QuickServer(http_server.HTTPServer):
             argc: int | None = None,
             complete: CmdCompleteF | None = None,
             no_replace: bool = False) -> Callable[[CmdF], CmdF]:
+        """Adds a command to the command line interface loop.
+
+        Args:
+            argc (int | None, optional): The number of expected further
+                arguments. If None arguments are not restricted. Defaults to
+                None.
+            complete (CmdCompleteF | None, optional): A function that is called
+                to complete further arguments. If None no suggestions are made.
+                The function gets the arguments up to the incomplete argument
+                (args). text contains the to be completed argument. The
+                function must returns a list of suggestions or None
+                if text is valid already and there are no further suggestions.
+            no_replace (bool, optional): Whether to replace existing commands.
+                Defaults to False.
+
+        Returns:
+            Callable[[CmdF], CmdF]: The wrapper function.
+        """
 
         def wrapper(fun: CmdF) -> CmdF:
             name = getattr(fun, "__name__")
@@ -2863,6 +3129,17 @@ class QuickServer(http_server.HTTPServer):
             self,
             mask: str,
             argc: int | None = None) -> Callable[[ReqF[R_co]], ReqF[R_co]]:
+        """
+        Adds a GET handler that produces a JSON response.
+
+        Args:
+            mask (str): The mask.
+            argc (int | None, optional): Number of path arguments. Defaults to
+                None.
+
+        Returns:
+            Callable[[ReqF[R_co]], ReqF[R_co]]: The wrapper function.
+        """
 
         def wrapper(fun: ReqF[R_co]) -> ReqF[R_co]:
             self.add_json_get_mask(mask, fun)
@@ -2875,6 +3152,17 @@ class QuickServer(http_server.HTTPServer):
             self,
             mask: str,
             argc: int | None = None) -> Callable[[ReqF[R_co]], ReqF[R_co]]:
+        """
+        Adds a PUT handler that produces a JSON response.
+
+        Args:
+            mask (str): The mask.
+            argc (int | None, optional): Number of path arguments. Defaults to
+                None.
+
+        Returns:
+            Callable[[ReqF[R_co]], ReqF[R_co]]: The wrapper function.
+        """
 
         def wrapper(fun: ReqF[R_co]) -> ReqF[R_co]:
             self.add_json_put_mask(mask, fun)
@@ -2887,6 +3175,17 @@ class QuickServer(http_server.HTTPServer):
             self,
             mask: str,
             argc: int | None = None) -> Callable[[ReqF[R_co]], ReqF[R_co]]:
+        """
+        Adds a DELETE handler that produces a JSON response.
+
+        Args:
+            mask (str): The mask.
+            argc (int | None, optional): Number of path arguments. Defaults to
+                None.
+
+        Returns:
+            Callable[[ReqF[R_co]], ReqF[R_co]]: The wrapper function.
+        """
 
         def wrapper(fun: ReqF[R_co]) -> ReqF[R_co]:
             self.add_json_delete_mask(mask, fun)
@@ -2899,6 +3198,17 @@ class QuickServer(http_server.HTTPServer):
             self,
             mask: str,
             argc: int | None = None) -> Callable[[ReqF[R_co]], ReqF[R_co]]:
+        """
+        Adds a POST handler that produces a JSON response.
+
+        Args:
+            mask (str): The mask.
+            argc (int | None, optional): Number of path arguments. Defaults to
+                None.
+
+        Returns:
+            Callable[[ReqF[R_co]], ReqF[R_co]]: The wrapper function.
+        """
 
         def wrapper(fun: ReqF[R_co]) -> ReqF[R_co]:
             self.add_json_post_mask(mask, fun)
@@ -2912,6 +3222,18 @@ class QuickServer(http_server.HTTPServer):
             mask: str,
             argc: int | None = None,
             ) -> Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]:
+        """
+        Adds a GET handler that produces a text response.
+
+        Args:
+            mask (str): The mask.
+            argc (int | None, optional): Number of path arguments. Defaults to
+                None.
+
+        Returns:
+            Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]: The wrapper
+                function.
+        """
 
         def wrapper(fun: ReqF[AnyStrResponse]) -> ReqF[AnyStrResponse]:
             self.add_text_get_mask(mask, fun)
@@ -2925,6 +3247,18 @@ class QuickServer(http_server.HTTPServer):
             mask: str,
             argc: int | None = None,
             ) -> Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]:
+        """
+        Adds a PUT handler that produces a text response.
+
+        Args:
+            mask (str): The mask.
+            argc (int | None, optional): Number of path arguments. Defaults to
+                None.
+
+        Returns:
+            Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]: The wrapper
+                function.
+        """
 
         def wrapper(fun: ReqF[AnyStrResponse]) -> ReqF[AnyStrResponse]:
             self.add_text_put_mask(mask, fun)
@@ -2938,6 +3272,18 @@ class QuickServer(http_server.HTTPServer):
             mask: str,
             argc: int | None = None,
             ) -> Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]:
+        """
+        Adds a DELETE handler that produces a text response.
+
+        Args:
+            mask (str): The mask.
+            argc (int | None, optional): Number of path arguments. Defaults to
+                None.
+
+        Returns:
+            Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]: The wrapper
+                function.
+        """
 
         def wrapper(fun: ReqF[AnyStrResponse]) -> ReqF[AnyStrResponse]:
             self.add_text_delete_mask(mask, fun)
@@ -2951,6 +3297,18 @@ class QuickServer(http_server.HTTPServer):
             mask: str,
             argc: int | None = None,
             ) -> Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]:
+        """
+        Adds a POST handler that produces a text response.
+
+        Args:
+            mask (str): The mask.
+            argc (int | None, optional): Number of path arguments. Defaults to
+                None.
+
+        Returns:
+            Callable[[ReqF[AnyStrResponse]], ReqF[AnyStrResponse]]: The wrapper
+                function.
+        """
 
         def wrapper(fun: ReqF[AnyStrResponse]) -> ReqF[AnyStrResponse]:
             self.add_text_post_mask(mask, fun)
@@ -2959,18 +3317,42 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
+    def add_middleware(self, mwfun: MiddlewareF) -> None:
+        """
+        Adds a middleware that is applied to all request handlers that are
+        installed afterwards.
+
+        Args:
+            mwfun (MiddlewareF): The middleware.
+        """
+        self._global_middleware.append(mwfun)
+
     def middleware(
             self,
             mwfun: MiddlewareF[A_co],
             ) -> Callable[[ReqF[B_co]], ReqF[A_co | B_co]]:
+        """
+        Adds a middleware to a given handler.
+
+        Args:
+            mwfun (MiddlewareF[A_co]): The middleware.
+
+        Returns:
+            Callable[[ReqF[B_co]], ReqF[A_co | B_co]]: The wrapper
+                function.
+        """
 
         def wrapper(fun: ReqF[B_co]) -> ReqF[A_co | B_co]:
 
             def compute(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
-                next_token = ReqNext()
+                next_token = ReqNext(mwfun.__qualname__)
                 intermediate = mwfun(req, args, next_token)
                 if intermediate is next_token:
                     return fun(req, args)
+                if isinstance(intermediate, ReqNext):
+                    raise ValueError(
+                        "middleware returned 'next' from a different "
+                        f"middleware: {intermediate}")
                 return intermediate
 
             return compute
@@ -3253,12 +3635,30 @@ class QuickServer(http_server.HTTPServer):
     # tokens #
 
     def create_token(self) -> str:
+        """
+        Create a unique token.
+
+        Returns:
+            str: The token.
+        """
         return uuid.uuid4().hex
 
-    def set_default_token_expiration(self, expire: int) -> None:
+    def set_default_token_expiration(self, expire: float) -> None:
+        """
+        Set the default token expiration in seconds.
+
+        Args:
+            expire (float): The expiration in seconds.
+        """
         self._token_expire = expire
 
-    def get_default_token_expiration(self) -> int:
+    def get_default_token_expiration(self) -> float:
+        """
+        Gets the default token expiration in seconds.
+
+        Returns:
+            float: The expiration in seconds.
+        """
         return self._token_expire
 
     @contextlib.contextmanager
@@ -3316,11 +3716,29 @@ class QuickServer(http_server.HTTPServer):
                     self._token_handler.put_token(token, res)
 
     def get_tokens(self) -> list[str]:
+        """
+        Retrieves all active tokens.
+
+        Returns:
+            list[str]: All tokens that have not expired yet.
+        """
         with self._token_handler.lock(None):
             self._token_handler.flush_old_tokens()
             return self._token_handler.get_tokens()
 
     def get_token_ttl(self, token: str) -> float | None:
+        """
+        Returns the time in seconds until the given key expires. If the key
+        does not expire None is returned. If the key has already expired 0
+        is returned.
+
+        Args:
+            token (str): The token.
+
+        Returns:
+            float | None: The number of seconds until the key expires. If None
+                the key does not expire. If 0 the key has already expired.
+        """
         with self._token_handler.lock(token):
             try:
                 ttl = self._token_handler.ttl(token)
