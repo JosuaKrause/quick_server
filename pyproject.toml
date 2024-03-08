@@ -2,7 +2,7 @@
     name = "quick_server"
     description = "QuickServer is a quick to use and easy to set up server implementation."
     readme = "README.rst"
-    version = "0.8.10"
+    version = "0.9.0"
     authors = [
         {name = "Josua Krause", email = "josua.krause@gmail.com"},
     ]
@@ -17,7 +17,7 @@
     requires-python = ">=3.10"
     classifiers = [
         "Development Status :: 4 - Beta",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",

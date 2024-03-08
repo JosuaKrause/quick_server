@@ -1,5 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+#
+# Copyright 2024 Josua Krause
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+"""Runs various tests for quick server."""
 import json
 import os
 import select
@@ -17,6 +33,13 @@ NL = "\n"
 
 
 def run(*, python: list[str], skip: int) -> None:
+    """
+    Runs the tests.
+
+    Args:
+        python (list[str]): The invocation command of the python interpreter.
+        skip (int): Skips the given number of tests.
+    """
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     def get_time() -> float:
@@ -558,6 +581,7 @@ def run(*, python: list[str], skip: int) -> None:
         return True
 
     def token_test() -> bool:
+        # pylint: disable=import-outside-toplevel
         from quick_server import QuickServer
 
         qserve = QuickServer(("", 0))
