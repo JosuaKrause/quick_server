@@ -182,4 +182,4 @@
     warn_no_return = true
     warn_unused_ignores = true
     follow_imports = "normal"
-    exclude = []
+    exclude = ["build/"]

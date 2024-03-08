@@ -280,6 +280,26 @@ def get_time() -> float:
     return time.monotonic()
 
 
+def function_name(fun: Callable) -> str:
+    """
+    Returns a readable representation of the name of the given function.
+
+    Args:
+        fun (Callable): The function.
+
+    Returns:
+        str: A precise readable name for the function. If the precise name is
+            not available less precise names are chosen instead.
+    """
+    res = getattr(fun, "__qualname__", None)
+    if res is not None:
+        return res
+    res = getattr(fun, "__name__", None)
+    if res is not None:
+        return res
+    return f"{res}"
+
+
 __version__ = version(__package__)
 
 
@@ -2795,7 +2815,7 @@ class QuickServer(http_server.HTTPServer):
                 req: QuickServerRequestHandler,
                 args: ReqArgs) -> B_co:
             for mwfun in self._global_middleware:
-                next_token = ReqNext(mwfun.__qualname__)
+                next_token = ReqNext(function_name(mwfun))
                 intermediate = mwfun(req, args, next_token)
                 if intermediate is next_token:
                     continue
@@ -2810,16 +2830,18 @@ class QuickServer(http_server.HTTPServer):
                 req: QuickServerRequestHandler,
                 args: ReqArgs) -> BytesIO | None:
             obj = fmethod(req, args)
-            if not isinstance(obj, Response):
-                obj = Response(obj)  # type: ignore
-            ctype = obj.get_ctype("application/json")
-            code = obj.code
-            obj = obj.response
-            if obj is None:
+            if isinstance(obj, Response):
+                resp = obj
+            else:
+                resp = Response(obj)  # type: ignore
+            ctype = resp.get_ctype("application/json")
+            code = resp.code
+            content = resp.response
+            if content is None:
                 req.send_error(404, "File not found")
                 return None
             f = BytesIO()
-            json_str = json_dumps(obj)
+            json_str = json_dumps(content)
             if isinstance(json_str, (str, bytes)):
                 try:
                     json_str = json_str.decode("utf-8")  # type: ignore
@@ -2957,7 +2979,7 @@ class QuickServer(http_server.HTTPServer):
                 req: QuickServerRequestHandler,
                 args: ReqArgs) -> AnyStrResponse:
             for mwfun in self._global_middleware:
-                next_token = ReqNext(mwfun.__qualname__)
+                next_token = ReqNext(function_name(mwfun))
                 intermediate = mwfun(req, args, next_token)
                 if intermediate is next_token:
                     continue
@@ -3360,7 +3382,7 @@ class QuickServer(http_server.HTTPServer):
         def wrapper(fun: ReqF[B_co]) -> ReqF[A_co | B_co]:
 
             def compute(req: QuickServerRequestHandler, args: ReqArgs) -> Any:
-                next_token = ReqNext(mwfun.__qualname__)
+                next_token = ReqNext(function_name(mwfun))
                 intermediate = mwfun(req, args, next_token)
                 if intermediate is next_token:
                     return fun(req, args)
