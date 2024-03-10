@@ -2810,11 +2810,12 @@ class QuickServer(http_server.HTTPServer):
             method was a POST the JSON form content "post"). If the result is
             `None` a 404 error is sent.
         """
+        middlewares = list(self._global_middleware)
 
         def fmethod(
                 req: QuickServerRequestHandler,
                 args: ReqArgs) -> B_co:
-            for mwfun in self._global_middleware:
+            for mwfun in middlewares:
                 next_token = ReqNext(function_name(mwfun))
                 intermediate = mwfun(req, args, next_token)
                 if intermediate is next_token:
@@ -2974,11 +2975,12 @@ class QuickServer(http_server.HTTPServer):
             and if the method was a POST the JSON form content "post"). If the
             result is `None` a 404 error is sent.
         """
+        middlewares = list(self._global_middleware)
 
         def fmethod(
                 req: QuickServerRequestHandler,
                 args: ReqArgs) -> AnyStrResponse:
-            for mwfun in self._global_middleware:
+            for mwfun in middlewares:
                 next_token = ReqNext(function_name(mwfun))
                 intermediate = mwfun(req, args, next_token)
                 if intermediate is next_token:
