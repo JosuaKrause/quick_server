@@ -1293,6 +1293,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         Args:
             proxy_url (str): The proxy URL.
         """
+        print(f"proxy to {proxy_url}")
         clen = _GETHEADER(self.headers, "content-length")
         clen = int(clen) if clen is not None else 0
         if clen > 0:
@@ -1300,37 +1301,38 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         else:
             payload = None
 
+        method = thread_local.method
         req = Request(
             proxy_url,
             data=payload,
             headers=dict(self.headers.items()),
-            method=thread_local.method)
+            method=method)
 
         def process(response: Any) -> None:
-            print("writing headers")
-            self.send_response(response.code)
-            for (hkey, hval) in response.headers.items():
-                self.send_header(hkey, hval)
-            self.end_headers()
-            print("writing headers done")
-            # if _GETHEADER(
-            #         response.headers, "transfer-encoding") == "chunked":
-            #     # FIXME implement properly
-            #     while True:
-            #         cur = response.read(1024)
-            #         if cur:
-            #             self.wfile.write(cur)
-            #             self.wfile.flush()
-            #         else:
-            #             break  # FIXME no better solution now..
-            # else:
             bio = BytesIO()
             shutil.copyfileobj(response, bio)
-            print(f"response get {bio.tell()} bytes read")
+            outlen = bio.tell()
+            thread_local.size = outlen
+            print(f"response get {outlen} bytes read")
+            print("writing headers")
+            self.send_response(response.code)
+            has_content_length = False
+            for (hkey, hval) in response.headers.items():
+                if f"{hkey}".lower() == "content-length":
+                    has_content_length = True
+                self.send_header(hkey, hval)
+            if not has_content_length:
+                self.send_header("Content-Length", outlen)
+            self.end_headers()
+            print("writing headers done")
             bio.seek(0, SEEK_SET)
             self.copyfile(bio, self.wfile)
             self.wfile.flush()
             print("written response")
+            if method == "GET":
+                SimpleHTTPRequestHandler.do_GET(self)
+            elif method == "HEAD":
+                SimpleHTTPRequestHandler.do_HEAD(self)
 
         try:
             with urlopen(req) as response:
@@ -1339,7 +1341,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         except HTTPError as e:
             print("error processing proxy")
             process(e)
-        raise PreventDefaultResponse()
+        raise PreventDefaultResponse(code=None, message=None)
 
     def handle_error(self) -> None:
         """Tries to send an 500 error after encountering an exception."""
