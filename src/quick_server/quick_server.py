@@ -1313,23 +1313,24 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 self.send_header(hkey, hval)
             self.end_headers()
             print("writing headers done")
-            if _GETHEADER(response.headers, "transfer-encoding") == "chunked":
-                # FIXME implement properly
-                while True:
-                    cur = response.read(1024)
-                    if cur:
-                        self.wfile.write(cur)
-                        self.wfile.flush()
-                    else:
-                        break  # FIXME no better solution now..
-            else:
-                bio = BytesIO()
-                shutil.copyfileobj(response, bio)
-                print(f"response get {bio.tell()} bytes read")
-                bio.seek(0, SEEK_SET)
-                self.copyfile(bio, self.wfile)
-                self.wfile.flush()
-                print("written response")
+            # if _GETHEADER(
+            #         response.headers, "transfer-encoding") == "chunked":
+            #     # FIXME implement properly
+            #     while True:
+            #         cur = response.read(1024)
+            #         if cur:
+            #             self.wfile.write(cur)
+            #             self.wfile.flush()
+            #         else:
+            #             break  # FIXME no better solution now..
+            # else:
+            bio = BytesIO()
+            shutil.copyfileobj(response, bio)
+            print(f"response get {bio.tell()} bytes read")
+            bio.seek(0, SEEK_SET)
+            self.copyfile(bio, self.wfile)
+            self.wfile.flush()
+            print("written response")
 
         try:
             with urlopen(req) as response:
