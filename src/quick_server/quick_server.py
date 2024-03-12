@@ -1650,6 +1650,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         match = EXTRACT_PATH.match(txt)
         if match is not None and match.group(1) in self.common_invalid_paths:
             return
+        if txt == "code 404, message File not found":
+            # NOTE: not a very helpful message to begin with
+            return
         msg(
             f"{timing + ' ' if len(timing) > 0 else ''}"
             f"[{self.log_date_time_string()}] {txt}")
