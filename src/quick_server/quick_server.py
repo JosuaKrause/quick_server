@@ -51,6 +51,7 @@ import json
 import math
 import os
 import posixpath
+import re
 import readline
 import select
 import shlex
@@ -683,6 +684,9 @@ def kill_thread(
                 msgout(f"killed worker {cur_key}")
 
 
+EXTRACT_PATH = re.compile(r"\"[A-Z]+\s([^\s]*)\sHTTP/[0-9\.]+\"\s404$")
+
+
 class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     """The request handler for QuickServer. Delegates file requests to
        SimpleHTTPRequestHandler if the request could not be resolved as
@@ -1185,8 +1189,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     self.send_to_proxy(pxya)  # raises PreventDefaultResponse
                 if orig_path not in self.common_invalid_paths:
                     msg(f"no matching folder alias: {orig_path}")
-                else:
-                    thread_local.no_log = True
                 raise PreventDefaultResponse(404, "File not found")
             path: str = mpath
             if os.path.isdir(path):
@@ -1637,10 +1639,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """
         # pylint: disable=redefined-builtin
 
-        no_log = getattr(thread_local, "no_log", False)
-        if no_log:
-            thread_local.no_log = False
-            return
         clock_start = getattr(thread_local, "clock_start", None)
         thread_local.clock_start = None
         timing = (
@@ -1649,6 +1647,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             else ""
         )
         txt = f"{format % args}" if args else f"{format}"
+        match = EXTRACT_PATH.match(txt)
+        if match is not None and match.group(1) in self.common_invalid_paths:
+            return
         msg(
             f"{timing + ' ' if len(timing) > 0 else ''}"
             f"[{self.log_date_time_string()}] {txt}")
