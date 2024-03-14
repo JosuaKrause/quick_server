@@ -1302,10 +1302,14 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             payload = None
 
         method = thread_local.method
+        headers_in = dict(self.headers.items())
+        print(f"{method} {proxy_url}")
+        for key, value in headers_in.items():
+            print(f"{key}={value}")
         req = Request(
             proxy_url,
             data=payload,
-            headers=dict(self.headers.items()),
+            headers=headers_in,
             method=method)
 
         def process(response: Any) -> None:
@@ -1314,21 +1318,23 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             outlen = bio.tell()
             thread_local.size = outlen
             print(f"response get {outlen} bytes read")
-            print("writing headers")
+            print(f"writing headers {response.code}")
             self.send_response(response.code)
             has_content_length = False
             for (hkey, hval) in response.headers.items():
                 if f"{hkey}".lower() == "content-length":
                     has_content_length = True
                 self.send_header(hkey, hval)
+                print(f"{hkey}={hval}")
             if not has_content_length:
                 self.send_header("Content-Length", outlen)
+                print(f"Content-Length={outlen}")
             self.end_headers()
             print("writing headers done")
             bio.seek(0, SEEK_SET)
             self.copyfile(bio, self.wfile)
             self.wfile.flush()
-            print("written response")
+            print(f"written response {bio.tell()}")
             if method == "GET":
                 SimpleHTTPRequestHandler.do_GET(self)
             elif method == "HEAD":
