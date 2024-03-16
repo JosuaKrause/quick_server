@@ -1321,18 +1321,30 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             print(f"writing headers {response.code}")
             self.send_response(response.code)
             has_content_length = False
+            is_chunked = False
             for (hkey, hval) in response.headers.items():
-                if f"{hkey}".lower() == "content-length":
+                lower_key = f"{hkey}".lower()
+                lower_val = f"{hval}".strip().lower()
+                if lower_key == "content-length":
                     has_content_length = True
+                elif (
+                        lower_key == "transfer-encoding"
+                        and lower_val == "chunked"):
+                    is_chunked = True
                 self.send_header(hkey, hval)
                 print(f"{hkey}={hval}")
-            if not has_content_length:
+            if not has_content_length and not is_chunked:
                 self.send_header("Content-Length", outlen)
                 print(f"Content-Length={outlen}")
             self.end_headers()
             print("writing headers done")
+            if is_chunked:
+                self.wfile.write(f"{outlen}".encode("utf-8"))
+                self.wfile.write(b"\r\n")
             bio.seek(0, SEEK_SET)
             self.copyfile(bio, self.wfile)
+            if is_chunked:
+                self.wfile.write(b"\r\n0\r\n\r\n")
             self.wfile.flush()
             print(f"written response {bio.tell()}")
             if method == "GET":
