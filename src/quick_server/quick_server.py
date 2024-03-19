@@ -1330,7 +1330,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 elif (
                         lower_key == "transfer-encoding"
                         and lower_val == "chunked"):
-                    is_chunked = True
+                    # is_chunked = True
+                    continue
                 self.send_header(hkey, hval)
                 print(f"{hkey}={hval}")
             if not has_content_length and not is_chunked:
