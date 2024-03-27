@@ -1293,7 +1293,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         Args:
             proxy_url (str): The proxy URL.
         """
-        # print(f"proxy to {proxy_url}")
         clen = _GETHEADER(self.headers, "content-length")
         clen = int(clen) if clen is not None else 0
         if clen > 0:
@@ -1303,9 +1302,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
         method = thread_local.method
         headers_in = dict(self.headers.items())
-        # print(f"{method} {proxy_url}")
-        # for key, value in headers_in.items():
-        #     print(f"{key}={value}")
         req = Request(
             proxy_url,
             data=payload,
@@ -1317,8 +1313,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             shutil.copyfileobj(response, bio)
             outlen = bio.tell()
             thread_local.size = outlen
-            # print(f"response get {outlen} bytes read")
-            # print(f"writing headers {response.code}")
             self.send_response(response.code)
             has_content_length = False
             is_chunked = False
@@ -1333,21 +1327,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     # is_chunked = True
                     continue
                 self.send_header(hkey, hval)
-                # print(f"{hkey}={hval}")
             if not has_content_length and not is_chunked:
                 self.send_header("Content-Length", outlen)
-                # print(f"Content-Length={outlen}")
             self.end_headers()
-            # print("writing headers done")
-            # if is_chunked:
-            #     self.wfile.write(f"{outlen}".encode("utf-8"))
-            #     self.wfile.write(b"\r\n")
             bio.seek(0, SEEK_SET)
             self.copyfile(bio, self.wfile)
-            # if is_chunked:
-            #     self.wfile.write(b"\r\n0\r\n\r\n")
             self.wfile.flush()
-            # print(f"written response {bio.tell()}")
             if method == "GET":
                 SimpleHTTPRequestHandler.do_GET(self)
             elif method == "HEAD":
@@ -1355,10 +1340,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
         try:
             with urlopen(req) as response:
-                # print("processing proxy response")
                 process(response)
         except HTTPError as e:
-            # print("error processing proxy")
             process(e)
         raise PreventDefaultResponse(code=None, message=None)
 
