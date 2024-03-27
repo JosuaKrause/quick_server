@@ -51,6 +51,7 @@ import json
 import math
 import os
 import posixpath
+import re
 import readline
 import select
 import shlex
@@ -66,7 +67,7 @@ import zlib
 from collections.abc import Callable, Iterable, Iterator
 from http.server import SimpleHTTPRequestHandler
 from importlib.metadata import version
-from io import BytesIO, StringIO
+from io import BytesIO, SEEK_END, SEEK_SET, StringIO
 from typing import Any, BinaryIO, cast, Generic, IO, Protocol, TextIO, TypeVar
 from urllib import parse as urlparse
 from urllib.error import HTTPError
@@ -434,7 +435,7 @@ def msg(message: str) -> None:
     for curline in message.splitlines():
         out.write(f"{head}{curline}\n")
     out.flush()
-    out.seek(0)
+    out.seek(0, SEEK_SET)
     if MSG_STDERR:
         sys.stderr.write(out.read())
         sys.stderr.flush()
@@ -683,6 +684,9 @@ def kill_thread(
                 msgout(f"killed worker {cur_key}")
 
 
+EXTRACT_PATH = re.compile(r"\"[A-Z]+\s([^\s]*)\sHTTP/[0-9\.]+\"\s404$")
+
+
 class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     """The request handler for QuickServer. Delegates file requests to
        SimpleHTTPRequestHandler if the request could not be resolved as
@@ -817,7 +821,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 buffr = lens["push"].pop()
                 res += buffr.read(length - len(res))
                 if buffr.read(1) != b"":
-                    buffr.seek(buffr.tell() - 1)
+                    buffr.seek(buffr.tell() - 1, SEEK_SET)
                     lens["push"].append(buffr)
             if len(res) < length:
                 res += f_in.read(length - len(res))
@@ -834,7 +838,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 buffl = BytesIO()
                 buffl.write(line)
                 buffl.flush()
-                buffl.seek(0)
+                buffl.seek(0, SEEK_SET)
                 lens["clen"] += len(line)
                 lens["push"].append(buffl)
 
@@ -859,7 +863,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 if out_split > 0:
                     write_buff(buff[:out_split])
                     buff = buff[out_split:]
-            f.seek(0)
+            f.seek(0, SEEK_SET)
             return f
 
         def process() -> None:
@@ -871,7 +875,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     line += buffr.readline()
                     tmp = buffr.read(1)
                     if tmp != b"":
-                        buffr.seek(buffr.tell() - 1)
+                        buffr.seek(buffr.tell() - 1, SEEK_SET)
                         lens["push"].append(buffr)
                 if not line.endswith(b"\n"):
                     line += f_in.readline(lens["clen"])
@@ -1185,8 +1189,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     self.send_to_proxy(pxya)  # raises PreventDefaultResponse
                 if orig_path not in self.common_invalid_paths:
                     msg(f"no matching folder alias: {orig_path}")
-                else:
-                    thread_local.no_log = True
                 raise PreventDefaultResponse(404, "File not found")
             path: str = mpath
             if os.path.isdir(path):
@@ -1298,36 +1300,49 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         else:
             payload = None
 
+        method = thread_local.method
+        headers_in = dict(self.headers.items())
         req = Request(
             proxy_url,
             data=payload,
-            headers=dict(self.headers.items()),
-            method=thread_local.method)
+            headers=headers_in,
+            method=method)
 
         def process(response: Any) -> None:
+            bio = BytesIO()
+            shutil.copyfileobj(response, bio)
+            outlen = bio.tell()
+            thread_local.size = outlen
             self.send_response(response.code)
+            has_content_length = False
+            is_chunked = False
             for (hkey, hval) in response.headers.items():
+                lower_key = f"{hkey}".lower()
+                lower_val = f"{hval}".strip().lower()
+                if lower_key == "content-length":
+                    has_content_length = True
+                elif (
+                        lower_key == "transfer-encoding"
+                        and lower_val == "chunked"):
+                    continue
                 self.send_header(hkey, hval)
+            if not has_content_length and not is_chunked:
+                self.send_header("Content-Length", outlen)
             self.end_headers()
-            if _GETHEADER(response.headers, "transfer-encoding") == "chunked":
-                # FIXME implement proper
-                while True:
-                    cur = response.read(1024)
-                    if cur:
-                        self.wfile.write(cur)
-                        self.wfile.flush()
-                    else:
-                        break  # FIXME no better solution now..
-            else:
-                self.wfile.write(response.read())
-                self.wfile.flush()
+            bio.seek(0, SEEK_SET)
+            self.copyfile(bio, self.wfile)
+            self.wfile.flush()
+            if method == "GET":
+                SimpleHTTPRequestHandler.do_GET(self)
+            elif method == "HEAD":
+                SimpleHTTPRequestHandler.do_HEAD(self)
 
         try:
             with urlopen(req) as response:
                 process(response)
         except HTTPError as e:
             process(e)
-        raise PreventDefaultResponse()
+        raise PreventDefaultResponse(code=None, message=None)
 
     def handle_error(self) -> None:
         """Tries to send an 500 error after encountering an exception."""
@@ -1637,10 +1652,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         """
         # pylint: disable=redefined-builtin
 
-        no_log = getattr(thread_local, "no_log", False)
-        if no_log:
-            thread_local.no_log = False
-            return
         clock_start = getattr(thread_local, "clock_start", None)
         thread_local.clock_start = None
         timing = (
@@ -1649,6 +1660,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             else ""
         )
         txt = f"{format % args}" if args else f"{format}"
+        match = EXTRACT_PATH.match(txt)
+        if match is not None and match.group(1) in self.common_invalid_paths:
+            return
+        if txt == "code 404, message File not found":
+            # NOTE: not a very helpful message to begin with
+            return
         msg(
             f"{timing + ' ' if len(timing) > 0 else ''}"
             f"[{self.log_date_time_string()}] {txt}")
@@ -2351,7 +2368,7 @@ def construct_multipart_response(
         resp.write(b"\"\r\n")
         if hasattr(value, "read"):
             if hasattr(value, "seek"):
-                value.seek(0)
+                value.seek(0, SEEK_SET)
             resp.write(b"Content-Type: application/octet-stream\r\n")
             resp.write(b"\r\n")
             shutil.copyfileobj(value, resp, length=16*1024)
@@ -2367,7 +2384,7 @@ def construct_multipart_response(
     resp.write(b"--")
     resp.write(bbound)
     resp.write(b"--\r\n")
-    resp.seek(0)
+    resp.seek(0, SEEK_SET)
     return resp, f"multipart/form-data; boundary=\"{boundary}\""
 
 
@@ -2852,11 +2869,11 @@ class QuickServer(http_server.HTTPServer):
             f.write(json_str)  # type: ignore
             f.flush()
             size = f.tell()
-            f.seek(0)
+            f.seek(0, SEEK_SET)
             # handle ETag caching
             if req.request_version >= "HTTP/1.1":
                 e_tag = f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"
-                f.seek(0)
+                f.seek(0, SEEK_SET)
                 match = _GETHEADER(req.headers, "if-none-match")
                 if match is not None:
                     if req.check_cache(e_tag, match):
@@ -3010,14 +3027,14 @@ class QuickServer(http_server.HTTPServer):
             if hasattr(val, "read"):
                 if hasattr(val, "seek"):
                     f: BytesIO = val  # type: ignore
-                    size = f.seek(0, os.SEEK_END)
-                    f.seek(0)
+                    size = f.seek(0, SEEK_END)
+                    f.seek(0, SEEK_SET)
                 else:
                     f = BytesIO()
                     v: IO = val  # type: ignore
                     shutil.copyfileobj(v, f, length=16*1024)
                     size = f.tell()
-                    f.seek(0)
+                    f.seek(0, SEEK_SET)
             else:
                 f = BytesIO()
                 if isinstance(val, (str, bytes)):
@@ -3030,11 +3047,11 @@ class QuickServer(http_server.HTTPServer):
                 f.write(val_bytes)
                 f.flush()
                 size = f.tell()
-                f.seek(0)
+                f.seek(0, SEEK_SET)
             # handle ETag caching
             if req.request_version >= "HTTP/1.1" and hasattr(f, "seek"):
                 e_tag = f"{zlib.crc32(f.read()) & 0xFFFFFFFF:x}"
-                f.seek(0)
+                f.seek(0, SEEK_SET)
                 match = _GETHEADER(req.headers, "if-none-match")
                 if match is not None:
                     if req.check_cache(e_tag, match):
