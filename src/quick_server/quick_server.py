@@ -1172,11 +1172,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             # if pass is still None here the file cannot be found
             if mpath is None:
 
-                def forward(url_path: str) -> None:
+                def forward(url_path: str, *, remove_last: bool) -> None:
                     for (name, pxy) in self.server._folder_proxys:
                         if not url_path.startswith(name):
                             continue
-                        remain = url_path[len(name) - 1:]
+                        start_adj = 0 if remove_last else 1
+                        remain = url_path[len(name) - start_adj:]
                         proxy = urlparse.urlparse(pxy)
                         reala = urlparse.urlparse(init_path)
                         pxya = urlparse.urlunparse((
@@ -1191,9 +1192,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
                 # try proxies
                 # raises PreventDefaultResponse if successful
-                forward(orig_path)
+                forward(orig_path, remove_last=False)
                 if len(orig_path) and orig_path[-1] != "/":
-                    forward(f"{orig_path}/")
+                    forward(f"{orig_path}/", remove_last=True)
 
                 # out of luck
                 if orig_path not in self.common_invalid_paths:
