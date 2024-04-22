@@ -1190,7 +1190,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                             reala[4],  # query
                             reala[5],  # fragment
                         ))
-                        self.send_to_proxy(pxya)
+                        self.send_to_proxy(pxya, orig_path)
 
                 # try proxies
                 # raises PreventDefaultResponse if successful
@@ -1298,12 +1298,13 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.size = 0
         return True
 
-    def send_to_proxy(self, proxy_url: str) -> None:
+    def send_to_proxy(self, proxy_url: str, orig_path: str) -> None:
         """
         Forward the request to the given proxy.
 
         Args:
             proxy_url (str): The proxy URL.
+            orig_path (str): The original URL path.
         """
         is_debug = self.debug_proxy
         clen = _GETHEADER(self.headers, "content-length")
@@ -1316,7 +1317,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         method = thread_local.method
         headers_in = dict(self.headers.items())
         if is_debug:
-            msg(f"proxy to {method} {proxy_url}: {headers_in=} {payload=}")
+            msg(
+                f"proxy {orig_path} to {method} {proxy_url}: "
+                f"{json_dumps(headers_in)=} {payload=}")
         req = Request(
             proxy_url,
             data=payload,
@@ -1330,8 +1333,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             thread_local.size = outlen
             if is_debug:
                 msg(
-                    f"response {response.code} {dict(response.headers)=} "
-                    f"{outlen=}")
+                    f"response {response.code} for {orig_path} {outlen=} "
+                    f"{json_dumps(dict(response.headers))=}")
             self.send_response(response.code)
             has_content_length = False
             is_chunked = False
