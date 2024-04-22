@@ -1160,6 +1160,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         The absolute file path denoted by the original path.
         """
         # pylint: disable=protected-access
+
         init_path = orig_path
         orig_path = urlparse.urlparse(orig_path)[2]
         needs_redirect = False
