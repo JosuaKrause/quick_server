@@ -1001,6 +1001,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def _handle_special(self, send_body: bool, method_str: str) -> bool:
         # pylint: disable=protected-access
+
         path = self.path
         self.maybe_proxy_request(path)  # raises PDR on success
 
@@ -1300,6 +1301,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             orig_path (str): The path.
         """
         # pylint: disable=protected-access
+
         folder_proxys = self.server._folder_proxys
 
         def forward(url_path: str, *, remove_last: bool) -> None:
