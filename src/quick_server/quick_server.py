@@ -1003,9 +1003,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         # pylint: disable=protected-access
 
         path = self.path
-        print(
-            f"hnd special {thread_local.method} {path=} "
-            f"{method_str=} {send_body=}")
+        print(f"hnd special {path=} {method_str=} {send_body=}")
         self.maybe_proxy_request(path)  # raises PDR on success
 
         # interpreting the URL masks to find which method to call
