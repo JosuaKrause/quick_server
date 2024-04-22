@@ -365,6 +365,24 @@ def json_dumps(obj: Any) -> str:
         do_map(json_obj), indent=2, sort_keys=True, allow_nan=False)
 
 
+def json_compact(obj: Any) -> str:
+    """
+    Creates a compact JSON from the given object. This function does not
+    correct for ECMAscript consumers.
+
+    Args:
+        obj (Any): The object.
+
+    Returns:
+        str: A JSON without any spaces or new lines.
+    """
+    return json.dumps(
+        obj,
+        sort_keys=True,
+        indent=None,
+        separators=(",", ":"))
+
+
 LOG_FILE: TextIO | None = None
 
 
@@ -1319,7 +1337,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         if is_debug:
             msg(
                 f"proxy {orig_path} to {method} {proxy_url}: "
-                f"{json_dumps(headers_in)=} {payload=}")
+                f"headers={json_compact(headers_in)} {payload=}")
         req = Request(
             proxy_url,
             data=payload,
@@ -1334,7 +1352,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if is_debug:
                 msg(
                     f"response {response.code} for {orig_path} {outlen=} "
-                    f"{json_dumps(dict(response.headers))=}")
+                    f"headers={json_compact(dict(response.headers))}")
             self.send_response(response.code)
             has_content_length = False
             is_chunked = False
