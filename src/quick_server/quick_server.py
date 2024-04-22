@@ -717,6 +717,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     common_invalid_paths: set[str] = set()
 
+    debug_proxy: bool = False
+
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self.command} {self.path}]"
 
@@ -1303,6 +1305,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         Args:
             proxy_url (str): The proxy URL.
         """
+        is_debug = self.debug_proxy
         clen = _GETHEADER(self.headers, "content-length")
         clen = int(clen) if clen is not None else 0
         if clen > 0:
@@ -1312,6 +1315,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
         method = thread_local.method
         headers_in = dict(self.headers.items())
+        if is_debug:
+            msg(f"proxy to {method} {proxy_url}: {headers_in=} {payload=}")
         req = Request(
             proxy_url,
             data=payload,
@@ -1323,6 +1328,10 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             shutil.copyfileobj(response, bio)
             outlen = bio.tell()
             thread_local.size = outlen
+            if is_debug:
+                msg(
+                    f"response {response.code} {dict(response.headers)=} "
+                    f"{outlen=}")
             self.send_response(response.code)
             has_content_length = False
             is_chunked = False
@@ -2633,6 +2642,16 @@ class QuickServer(http_server.HTTPServer):
             invalid_paths (Iterable[str]): The new set of paths.
         """
         QuickServerRequestHandler.common_invalid_paths = set(invalid_paths)
+
+    def set_debug_proxy(self, is_debug_proxy: bool) -> None:
+        """
+        Sets whether to provide information about proxied requests.
+
+        Args:
+            is_debug_proxy (bool): If True, additional information is printed
+                on each proxy request.
+        """
+        QuickServerRequestHandler.debug_proxy = is_debug_proxy
 
     # request processing #
 
