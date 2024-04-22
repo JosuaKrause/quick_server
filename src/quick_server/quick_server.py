@@ -301,7 +301,7 @@ def function_name(fun: Callable) -> str:
     return f"{res}"
 
 
-__version__ = version(__package__)
+__version__ = version(cast(str, __package__))
 
 
 def _getheader_fallback(obj: Any, key: str) -> Any:
@@ -1171,22 +1171,32 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     break
             # if pass is still None here the file cannot be found
             if mpath is None:
+
+                def forward(url_path: str, *, remove_last: bool) -> None:
+                    for (name, pxy) in self.server._folder_proxys:
+                        if not url_path.startswith(name):
+                            continue
+                        start_adj = 0 if remove_last else 1
+                        remain = url_path[len(name) - start_adj:]
+                        proxy = urlparse.urlparse(pxy)
+                        reala = urlparse.urlparse(init_path)
+                        pxya = urlparse.urlunparse((
+                            proxy[0],  # scheme
+                            proxy[1],  # netloc
+                            f"{proxy[2]}{remain}",  # path
+                            reala[3],  # params
+                            reala[4],  # query
+                            reala[5],  # fragment
+                        ))
+                        self.send_to_proxy(pxya)
+
                 # try proxies
-                for (name, pxy) in self.server._folder_proxys:
-                    if not orig_path.startswith(name):
-                        continue
-                    remain = orig_path[len(name) - 1:]
-                    proxy = urlparse.urlparse(pxy)
-                    reala = urlparse.urlparse(init_path)
-                    pxya = urlparse.urlunparse((
-                        proxy[0],  # scheme
-                        proxy[1],  # netloc
-                        f"{proxy[2]}{remain}",  # path
-                        reala[3],  # params
-                        reala[4],  # query
-                        reala[5],  # fragment
-                    ))
-                    self.send_to_proxy(pxya)  # raises PreventDefaultResponse
+                # raises PreventDefaultResponse if successful
+                forward(orig_path, remove_last=False)
+                if len(orig_path) and orig_path[-1] != "/":
+                    forward(f"{orig_path}/", remove_last=True)
+
+                # out of luck
                 if orig_path not in self.common_invalid_paths:
                     msg(f"no matching folder alias: {orig_path}")
                 raise PreventDefaultResponse(404, "File not found")

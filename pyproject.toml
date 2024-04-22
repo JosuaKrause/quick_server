@@ -2,7 +2,7 @@
     name = "quick_server"
     description = "QuickServer is a quick to use and easy to set up server implementation."
     readme = "README.rst"
-    version = "0.9.2"
+    version = "0.9.3"
     authors = [
         {name = "Josua Krause", email = "josua.krause@gmail.com"},
     ]
