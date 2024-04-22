@@ -1001,9 +1001,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def _handle_special(self, send_body: bool, method_str: str) -> bool:
         # pylint: disable=protected-access
-
         path = self.path
-        print(f"hnd special {path=} {method_str=} {send_body=}")
         self.maybe_proxy_request(path)  # raises PDR on success
 
         # interpreting the URL masks to find which method to call
@@ -1161,8 +1159,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         The absolute file path denoted by the original path.
         """
         # pylint: disable=protected-access
-        print(f"{thread_local.method} {orig_path}")
-
         init_path = orig_path
         orig_path = urlparse.urlparse(orig_path)[2]
         needs_redirect = False
@@ -1195,8 +1191,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     break
             # if pass is still None here the file cannot be found
             if mpath is None:
-                # self.maybe_proxy_request(orig_path)  # raises PDR on success
-
                 # out of luck
                 if orig_path not in self.common_invalid_paths:
                     msg(f"no matching folder alias: {orig_path}")
@@ -1298,6 +1292,13 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         return True
 
     def maybe_proxy_request(self, orig_path: str) -> None:
+        """
+        Check if the given path needs to be proxied. If it is the case the
+        request is proxied and a `PreventDefaultResponse` exception is raised.
+
+        Args:
+            orig_path (str): The path.
+        """
         # pylint: disable=protected-access
         folder_proxys = self.server._folder_proxys
 
