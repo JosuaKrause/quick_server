@@ -1001,9 +1001,13 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def _handle_special(self, send_body: bool, method_str: str) -> bool:
         # pylint: disable=protected-access
-        print(f"hnd special {thread_local.method} {method_str} {send_body=}")
 
         path = self.path
+        print(
+            f"hnd special {thread_local.method} {path=} "
+            f"{method_str=} {send_body=}")
+        self.maybe_proxy_request(path)  # raises PDR on success
+
         # interpreting the URL masks to find which method to call
         method: ReqF[BytesIO | None] | None = None
         method_mask = None
@@ -1193,30 +1197,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     break
             # if pass is still None here the file cannot be found
             if mpath is None:
-
-                def forward(url_path: str, *, remove_last: bool) -> None:
-                    for (name, pxy) in self.server._folder_proxys:
-                        if not url_path.startswith(name):
-                            continue
-                        start_adj = 0 if remove_last else 1
-                        remain = url_path[len(name) - start_adj:]
-                        proxy = urlparse.urlparse(pxy)
-                        reala = urlparse.urlparse(init_path)
-                        pxya = urlparse.urlunparse((
-                            proxy[0],  # scheme
-                            proxy[1],  # netloc
-                            f"{proxy[2]}{remain}",  # path
-                            reala[3],  # params
-                            reala[4],  # query
-                            reala[5],  # fragment
-                        ))
-                        self.send_to_proxy(pxya, orig_path)
-
-                # try proxies
-                # raises PreventDefaultResponse if successful
-                forward(orig_path, remove_last=False)
-                if len(orig_path) and orig_path[-1] != "/":
-                    forward(f"{orig_path}/", remove_last=True)
+                self.maybe_proxy_request(orig_path)  # raises PDR on success
 
                 # out of luck
                 if orig_path not in self.common_invalid_paths:
@@ -1317,6 +1298,34 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         thread_local.size = 0
         return True
+
+    def maybe_proxy_request(self, orig_path: str) -> None:
+        # pylint: disable=protected-access
+        folder_proxys = self.server._folder_proxys
+
+        def forward(url_path: str, *, remove_last: bool) -> None:
+            for (name, pxy) in folder_proxys:
+                if not url_path.startswith(name):
+                    continue
+                start_adj = 0 if remove_last else 1
+                remain = url_path[len(name) - start_adj:]
+                proxy = urlparse.urlparse(pxy)
+                reala = urlparse.urlparse(orig_path)
+                pxya = urlparse.urlunparse((
+                    proxy[0],  # scheme
+                    proxy[1],  # netloc
+                    f"{proxy[2]}{remain}",  # path
+                    reala[3],  # params
+                    reala[4],  # query
+                    reala[5],  # fragment
+                ))
+                self.send_to_proxy(pxya, orig_path)
+
+        # try proxies
+        # raises PreventDefaultResponse if successful
+        forward(orig_path, remove_last=False)
+        if len(orig_path) and orig_path[-1] != "/":
+            forward(f"{orig_path}/", remove_last=True)
 
     def send_to_proxy(self, proxy_url: str, orig_path: str) -> None:
         """
