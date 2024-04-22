@@ -1195,7 +1195,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     break
             # if pass is still None here the file cannot be found
             if mpath is None:
-                self.maybe_proxy_request(orig_path)  # raises PDR on success
+                # self.maybe_proxy_request(orig_path)  # raises PDR on success
 
                 # out of luck
                 if orig_path not in self.common_invalid_paths:
