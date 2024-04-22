@@ -1001,6 +1001,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def _handle_special(self, send_body: bool, method_str: str) -> bool:
         # pylint: disable=protected-access
+        print(f"hnd special {thread_local.method} {method_str} {send_body=}")
 
         path = self.path
         # interpreting the URL masks to find which method to call
@@ -1158,6 +1159,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         The absolute file path denoted by the original path.
         """
         # pylint: disable=protected-access
+        print(f"{thread_local.method} {orig_path}")
 
         init_path = orig_path
         orig_path = urlparse.urlparse(orig_path)[2]
