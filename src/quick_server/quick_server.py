@@ -365,6 +365,24 @@ def json_dumps(obj: Any) -> str:
         do_map(json_obj), indent=2, sort_keys=True, allow_nan=False)
 
 
+def json_compact(obj: Any) -> str:
+    """
+    Creates a compact JSON from the given object. This function does not
+    correct for ECMAscript consumers.
+
+    Args:
+        obj (Any): The object.
+
+    Returns:
+        str: A JSON without any spaces or new lines.
+    """
+    return json.dumps(
+        obj,
+        sort_keys=True,
+        indent=None,
+        separators=(",", ":"))
+
+
 LOG_FILE: TextIO | None = None
 
 
@@ -985,6 +1003,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         # pylint: disable=protected-access
 
         path = self.path
+        self.maybe_proxy_request(path)  # raises PDR on success
+
         # interpreting the URL masks to find which method to call
         method: ReqF[BytesIO | None] | None = None
         method_mask = None
@@ -1173,31 +1193,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                     break
             # if pass is still None here the file cannot be found
             if mpath is None:
-
-                def forward(url_path: str, *, remove_last: bool) -> None:
-                    for (name, pxy) in self.server._folder_proxys:
-                        if not url_path.startswith(name):
-                            continue
-                        start_adj = 0 if remove_last else 1
-                        remain = url_path[len(name) - start_adj:]
-                        proxy = urlparse.urlparse(pxy)
-                        reala = urlparse.urlparse(init_path)
-                        pxya = urlparse.urlunparse((
-                            proxy[0],  # scheme
-                            proxy[1],  # netloc
-                            f"{proxy[2]}{remain}",  # path
-                            reala[3],  # params
-                            reala[4],  # query
-                            reala[5],  # fragment
-                        ))
-                        self.send_to_proxy(pxya)
-
-                # try proxies
-                # raises PreventDefaultResponse if successful
-                forward(orig_path, remove_last=False)
-                if len(orig_path) and orig_path[-1] != "/":
-                    forward(f"{orig_path}/", remove_last=True)
-
                 # out of luck
                 if orig_path not in self.common_invalid_paths:
                     msg(f"no matching folder alias: {orig_path}")
@@ -1298,12 +1293,49 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.size = 0
         return True
 
-    def send_to_proxy(self, proxy_url: str) -> None:
+    def maybe_proxy_request(self, orig_path: str) -> None:
+        """
+        Check if the given path needs to be proxied. If it is the case the
+        request is proxied and a `PreventDefaultResponse` exception is raised.
+
+        Args:
+            orig_path (str): The path.
+        """
+        # pylint: disable=protected-access
+
+        folder_proxys = self.server._folder_proxys
+
+        def forward(url_path: str, *, remove_last: bool) -> None:
+            for (name, pxy) in folder_proxys:
+                if not url_path.startswith(name):
+                    continue
+                start_adj = 0 if remove_last else 1
+                remain = url_path[len(name) - start_adj:]
+                proxy = urlparse.urlparse(pxy)
+                reala = urlparse.urlparse(orig_path)
+                pxya = urlparse.urlunparse((
+                    proxy[0],  # scheme
+                    proxy[1],  # netloc
+                    f"{proxy[2]}{remain}",  # path
+                    reala[3],  # params
+                    reala[4],  # query
+                    reala[5],  # fragment
+                ))
+                self.send_to_proxy(pxya, orig_path)
+
+        # try proxies
+        # raises PreventDefaultResponse if successful
+        forward(orig_path, remove_last=False)
+        if len(orig_path) and orig_path[-1] != "/":
+            forward(f"{orig_path}/", remove_last=True)
+
+    def send_to_proxy(self, proxy_url: str, orig_path: str) -> None:
         """
         Forward the request to the given proxy.
 
         Args:
             proxy_url (str): The proxy URL.
+            orig_path (str): The original URL path.
         """
         is_debug = self.debug_proxy
         clen = _GETHEADER(self.headers, "content-length")
@@ -1316,7 +1348,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         method = thread_local.method
         headers_in = dict(self.headers.items())
         if is_debug:
-            msg(f"proxy to {method} {proxy_url}: {headers_in=} {payload=}")
+            msg(
+                f"proxy {orig_path} to {method} {proxy_url}: "
+                f"headers={json_compact(headers_in)} {payload=}")
         req = Request(
             proxy_url,
             data=payload,
@@ -1330,8 +1364,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             thread_local.size = outlen
             if is_debug:
                 msg(
-                    f"response {response.code} {dict(response.headers)=} "
-                    f"{outlen=}")
+                    f"response {response.code} for {orig_path} {outlen=} "
+                    f"headers={json_compact(dict(response.headers))}")
             self.send_response(response.code)
             has_content_length = False
             is_chunked = False
