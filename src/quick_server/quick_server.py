@@ -2660,6 +2660,7 @@ class QuickServer(http_server.HTTPServer):
         self.cache: Any | None = None
         self.object_path = "/objects/"
         self.done = False
+        self._shutdown_registered = False
         self._parallel = parallel
         if thread_factory is None:
             def _thread_factory_impl(
@@ -2702,6 +2703,19 @@ class QuickServer(http_server.HTTPServer):
     def __str__(self) -> str:
         parallel = " parallel" if self._parallel else ""
         return f"{self.__class__.__name__}[{self.server_address}{parallel}]"
+
+    def register_shutdown(self) -> None:
+        """
+        Registers this server to shutdown on SIGINT. Requires `setup_shutdown`.
+        """
+        if self._shutdown_registered:
+            return
+
+        def hook() -> None:
+            self.done = True
+
+        add_shutdown_hook(hook)
+        self._shutdown_registered = True
 
     def update_version_string(self, version_str: str) -> None:
         """
