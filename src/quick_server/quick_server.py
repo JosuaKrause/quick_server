@@ -56,6 +56,7 @@ import readline
 import select
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -68,6 +69,7 @@ from collections.abc import Callable, Iterable, Iterator
 from http.server import SimpleHTTPRequestHandler
 from importlib.metadata import version
 from io import BytesIO, SEEK_END, SEEK_SET, StringIO
+from types import FrameType
 from typing import Any, BinaryIO, cast, Generic, IO, Protocol, TextIO, TypeVar
 from urllib import parse as urlparse
 from urllib.error import HTTPError
@@ -642,6 +644,56 @@ def has_been_restarted() -> bool:
        call in order to make this function work.
     """
     return os.environ.get("QUICK_SERVER_SUBSEQ", "0") == "1"
+
+
+SHUTDOWN_HOOKS: list[Callable[[], None]] = []
+
+
+def setup_shutdown(
+        *,
+        pre_flush_wait: float = 0.5,
+        final_wait: float = 0.5) -> None:
+    """
+    Sets up a shutdown handler than triggers on interrupt signals. This can be
+    used to run code *before* `sys.exit` is called.
+
+    Args:
+        pre_flush_wait (float, optional): Wait after all hooks have completed
+            execution in seconds. Defaults to 0.5.
+
+        final_wait (float, optional): Wait after the output streams have been
+            flushed in seconds. Defaults to 0.5.
+    """
+
+    def sigint_handler(_signal: int, _frame: FrameType | None) -> None:
+        try:
+            for hook in list(SHUTDOWN_HOOKS[::-1]):
+                try:
+                    hook()
+                except BaseException:  # pylint: disable=broad-exception-caught
+                    pass
+            if pre_flush_wait > 0.0:
+                time.sleep(pre_flush_wait)
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            if final_wait > 0.0:
+                time.sleep(final_wait)
+            sys.exit(130)
+
+    signal.signal(signal.SIGINT, sigint_handler)
+
+
+def add_shutdown_hook(hook: Callable[[], None]) -> None:
+    """
+    Adds a shutdown hook that runs on interrupt signals *before* `sys.exit` is
+    called. Exceptions from a hook are silently ignored and adding hooks during
+    hook execution is a no-op. The hooks are run in reverse registering order.
+
+    Args:
+        hook (Callable[[], None]): The hook to execute.
+    """
+    SHUTDOWN_HOOKS.append(hook)
 
 
 _PDR_MARK = "__pdr"
