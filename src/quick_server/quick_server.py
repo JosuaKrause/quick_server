@@ -66,6 +66,7 @@ import traceback
 import uuid
 import zlib
 from collections.abc import Callable, Iterable, Iterator
+from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler
 from importlib.metadata import version
 from io import BytesIO, SEEK_END, SEEK_SET, StringIO
@@ -126,6 +127,7 @@ ReqArgs = TypedDict('ReqArgs', {
     "fragment": str,
     "segments": dict[str, str],
     "meta": dict[str, Any],
+    "cookie": SimpleCookie | None,
 })
 
 
@@ -1128,8 +1130,12 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             "fragment": "",
             "segments": segments,
             "meta": {},
+            "cookie": None,
         }
         try:
+            cookie = _GETHEADER(self.headers, "cookie")
+            if cookie is not None:
+                args["cookie"] = SimpleCookie(cookie)
             # POST can accept forms encoded in JSON
             if method_str in ["POST", "DELETE", "PUT"]:
                 ctype = _GETHEADER(self.headers, "content-type")
@@ -1513,6 +1519,16 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Credentials", "true")
         return allow_headers is not None
+
+    def send_cookie(self, cookie: SimpleCookie) -> None:
+        """
+        Send the given cookie.
+
+        Args:
+            cookie (SimpleCookie): The cookie.
+        """
+        for morsel in cookie.values():
+            self.send_header("Set-Cookie", morsel.OutputString())
 
     def do_OPTIONS(self) -> None:  # pylint: disable=invalid-name
         """Handles an OPTIONS request."""
