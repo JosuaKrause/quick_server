@@ -684,6 +684,7 @@ def setup_shutdown(
             sys.exit(130)
 
     signal.signal(signal.SIGINT, sigint_handler)
+    signal.signal(signal.SIGTERM, sigint_handler)
 
 
 def add_shutdown_hook(hook: Callable[[], None]) -> None:
