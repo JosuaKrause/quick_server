@@ -1632,6 +1632,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 return
             SimpleHTTPRequestHandler.do_GET(self)
         except PreventDefaultResponse as pdr:
+            raise ValueError() from pdr
             if pdr.code:
                 self.send_error(pdr.code, pdr.msg)
         except (KeyboardInterrupt, SystemExit):
