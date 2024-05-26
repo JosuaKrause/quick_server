@@ -1315,6 +1315,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 self.send_header("Location", location)
                 self.end_headers()
                 raise PreventDefaultResponse()
+            if not os.path.exists(path):
+                raise PreventDefaultResponse(404, "File not found")
         except PreventDefaultResponse as pdr:
             ffcb = self.server._file_fallback_cb
             if ffcb is not None and pdr.code == 404:
@@ -1632,7 +1634,6 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 return
             SimpleHTTPRequestHandler.do_GET(self)
         except PreventDefaultResponse as pdr:
-            raise ValueError() from pdr
             if pdr.code:
                 self.send_error(pdr.code, pdr.msg)
         except (KeyboardInterrupt, SystemExit):
