@@ -47,6 +47,7 @@ import ctypes
 import errno
 import fnmatch
 import http.server as http_server
+import inspect
 import json
 import math
 import os
@@ -1019,30 +1020,58 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         requested URL is interpreted as static file.
         """
         ongoing = True
+        did_report = False
+
+        def default_report(
+                method_str: str,
+                path: str,
+                duration: float,
+                complete: bool) -> None:
+            if complete:
+                final = f"({duration}s)"
+            else:
+                final = ""
+            msg(
+                f"request {'took' if complete else 'takes'} longer than "
+                f"expected: \"{method_str} {path}\"{final}")
+
+        def wrap_report(
+                report_fn: Callable[[str, str, float, bool], None],
+                ) -> Callable[[str, str, float, bool], None]:
+            argc = len(inspect.signature(report_fn).parameters)
+
+            def report(*args: Any) -> None:
+                if argc < 4 and args[3]:
+                    return
+                report_fn(*args[:argc])
+
+            return report
+
         report_slow_requests = self.server.report_slow_requests
-        if report_slow_requests:
+        if report_slow_requests is True:
+            timeout: float = 5.0
+            report_fn: Callable[[str, str, float, bool], None] = default_report
+        elif report_slow_requests is False:
+            timeout = 0.0
+            report_fn = default_report
+        elif callable(report_slow_requests):
+            timeout = 5.0
+            report_fn = wrap_report(report_slow_requests)  # type: ignore
+        else:
+            timeout, report_fn = report_slow_requests
+        if timeout > 0.0:
             path = self.path
             request_time = get_time()
 
             def do_report() -> None:
+                nonlocal did_report
+
                 if not ongoing:
                     return
-                duration = get_time() - request_time
-                if callable(report_slow_requests):
-                    try:
-                        report_slow_requests(
-                            method_str, path, duration)  # type: ignore
-                    except TypeError as outer_te:
-                        if "arguments but 3 were given" not in f"{outer_te}":
-                            raise outer_te
-                        report_slow_requests(  # type: ignore
-                            method_str, path)
-                else:
-                    msg(
-                        "request takes longer than expected: "
-                        f"\"{method_str} {path}\" ({duration}s)")
+                report_fn(method_str, path, get_time() - request_time, False)
+                did_report = True
 
-            alarm_init = threading.Timer(5.0, do_report)
+            alarm_init = threading.Timer(timeout, do_report)
             alarm_init.start()
             alarm: threading.Timer | None = alarm_init
         else:
@@ -1053,6 +1082,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if alarm is not None:
                 alarm.cancel()
             ongoing = False
+            if did_report:
+                report_fn(method_str, path, get_time() - request_time, True)
 
     def _handle_special(self, send_body: bool, method_str: str) -> bool:
         # pylint: disable=protected-access
@@ -2631,10 +2662,11 @@ class QuickServer(http_server.HTTPServer):
             If set only messages with a non-trivial status code
             (i.e., not 200 nor 304) are reported. Defaults to False.
 
-        report_slow_requests : bool or function
-            If set request that take longer than 5 seconds are reported.
-            Defaults to False. If the value is callable the method_str and
-            path are provided as arguments.
+        report_slow_requests : bool or tuple[float, function]
+            If set request that take longer than float (default: 5) seconds
+            are reported. Defaults to False. If the value is callable the
+            method_str, path, time, and whether the method has completed are
+            provided as arguments.
 
         verbose_workers : bool
             If set messages about worker requests are printed.
@@ -2672,8 +2704,7 @@ class QuickServer(http_server.HTTPServer):
         self.suppress_noise = False
         self.report_slow_requests: \
             bool | \
-            Callable[[str, str], None] | \
-            Callable[[str, str, float], None] = False
+            tuple[float, Callable[[str, str, float, bool], None]] = False
         self.verbose_workers = False
         self.no_command_loop = False
         self.cache: Any | None = None
