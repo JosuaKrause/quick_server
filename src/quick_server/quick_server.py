@@ -820,30 +820,40 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self.command} {self.path}]"
 
-    def get_original_host(self) -> str:
+    def get_original_host(self) -> tuple[str, str]:
         """
-        Gets the original host. If the request was forwarded the original host
-        is the first leftmost forwarded host.
+        Gets the original protocol and host. If the request was forwarded the
+        original host is the first leftmost forwarded host.
 
         Returns:
-            str: The host.
+            tuple[str, str]: The protocol and host including the port.
         """
+        origin = _GETHEADER(self.headers, "origin").strip()
+        proto_end_ix = origin.find("://")
+        if origin != "null" and proto_end_ix >= 0:
+            proto = origin[:proto_end_ix]
+            host = origin[proto_end_ix + 3:]
+            return (proto, host)
+        fwhost = None
+        fwproto = None
         host = None
-
-        def get_host(host: str) -> str:
-            return host.split(":", 1)[0]
-
         for key, value in self.headers.items():
             hkey = key.lower()
             if hkey == "host" and host is None:
-                host = get_host(value)
+                host = value
             elif hkey == "forwarded":
                 for entry in value.split(";"):
-                    fwhost = entry.strip().removeprefix("host=")
-                    if fwhost != entry:
-                        return get_host(fwhost)
+                    entry = entry.strip()
+                    fwhost_candidate = entry.removeprefix("host=")
+                    if fwhost_candidate != entry and fwhost is None:
+                        fwhost = fwhost_candidate
+                    fwproto_candidate = entry.removeprefix("proto=")
+                    if fwproto_candidate != entry and fwproto is None:
+                        fwproto = fwproto_candidate
+                if fwhost is not None and fwproto is not None:
+                    return (fwproto, fwhost)
         assert host is not None
-        return host
+        return "http", host
 
     def convert_argmap(
             self,
