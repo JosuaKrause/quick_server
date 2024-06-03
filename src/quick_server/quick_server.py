@@ -820,6 +820,31 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self.command} {self.path}]"
 
+    def get_original_host(self) -> str:
+        """
+        Gets the original host. If the request was forwarded the original host
+        is the first leftmost forwarded host.
+
+        Returns:
+            str: The host.
+        """
+        host = None
+
+        def get_host(host: str) -> str:
+            return host.split(":", 1)[0]
+
+        for key, value in self.headers.items():
+            hkey = key.lower()
+            if hkey == "host" and host is None:
+                host = get_host(value)
+            elif hkey == "forwarded":
+                for entry in value.split(";"):
+                    fwhost = entry.strip().removeprefix("host=")
+                    if fwhost != entry:
+                        return get_host(fwhost)
+        assert host is not None
+        return host
+
     def convert_argmap(
             self,
             query: str | bytes,
