@@ -196,6 +196,30 @@ class MiddlewareF(  # pylint: disable=too-few-public-methods
         ...
 
 
+class PreMiddlewareF(Protocol):  # pylint: disable=too-few-public-methods
+    """Processe a request pre middleware. This middleware is called on all
+    requests before any other action is taken. Because of this only a limited
+    amount of information is directly accessible."""
+    def __call__(
+            self,
+            req: 'QuickServerRequestHandler',
+            path: str,
+            cookie: SimpleCookie | None,
+            /) -> None:
+        """
+        Processe a request pre middleware. This middleware is called on all
+        requests before any other action is taken. Because of this only a
+        limited amount of information is directly accessible. If an alternative
+        response is desired raise a `PreventDefaultResponse`.
+
+        Args:
+            req (QuickServerRequestHandler): The raw request.
+            path (str): The path of this request.
+            cookie (SimpleCookie | None): The cookie if any.
+        """
+        ...
+
+
 class WorkerF(  # pylint: disable=too-few-public-methods
         Protocol, Generic[R_co]):
     """Processes a worker request."""
@@ -1089,6 +1113,15 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         # pylint: disable=protected-access
 
         path = self.path
+        cookie_hdr = _GETHEADER(self.headers, "cookie")
+        if cookie_hdr is not None:
+            cookie = SimpleCookie(cookie_hdr)
+        else:
+            cookie = None
+
+        for pmwfun in self.server._pre_middleware:
+            pmwfun(self, path, cookie)
+
         self.maybe_proxy_request(path)  # raises PDR on success
 
         # interpreting the URL masks to find which method to call
@@ -1162,12 +1195,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             "fragment": "",
             "segments": segments,
             "meta": {},
-            "cookie": None,
+            "cookie": cookie,
         }
         try:
-            cookie = _GETHEADER(self.headers, "cookie")
-            if cookie is not None:
-                args["cookie"] = SimpleCookie(cookie)
             # POST can accept forms encoded in JSON
             if method_str in ["POST", "DELETE", "PUT"]:
                 ctype = _GETHEADER(self.headers, "content-type")
@@ -2728,6 +2758,7 @@ class QuickServer(http_server.HTTPServer):
         self._soft_worker_death = soft_worker_death
         self._folder_masks: list[tuple[str, str]] = []
         self._folder_proxys: list[tuple[str, str]] = []
+        self._pre_middleware: list[PreMiddlewareF] = []
         self._global_middleware: list[MiddlewareF] = []
         self._f_mask: dict[str, list[tuple[str, ReqF[BytesIO | None]]]] = {}
         self._f_argc: dict[str, int | None] = {}
@@ -3562,6 +3593,17 @@ class QuickServer(http_server.HTTPServer):
             mwfun (MiddlewareF): The middleware.
         """
         self._global_middleware.append(mwfun)
+
+    def add_pre_middleware(self, pmwfun: PreMiddlewareF) -> None:
+        """
+        Adds a middleware that is applied to all requests. The middleware is
+        called before any other processing so only a limited amount of
+        information is available.
+
+        Args:
+            pmwfun (PreMiddlewareF): The pre middleware.
+        """
+        self._pre_middleware.append(pmwfun)
 
     def middleware(
             self,
