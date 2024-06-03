@@ -828,12 +828,14 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         Returns:
             tuple[str, str]: The protocol and host including the port.
         """
-        origin = _GETHEADER(self.headers, "origin").strip()
-        proto_end_ix = origin.find("://")
-        if origin != "null" and proto_end_ix >= 0:
-            proto = origin[:proto_end_ix]
-            host = origin[proto_end_ix + 3:]
-            return (proto, host)
+        origin = _GETHEADER(self.headers, "origin")
+        if origin is not None:
+            origin = origin.strip()
+            proto_end_ix = origin.find("://")
+            if origin != "null" and proto_end_ix >= 0:
+                proto = origin[:proto_end_ix]
+                host = origin[proto_end_ix + 3:]
+                return (proto, host)
         fwhost = None
         fwproto = None
         host = None
