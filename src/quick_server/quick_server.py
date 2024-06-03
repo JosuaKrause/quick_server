@@ -1419,6 +1419,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         except PreventDefaultResponse as pdr:
             ffcb = self.server._file_fallback_cb
             if ffcb is not None and pdr.code == 404:
+                print(f"redirecting {orig_path} for {pdr.msg}")
                 path = ffcb(orig_path)
             else:
                 raise
