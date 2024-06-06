@@ -1497,6 +1497,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             proxy_url (str): The proxy URL.
             orig_path (str): The original URL path.
         """
+        if thread_local.did_proxy:
+            return
+        thread_local.did_proxy = True
         is_debug = self.debug_proxy
         clen = _GETHEADER(self.headers, "content-length")
         clen = int(clen) if clen is not None else 0
@@ -1636,6 +1639,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1657,6 +1661,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1679,6 +1684,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1701,6 +1707,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1723,6 +1730,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1747,6 +1755,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
