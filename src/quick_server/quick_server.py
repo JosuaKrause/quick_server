@@ -464,8 +464,10 @@ def msg(message: str) -> None:
     """Prints a message from the server to the log file."""
     global LOG_FILE
 
-    if LOG_FILE is None:
-        LOG_FILE = sys.stderr
+    log_file = LOG_FILE
+    if log_file is None:
+        log_file = sys.stderr
+        LOG_FILE = log_file
     if LONG_MSG:
         file_name, line = caller_trace()
         file_name, file_type = os.path.splitext(file_name)
@@ -487,8 +489,8 @@ def msg(message: str) -> None:
         sys.stderr.write(out.read())
         sys.stderr.flush()
     else:
-        LOG_FILE.write(out.read())
-        LOG_FILE.flush()
+        log_file.write(out.read())
+        log_file.flush()
     out.close()
 
 
