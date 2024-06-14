@@ -3632,15 +3632,20 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def add_middleware(self, mwfun: MiddlewareF) -> None:
+    @contextlib.contextmanager
+    def middlewares(self, *mwfuns: MiddlewareF) -> Iterator[None]:
         """
-        Adds a middleware that is applied to all request handlers that are
-        installed afterwards.
+        Applies the middlewares to all request handlers in the block.
 
         Args:
-            mwfun (MiddlewareF): The middleware.
+            *mwfuns (MiddlewareF): The middlewares.
         """
-        self._global_middleware.append(mwfun)
+        old = self._global_middleware
+        try:
+            self._global_middleware = [*old, *mwfuns]
+            yield
+        finally:
+            self._global_middleware = old
 
     def add_pre_middleware(self, pmwfun: PreMiddlewareF) -> None:
         """
