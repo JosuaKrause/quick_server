@@ -47,6 +47,7 @@ import ctypes
 import errno
 import fnmatch
 import http.server as http_server
+import inspect
 import json
 import math
 import os
@@ -56,6 +57,7 @@ import readline
 import select
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -65,9 +67,11 @@ import traceback
 import uuid
 import zlib
 from collections.abc import Callable, Iterable, Iterator
+from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler
 from importlib.metadata import version
 from io import BytesIO, SEEK_END, SEEK_SET, StringIO
+from types import FrameType
 from typing import Any, BinaryIO, cast, Generic, IO, Protocol, TextIO, TypeVar
 from urllib import parse as urlparse
 from urllib.error import HTTPError
@@ -124,6 +128,7 @@ ReqArgs = TypedDict('ReqArgs', {
     "fragment": str,
     "segments": dict[str, str],
     "meta": dict[str, Any],
+    "cookie": SimpleCookie | None,
 })
 
 
@@ -187,6 +192,30 @@ class MiddlewareF(  # pylint: disable=too-few-public-methods
         Returns:
             ReqNext | Response: Return `okay` to proceed otherwise the request
                 ends and returns the given response.
+        """
+        ...
+
+
+class PreMiddlewareF(Protocol):  # pylint: disable=too-few-public-methods
+    """Processe a request pre middleware. This middleware is called on all
+    requests before any other action is taken. Because of this only a limited
+    amount of information is directly accessible."""
+    def __call__(
+            self,
+            req: 'QuickServerRequestHandler',
+            path: str,
+            cookie: SimpleCookie | None,
+            /) -> None:
+        """
+        Processe a request pre middleware. This middleware is called on all
+        requests before any other action is taken. Because of this only a
+        limited amount of information is directly accessible. If an alternative
+        response is desired raise a `PreventDefaultResponse`.
+
+        Args:
+            req (QuickServerRequestHandler): The raw request.
+            path (str): The path of this request.
+            cookie (SimpleCookie | None): The cookie if any.
         """
         ...
 
@@ -435,8 +464,10 @@ def msg(message: str) -> None:
     """Prints a message from the server to the log file."""
     global LOG_FILE
 
-    if LOG_FILE is None:
-        LOG_FILE = sys.stderr
+    log_file = LOG_FILE
+    if log_file is None:
+        log_file = sys.stderr
+        LOG_FILE = log_file
     if LONG_MSG:
         file_name, line = caller_trace()
         file_name, file_type = os.path.splitext(file_name)
@@ -458,8 +489,8 @@ def msg(message: str) -> None:
         sys.stderr.write(out.read())
         sys.stderr.flush()
     else:
-        LOG_FILE.write(out.read())
-        LOG_FILE.flush()
+        log_file.write(out.read())
+        log_file.flush()
     out.close()
 
 
@@ -644,6 +675,57 @@ def has_been_restarted() -> bool:
     return os.environ.get("QUICK_SERVER_SUBSEQ", "0") == "1"
 
 
+SHUTDOWN_HOOKS: list[Callable[[], None]] = []
+
+
+def setup_shutdown(
+        *,
+        pre_flush_wait: float = 0.5,
+        final_wait: float = 0.5) -> None:
+    """
+    Sets up a shutdown handler than triggers on interrupt signals. This can be
+    used to run code *before* `sys.exit` is called.
+
+    Args:
+        pre_flush_wait (float, optional): Wait after all hooks have completed
+            execution in seconds. Defaults to 0.5.
+
+        final_wait (float, optional): Wait after the output streams have been
+            flushed in seconds. Defaults to 0.5.
+    """
+
+    def sigint_handler(_signal: int, _frame: FrameType | None) -> None:
+        try:
+            for hook in list(SHUTDOWN_HOOKS[::-1]):
+                try:
+                    hook()
+                except BaseException:  # pylint: disable=broad-exception-caught
+                    pass
+            if pre_flush_wait > 0.0:
+                time.sleep(pre_flush_wait)
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            if final_wait > 0.0:
+                time.sleep(final_wait)
+            sys.exit(130)
+
+    signal.signal(signal.SIGINT, sigint_handler)
+    signal.signal(signal.SIGTERM, sigint_handler)
+
+
+def add_shutdown_hook(hook: Callable[[], None]) -> None:
+    """
+    Adds a shutdown hook that runs on interrupt signals *before* `sys.exit` is
+    called. Exceptions from a hook are silently ignored and adding hooks during
+    hook execution is a no-op. The hooks are run in reverse registering order.
+
+    Args:
+        hook (Callable[[], None]): The hook to execute.
+    """
+    SHUTDOWN_HOOKS.append(hook)
+
+
 _PDR_MARK = "__pdr"
 
 
@@ -739,6 +821,43 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{self.command} {self.path}]"
+
+    def get_original_host(self) -> tuple[str, str]:
+        """
+        Gets the original protocol and host. If the request was forwarded the
+        original host is the first leftmost forwarded host.
+
+        Returns:
+            tuple[str, str]: The protocol and host including the port.
+        """
+        origin = _GETHEADER(self.headers, "origin")
+        if origin is not None:
+            origin = origin.strip()
+            proto_end_ix = origin.find("://")
+            if origin != "null" and proto_end_ix >= 0:
+                proto = origin[:proto_end_ix]
+                host = origin[proto_end_ix + 3:]
+                return (proto, host)
+        fwhost = None
+        fwproto = None
+        host = None
+        for key, value in self.headers.items():
+            hkey = key.lower()
+            if hkey == "host" and host is None:
+                host = value
+            elif hkey == "forwarded":
+                for entry in value.split(";"):
+                    entry = entry.strip()
+                    fwhost_candidate = entry.removeprefix("host=")
+                    if fwhost_candidate != entry and fwhost is None:
+                        fwhost = fwhost_candidate
+                    fwproto_candidate = entry.removeprefix("proto=")
+                    if fwproto_candidate != entry and fwproto is None:
+                        fwproto = fwproto_candidate
+                if fwhost is not None and fwproto is not None:
+                    return (fwproto, fwhost)
+        assert host is not None
+        return "http", host
 
     def convert_argmap(
             self,
@@ -964,30 +1083,58 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         requested URL is interpreted as static file.
         """
         ongoing = True
+        did_report = False
+
+        def default_report(
+                method_str: str,
+                path: str,
+                duration: float,
+                complete: bool) -> None:
+            if complete:
+                final = f"({duration}s)"
+            else:
+                final = ""
+            msg(
+                f"request {'took' if complete else 'takes'} longer than "
+                f"expected: \"{method_str} {path}\"{final}")
+
+        def wrap_report(
+                report_fn: Callable[[str, str, float, bool], None],
+                ) -> Callable[[str, str, float, bool], None]:
+            argc = len(inspect.signature(report_fn).parameters)
+
+            def report(*args: Any) -> None:
+                if argc < 4 and args[3]:
+                    return
+                report_fn(*args[:argc])
+
+            return report
+
         report_slow_requests = self.server.report_slow_requests
-        if report_slow_requests:
+        if report_slow_requests is True:
+            timeout: float = 5.0
+            report_fn: Callable[[str, str, float, bool], None] = default_report
+        elif report_slow_requests is False:
+            timeout = 0.0
+            report_fn = default_report
+        elif callable(report_slow_requests):
+            timeout = 5.0
+            report_fn = wrap_report(report_slow_requests)  # type: ignore
+        else:
+            timeout, report_fn = report_slow_requests
+        if timeout > 0.0:
             path = self.path
             request_time = get_time()
 
             def do_report() -> None:
+                nonlocal did_report
+
                 if not ongoing:
                     return
-                duration = get_time() - request_time
-                if callable(report_slow_requests):
-                    try:
-                        report_slow_requests(
-                            method_str, path, duration)  # type: ignore
-                    except TypeError as outer_te:
-                        if "arguments but 3 were given" not in f"{outer_te}":
-                            raise outer_te
-                        report_slow_requests(  # type: ignore
-                            method_str, path)
-                else:
-                    msg(
-                        "request takes longer than expected: "
-                        f"\"{method_str} {path}\" ({duration}s)")
+                report_fn(method_str, path, get_time() - request_time, False)
+                did_report = True
 
-            alarm_init = threading.Timer(5.0, do_report)
+            alarm_init = threading.Timer(timeout, do_report)
             alarm_init.start()
             alarm: threading.Timer | None = alarm_init
         else:
@@ -998,11 +1145,22 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             if alarm is not None:
                 alarm.cancel()
             ongoing = False
+            if did_report:
+                report_fn(method_str, path, get_time() - request_time, True)
 
     def _handle_special(self, send_body: bool, method_str: str) -> bool:
         # pylint: disable=protected-access
 
         path = self.path
+        cookie_hdr = _GETHEADER(self.headers, "cookie")
+        if cookie_hdr is not None:
+            cookie = SimpleCookie(cookie_hdr)
+        else:
+            cookie = None
+
+        for pmwfun in self.server._pre_middleware:
+            pmwfun(self, path, cookie)
+
         self.maybe_proxy_request(path)  # raises PDR on success
 
         # interpreting the URL masks to find which method to call
@@ -1076,6 +1234,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             "fragment": "",
             "segments": segments,
             "meta": {},
+            "cookie": cookie,
         }
         try:
             # POST can accept forms encoded in JSON
@@ -1257,6 +1416,8 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
                 self.send_header("Location", location)
                 self.end_headers()
                 raise PreventDefaultResponse()
+            if not os.path.exists(path):
+                raise PreventDefaultResponse(404, "File not found")
         except PreventDefaultResponse as pdr:
             ffcb = self.server._file_fallback_cb
             if ffcb is not None and pdr.code == 404:
@@ -1338,6 +1499,9 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
             proxy_url (str): The proxy URL.
             orig_path (str): The original URL path.
         """
+        if thread_local.did_proxy:
+            return
+        thread_local.did_proxy = True
         is_debug = self.debug_proxy
         clen = _GETHEADER(self.headers, "content-length")
         clen = int(clen) if clen is not None else 0
@@ -1462,11 +1626,22 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Credentials", "true")
         return allow_headers is not None
 
+    def send_cookie(self, cookie: SimpleCookie) -> None:
+        """
+        Send the given cookie.
+
+        Args:
+            cookie (SimpleCookie): The cookie.
+        """
+        for morsel in cookie.values():
+            self.send_header("Set-Cookie", morsel.OutputString())
+
     def do_OPTIONS(self) -> None:  # pylint: disable=invalid-name
         """Handles an OPTIONS request."""
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1488,6 +1663,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1510,6 +1686,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1532,6 +1709,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1554,6 +1732,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -1578,6 +1757,7 @@ class QuickServerRequestHandler(SimpleHTTPRequestHandler):
         thread_local.clock_start = get_time()
         thread_local.status_code = 200
         thread_local.message = None
+        thread_local.did_proxy = False
         thread_local.headers = []
         thread_local.end_headers = []
         thread_local.size = -1
@@ -2560,10 +2740,11 @@ class QuickServer(http_server.HTTPServer):
             If set only messages with a non-trivial status code
             (i.e., not 200 nor 304) are reported. Defaults to False.
 
-        report_slow_requests : bool or function
-            If set request that take longer than 5 seconds are reported.
-            Defaults to False. If the value is callable the method_str and
-            path are provided as arguments.
+        report_slow_requests : bool or tuple[float, function]
+            If set request that take longer than float (default: 5) seconds
+            are reported. Defaults to False. If the value is callable the
+            method_str, path, time, and whether the method has completed are
+            provided as arguments.
 
         verbose_workers : bool
             If set messages about worker requests are printed.
@@ -2601,13 +2782,13 @@ class QuickServer(http_server.HTTPServer):
         self.suppress_noise = False
         self.report_slow_requests: \
             bool | \
-            Callable[[str, str], None] | \
-            Callable[[str, str, float], None] = False
+            tuple[float, Callable[[str, str, float, bool], None]] = False
         self.verbose_workers = False
         self.no_command_loop = False
         self.cache: Any | None = None
         self.object_path = "/objects/"
         self.done = False
+        self._shutdown_registered = False
         self._parallel = parallel
         if thread_factory is None:
             def _thread_factory_impl(
@@ -2625,6 +2806,7 @@ class QuickServer(http_server.HTTPServer):
         self._soft_worker_death = soft_worker_death
         self._folder_masks: list[tuple[str, str]] = []
         self._folder_proxys: list[tuple[str, str]] = []
+        self._pre_middleware: list[PreMiddlewareF] = []
         self._global_middleware: list[MiddlewareF] = []
         self._f_mask: dict[str, list[tuple[str, ReqF[BytesIO | None]]]] = {}
         self._f_argc: dict[str, int | None] = {}
@@ -2650,6 +2832,19 @@ class QuickServer(http_server.HTTPServer):
     def __str__(self) -> str:
         parallel = " parallel" if self._parallel else ""
         return f"{self.__class__.__name__}[{self.server_address}{parallel}]"
+
+    def register_shutdown(self) -> None:
+        """
+        Registers this server to shutdown on SIGINT. Requires `setup_shutdown`.
+        """
+        if self._shutdown_registered:
+            return
+
+        def hook() -> None:
+            self.done = True
+
+        add_shutdown_hook(hook)
+        self._shutdown_registered = True
 
     def update_version_string(self, version_str: str) -> None:
         """
@@ -3437,15 +3632,31 @@ class QuickServer(http_server.HTTPServer):
 
         return wrapper
 
-    def add_middleware(self, mwfun: MiddlewareF) -> None:
+    @contextlib.contextmanager
+    def middlewares(self, *mwfuns: MiddlewareF) -> Iterator[None]:
         """
-        Adds a middleware that is applied to all request handlers that are
-        installed afterwards.
+        Applies the middlewares to all request handlers in the block.
 
         Args:
-            mwfun (MiddlewareF): The middleware.
+            *mwfuns (MiddlewareF): The middlewares.
         """
-        self._global_middleware.append(mwfun)
+        old = self._global_middleware
+        try:
+            self._global_middleware = [*old, *mwfuns]
+            yield
+        finally:
+            self._global_middleware = old
+
+    def add_pre_middleware(self, pmwfun: PreMiddlewareF) -> None:
+        """
+        Adds a middleware that is applied to all requests. The middleware is
+        called before any other processing so only a limited amount of
+        information is available.
+
+        Args:
+            pmwfun (PreMiddlewareF): The pre middleware.
+        """
+        self._pre_middleware.append(pmwfun)
 
     def middleware(
             self,

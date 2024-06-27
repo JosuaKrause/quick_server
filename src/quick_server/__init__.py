@@ -39,6 +39,7 @@ Please refer to the example folder for usage examples.
 """
 from .quick_server import (
     __version__,
+    add_shutdown_hook,
     AnyStrResponse,
     BaseWorker,
     CacheIdObj,
@@ -76,6 +77,7 @@ from .quick_server import (
     set_log_file,
     set_restart_exit_code,
     setup_restart,
+    setup_shutdown,
     ThreadFactory,
     TokenHandler,
     TokenObj,
@@ -91,6 +93,7 @@ from .worker_request import worker_request, WorkerError
 
 __all__ = [
     "__version__",
+    "add_shutdown_hook",
     "AnyStrResponse",
     "BaseWorker",
     "CacheIdObj",
@@ -128,6 +131,7 @@ __all__ = [
     "set_log_file",
     "set_restart_exit_code",
     "setup_restart",
+    "setup_shutdown",
     "ThreadFactory",
     "TokenHandler",
     "TokenObj",
